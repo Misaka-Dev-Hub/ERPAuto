@@ -13,9 +13,10 @@ describe('ERP Locators', () => {
   });
 
   it('should have extractor page locators', () => {
-    expect(ERP_LOCATORS.extractor.orderNumberInput).toBeDefined();
+    expect(ERP_LOCATORS.extractor.orderNumberInputRole).toBeDefined();
     expect(ERP_LOCATORS.extractor.queryButton).toBeDefined();
     expect(ERP_LOCATORS.extractor.exportButton).toBeDefined();
+    expect(ERP_LOCATORS.extractor.confirmButton).toBeDefined();
   });
 
   it('should have cleaner page locators', () => {

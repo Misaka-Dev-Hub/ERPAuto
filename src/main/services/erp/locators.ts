@@ -13,18 +13,53 @@ export const ERP_LOCATORS = {
   },
 
   // Main Frame
+  // Reference: Nested iframe structure from Python code
   main: {
+    // Main iframe on the page
     mainIframe: '#mainiframe',
-    loadingOverlay: '.loading-overlay',
-    contentFrame: '#contentframe',
+    // Forward frame (nested inside main)
+    forwardFrame: '#forwardFrame',
+    // Inner iframe (inside forward frame)
+    innerIframe: '#mainiframe',
+    // Loading overlay text
+    loadingText: '加载中',
   },
 
   // Extractor (Data Export) Page
+  // Reference: playwrite/utils/discrete_material_plan_extractor.py
   extractor: {
-    orderNumberInput: 'input[name="orderNumber"]',
-    queryButton: 'button:has-text("查询")',
-    exportButton: 'button:has-text("导出")',
+    // Textbox by role: get_by_role("textbox", name="来源生产订单号")
+    orderNumberInputRole: '来源生产订单号',
+    // Search button: .search-component-searchBtn
+    queryButton: '.search-component-searchBtn',
+    // Loading indicator: div with text "加载中"
+    loadingText: '加载中',
+    // First row selector (序号 row)
+    firstRowSelector: 'internal:role=row[name=/序号/i]',
+    // More button
+    moreButton: 'internal:has-text="更多"',
+    // Export button (输出)
+    exportButton: 'internal:has-text="输出"',
+    // Export dialog - threshold input
+    thresholdInputSelector: 'div:has-text(/^行数阈值$/) input[type="text"]',
+    // Confirm button
+    confirmButton: 'internal:has-text="确定(Y)"',
   },
+
+  // Menu navigation
+  menu: {
+    // Search icon in search wrapper
+    searchIcon: '.search-name-wrapper .iconfont',
+    // Order number query menu item
+    orderQuery: 'internal:has-text="订单号查询"',
+    // "All" tab
+    allTab: 'internal:role=tab[name="全部"]',
+    // Select input for setting limits
+    selectInput: '#rc_select_0',
+  },
+
+  // Discrete material plan menu item
+  discreteMaterialPlan: 'internal:has-title="离散备料计划维护"',
 
   // Cleaner (Material Delete) Page
   cleaner: {
