@@ -21,7 +21,10 @@
     "build:linux": "electron-vite build && electron-builder --linux",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
