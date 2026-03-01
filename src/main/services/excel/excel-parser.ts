@@ -224,7 +224,7 @@ export class ExcelParser {
 
               if (isNextRowFooter) {
                 // Next row is footer, parse current row as material first
-                const material = this.parseMaterialRow(allRows[dataRow], dataRow + 1);
+                const material = this.parseMaterialRowInternal(allRows[dataRow], dataRow + 1);
                 if (material) {
                   this.log('  Parsed material:', material.materialCode);
                   materials.push(material);
@@ -240,7 +240,7 @@ export class ExcelParser {
               }
 
               // Extract material data
-              const material = this.parseMaterialRow(allRows[dataRow], dataRow + 1);
+              const material = this.parseMaterialRowInternal(allRows[dataRow], dataRow + 1);
               if (material) {
                 this.log('  Parsed material:', material.materialCode);
                 materials.push(material);
@@ -313,8 +313,9 @@ export class ExcelParser {
    * Parse material data row
    * Reference: material data extraction in Python code
    * ExcelJS arrays are 1-indexed (index 0 is null), so data starts at index 2
+   * NOTE: This is an internal method that returns raw data structure
    */
-  private parseMaterialRow(row: any[], rowNumber: number): any | null {
+  private parseMaterialRowInternal(row: any[], rowNumber: number): any | null {
     // Extract 13 fields from material row (starting at index 2)
     const material = {
       sequence: row[2],
@@ -350,5 +351,92 @@ export class ExcelParser {
     }
     const parsed = parseFloat(String(value));
     return isNaN(parsed) ? undefined : parsed;
+  }
+
+  /**
+   * Check if row contains order information
+   * (Spec-compliant method for detecting order rows)
+   *
+   * @param values - Row values array from ExcelJS
+   * @returns true if row contains "离散备料计划" (order title)
+   */
+  public isOrderRow(values: any[]): boolean {
+    // ExcelJS arrays are 1-indexed, check index 2 for order title
+    const firstCell = values[2];
+    return (
+      typeof firstCell === 'string' &&
+      firstCell.includes('离散备料计划')
+    );
+  }
+
+  /**
+   * Extract order number from row
+   * (Spec-compliant method for extracting order number)
+   *
+   * Parses a row containing order header information and extracts
+   * the production order number (生产订单).
+   *
+   * @param values - Row values array from ExcelJS
+   * @returns Order number (e.g., "SC202501001") or empty string
+   */
+  public extractOrderNumber(values: any[]): string {
+    // Parse the row to extract order number using same logic as header parsing
+    const orderInfo: OrderHeader = {};
+    this.parseHeaderRow(values, orderInfo);
+    return orderInfo.productionOrder || '';
+  }
+
+  /**
+   * Parse material row
+   * (Spec-compliant method for parsing material data)
+   *
+   * @param values - Row values array from ExcelJS
+   * @param orderNumber - Order number for this material
+   * @param productionId - Production ID for this material
+   * @param rowNumber - Row number in Excel file
+   * @returns DiscreteMaterialPlan or null if invalid row
+   */
+  public parseMaterialRow(
+    values: any[],
+    orderNumber: string,
+    productionId: string,
+    rowNumber: number
+  ): DiscreteMaterialPlan | null {
+    // ExcelJS arrays are 1-indexed, data starts at index 2
+    const materialCode = values[3]?.toString().trim();
+    const materialName = values[4]?.toString().trim();
+    const specification = values[5]?.toString().trim();
+    const model = values[6]?.toString().trim();
+    const drawingNumber = values[7]?.toString().trim();
+    const material = values[8]?.toString().trim();
+    const quantity = this.parseFloat(values[9]) || 0;
+    const unit = values[10]?.toString().trim() || '';
+    const requiredDate = values[11]?.toString().trim();
+    const warehouse = values[12]?.toString().trim();
+    const unitUsage = this.parseFloat(values[13]);
+    const cumulativeOutboundQty = this.parseFloat(values[14]);
+
+    // Skip if no material code
+    if (!materialCode) {
+      return null;
+    }
+
+    return {
+      orderNumber,
+      productionId,
+      materialCode,
+      materialName,
+      specification,
+      model,
+      drawingNumber,
+      material,
+      quantity,
+      unit,
+      requiredDate,
+      warehouse,
+      unitUsage,
+      cumulativeOutboundQty,
+      rowNumber,
+    };
   }
 }

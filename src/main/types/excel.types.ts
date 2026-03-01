@@ -50,6 +50,9 @@ export interface DiscreteMaterialPlan {
   /** Cumulative outbound quantity (累计出库数量) */
   cumulativeOutboundQty?: number;
 
+  /** Pending quantity (pending quantity for fulfillment) */
+  pendingQty?: number;
+
   /** Row number in Excel file */
   rowNumber?: number;
 }
