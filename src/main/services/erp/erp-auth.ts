@@ -1,5 +1,4 @@
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
-import { ERP_LOCATORS } from './locators'
+import { chromium, type BrowserContext, type Page } from 'playwright'
 import type { ErpConfig, ErpSession } from '../../types/erp.types'
 
 /**
@@ -9,11 +8,9 @@ import type { ErpConfig, ErpSession } from '../../types/erp.types'
 export class ErpAuthService {
   private config: ErpConfig
   private session: ErpSession | null = null
-  private ignoreHTTPSErrors: boolean
 
   constructor(config: ErpConfig) {
     this.config = config
-    this.ignoreHTTPSErrors = process.env.ERP_IGNORE_HTTPS_ERRORS === 'true'
   }
 
   /**
@@ -28,7 +25,6 @@ export class ErpAuthService {
     const browser = await chromium.launch({
       headless: this.config.headless ?? false, // Use config or default to false
       slowMo: 100, // Slow down for debugging
-      ignoreHTTPSErrors: true, // Ignore SSL certificate errors
       args: [
         '--ignore-certificate-errors',
         '--ignore-ssl-errors',
@@ -41,7 +37,6 @@ export class ErpAuthService {
       acceptDownloads: true,
       viewport: { width: 1920, height: 1080 },
       ignoreHTTPSErrors: true, // Ignore SSL certificate errors
-      acceptAllDownloads: true, // Accept all downloads
       // Disable web security for internal VPN
       javaScriptEnabled: true
     })
@@ -120,7 +115,8 @@ export class ErpAuthService {
       browser,
       context,
       page,
-      mainFrame, // Store forwardFrame content frame for subsequent operations
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mainFrame: mainFrame as any, // Store forwardFrame content frame for subsequent operations
       isLoggedIn: true
     }
 

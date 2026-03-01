@@ -202,7 +202,6 @@ export class ExcelParser {
           drawingNumber: material.drawingNumber || '',
           material: material.material || '',
           quantity: material.quantity || 0,
-          unit: material.unit || '',
           requiredDate: material.requiredDate || '',
           warehouse: material.warehouse || '',
           unitUsage: material.unitUsage || 0,
