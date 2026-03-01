@@ -1,6 +1,8 @@
 import { ipcMain } from 'electron'
 import { ErpAuthService } from '../services/erp/erp-auth'
 import { CleanerService } from '../services/erp/cleaner'
+import { OrderNumberResolver } from '../services/erp/order-resolver'
+import { MySqlService } from '../services/database/mysql'
 import type { CleanerInput, CleanerResult } from '../types/cleaner.types'
 
 /**
@@ -14,6 +16,7 @@ export function registerCleanerHandlers(): void {
       input: CleanerInput
     ): Promise<{ success: boolean; data?: CleanerResult; error?: string }> => {
       let authService: ErpAuthService | null = null
+      let mysqlService: MySqlService | null = null
 
       try {
         // Check environment variables
@@ -32,6 +35,36 @@ export function registerCleanerHandlers(): void {
           )
         }
 
+        // Resolve order numbers (convert productionIDs to 生产订单号)
+        const mysqlConfig = {
+          host: process.env.DB_MYSQL_HOST || 'localhost',
+          port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
+          user: process.env.DB_USERNAME || 'root',
+          password: process.env.DB_PASSWORD || '',
+          database: process.env.DB_NAME || ''
+        }
+
+        console.log('[Cleaner] Connecting to MySQL for order resolution...')
+        mysqlService = new MySqlService(mysqlConfig)
+        await mysqlService.connect()
+
+        const resolver = new OrderNumberResolver(mysqlService)
+        const mappings = await resolver.resolve(input.orderNumbers)
+
+        // Get valid order numbers and warnings
+        const validOrderNumbers = resolver.getValidOrderNumbers(mappings)
+        const warnings = resolver.getWarnings(mappings)
+
+        if (warnings.length > 0) {
+          console.warn('[Cleaner] Resolution warnings:', warnings)
+        }
+
+        if (validOrderNumbers.length === 0) {
+          throw new Error('没有有效的生产订单号可处理。请检查输入的格式或数据库连接。')
+        }
+
+        console.log('[Cleaner] Resolved order numbers:', validOrderNumbers)
+
         // Create auth service and login
         authService = new ErpAuthService({
           url: erpUrl,
@@ -44,11 +77,23 @@ export function registerCleanerHandlers(): void {
         await authService.login()
         console.log('[Cleaner] Login successful')
 
-        // Create cleaner service and run cleaning
+        // Create cleaner service and run cleaning with resolved order numbers
         const cleaner = new CleanerService(authService)
-        console.log('[Cleaner] Starting cleaning:', input)
-        const result = await cleaner.clean(input)
+
+        const modifiedInput: CleanerInput = {
+          ...input,
+          orderNumbers: validOrderNumbers,
+          onProgress: input.onProgress
+        }
+
+        console.log('[Cleaner] Starting cleaning:', modifiedInput)
+        const result = await cleaner.clean(modifiedInput)
         console.log('[Cleaner] Cleaning completed:', result)
+
+        // Add warnings to result errors if any
+        if (warnings.length > 0) {
+          result.errors = [...warnings, ...result.errors]
+        }
 
         return { success: true, data: result }
       } catch (error) {
@@ -64,6 +109,16 @@ export function registerCleanerHandlers(): void {
             console.log('[Cleaner] Browser closed')
           } catch (closeError) {
             console.warn('[Cleaner] Error closing browser:', closeError)
+          }
+        }
+
+        // Clean up: disconnect MySQL
+        if (mysqlService) {
+          try {
+            await mysqlService.disconnect()
+            console.log('[Cleaner] MySQL disconnected')
+          } catch (closeError) {
+            console.warn('[Cleaner] Error disconnecting MySQL:', closeError)
           }
         }
       }

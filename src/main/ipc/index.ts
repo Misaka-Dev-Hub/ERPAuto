@@ -7,6 +7,7 @@ import { registerFileHandlers } from './file-handler'
 import { registerExtractorHandlers } from './extractor-handler'
 import { registerCleanerHandlers } from './cleaner-handler'
 import { registerDatabaseHandlers } from './database-handler'
+import { registerResolverHandlers } from './resolver-handler'
 
 /**
  * Register all IPC handlers
@@ -16,4 +17,5 @@ export function registerIpcHandlers(): void {
   registerExtractorHandlers()
   registerCleanerHandlers()
   registerDatabaseHandlers()
+  registerResolverHandlers()
 }

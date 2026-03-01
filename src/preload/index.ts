@@ -3,6 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type { MySqlConfig, SqlServerConfig } from '../main/types/ipc-api.types'
 import type { ExtractorInput } from '../main/types/extractor.types'
 import type { CleanerInput } from '../main/types/cleaner.types'
+import type { ResolverInput } from '../main/ipc/resolver-handler'
 
 // Custom APIs for renderer
 const api = {
@@ -23,6 +24,12 @@ const api = {
   // Cleaner service
   cleaner: {
     runCleaner: (input: CleanerInput) => ipcRenderer.invoke('cleaner:run', input)
+  },
+
+  // Order number resolver
+  resolver: {
+    resolve: (input: ResolverInput) => ipcRenderer.invoke('resolver:resolve', input),
+    validateFormat: (inputs: string[]) => ipcRenderer.invoke('resolver:validateFormat', inputs)
   },
 
   // Database service
