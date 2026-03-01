@@ -9,6 +9,7 @@ import type {
   CurrentUserResponse
 } from '../main/ipc/auth-handler'
 import type { ValidationRequest, ValidationResponse } from '../main/types/validation.types'
+import type { SettingsData, UserType, ConnectionTestResult, SaveSettingsResult } from '../main/types/settings.types'
 
 /**
  * Order number resolver API
@@ -88,6 +89,16 @@ export interface ValidationAPI {
    * Get shared Production IDs
    */
   getSharedProductionIds: () => Promise<{ productionIds: string[] }>
+  /**
+   * Get cleaner data (order numbers from shared Production IDs + material codes from MaterialsToBeDeleted)
+   * Filters materials by current user (admin sees all, regular users see only their own)
+   */
+  getCleanerData: () => Promise<{
+    success: boolean
+    orderNumbers?: string[]
+    materialCodes?: string[]
+    error?: string
+  }>
 }
 
 /**
@@ -131,6 +142,37 @@ export interface MaterialsAPI {
   getStatistics: () => Promise<{ stats: unknown }>
 }
 
+/**
+ * Settings API
+ */
+export interface SettingsAPI {
+  /**
+   * Get current user type
+   */
+  getUserType: () => Promise<UserType>
+  /**
+   * Get settings (filtered by user type)
+   */
+  getSettings: () => Promise<SettingsData>
+  /**
+   * Save settings
+   * @param settings - Settings data to save
+   */
+  saveSettings: (settings: SettingsData) => Promise<SaveSettingsResult>
+  /**
+   * Reset to defaults (Admin only)
+   */
+  resetDefaults: () => Promise<SaveSettingsResult>
+  /**
+   * Test ERP connection
+   */
+  testErpConnection: () => Promise<ConnectionTestResult>
+  /**
+   * Test database connection
+   */
+  testDbConnection: () => Promise<ConnectionTestResult>
+}
+
 declare global {
   interface Window {
     electron: {
@@ -157,6 +199,7 @@ declare global {
       auth: AuthAPI
       validation: ValidationAPI
       materials: MaterialsAPI
+      settings: SettingsAPI
     }
     api: unknown
   }

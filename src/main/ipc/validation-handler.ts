@@ -615,4 +615,100 @@ export function registerValidationHandlers(): void {
       return { productionIds: getSharedProductionIds() }
     }
   )
+
+  /**
+   * Get cleaner data (order numbers from shared Production IDs + material codes from MaterialsToBeDeleted)
+   * Filters materials by current user (admin sees all, regular users see only their own)
+   */
+  ipcMain.handle(
+    'validation:getCleanerData',
+    async (_event): Promise<{
+      success: boolean
+      orderNumbers?: string[]
+      materialCodes?: string[]
+      error?: string
+    }> => {
+      let mysqlService: MySqlService | null = null
+      const sessionManager = (await import('../services/user/session-manager')).SessionManager.getInstance()
+
+      try {
+        // Get current user
+        const userInfo = sessionManager.getUserInfo()
+        if (!userInfo) {
+          return {
+            success: false,
+            error: '用户未登录'
+          }
+        }
+
+        const isAdmin = userInfo.userType === 'Admin'
+        const username = userInfo.username
+
+        console.log(`[CleanerData] User: ${username}, isAdmin: ${isAdmin}`)
+
+        // Connect to MySQL
+        mysqlService = await getValidationMySqlService()
+
+        // 1. Get order numbers from shared Production IDs
+        const sharedIds = getSharedProductionIds()
+        let orderNumbers: string[] = []
+
+        if (sharedIds.length > 0) {
+          console.log(`[CleanerData] Using ${sharedIds.length} shared Production IDs`)
+          orderNumbers = await getSourceNumbersFromInputs(sharedIds, mysqlService)
+          console.log(`[CleanerData] Got ${orderNumbers.length} order numbers`)
+        }
+
+        // 2. Get material codes from MaterialsToBeDeleted table
+        let materialCodes: string[] = []
+
+        if (isAdmin) {
+          // Admin sees all materials
+          const allCodesSql = `
+            SELECT MaterialCode
+            FROM dbo_MaterialsToBeDeleted
+            WHERE MaterialCode IS NOT NULL
+          `
+          const result = await mysqlService.query(allCodesSql)
+          materialCodes = result.rows
+            .map(row => row.MaterialCode as string)
+            .filter(Boolean)
+          console.log(`[CleanerData] Admin user: got ${materialCodes.length} materials`)
+        } else {
+          // Regular users only see their own materials
+          const userMaterialsSql = `
+            SELECT MaterialCode
+            FROM dbo_MaterialsToBeDeleted
+            WHERE ManagerName = ? AND MaterialCode IS NOT NULL
+          `
+          const result = await mysqlService.query(userMaterialsSql, [username])
+          materialCodes = result.rows
+            .map(row => row.MaterialCode as string)
+            .filter(Boolean)
+          console.log(`[CleanerData] Regular user: got ${materialCodes.length} materials`)
+        }
+
+        return {
+          success: true,
+          orderNumbers,
+          materialCodes
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        console.error('[CleanerData] Error:', error)
+        return {
+          success: false,
+          error: `获取清理数据失败：${message}`
+        }
+      } finally {
+        if (mysqlService) {
+          try {
+            await mysqlService.disconnect()
+          } catch (closeError) {
+            console.warn('[CleanerData] Error disconnecting MySQL:', closeError)
+          }
+        }
+      }
+    }
+  )
 }

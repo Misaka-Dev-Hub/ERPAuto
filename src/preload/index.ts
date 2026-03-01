@@ -7,6 +7,7 @@ import type { ResolverInput } from '../main/ipc/resolver-handler'
 import type { LoginRequest } from '../main/ipc/auth-handler'
 import type { UserInfo } from '../main/types/user.types'
 import type { ValidationRequest } from '../main/types/validation.types'
+import type { SettingsData } from '../main/types/settings.types'
 
 // Custom APIs for renderer
 const api = {
@@ -70,7 +71,9 @@ const api = {
     setSharedProductionIds: (productionIds: string[]) =>
       ipcRenderer.invoke('validation:setSharedProductionIds', productionIds),
     getSharedProductionIds: () =>
-      ipcRenderer.invoke('validation:getSharedProductionIds')
+      ipcRenderer.invoke('validation:getSharedProductionIds'),
+    getCleanerData: () =>
+      ipcRenderer.invoke('validation:getCleanerData')
   },
 
   // Materials service
@@ -84,6 +87,16 @@ const api = {
       ipcRenderer.invoke('materials:getByManager', managerName),
     getAll: () => ipcRenderer.invoke('materials:getAll'),
     getStatistics: () => ipcRenderer.invoke('materials:getStatistics')
+  },
+
+  // Settings service
+  settings: {
+    getUserType: () => ipcRenderer.invoke('settings:getUserType'),
+    getSettings: () => ipcRenderer.invoke('settings:getSettings'),
+    saveSettings: (settings: SettingsData) => ipcRenderer.invoke('settings:saveSettings', settings),
+    resetDefaults: () => ipcRenderer.invoke('settings:resetDefaults'),
+    testErpConnection: () => ipcRenderer.invoke('settings:testErpConnection'),
+    testDbConnection: () => ipcRenderer.invoke('settings:testDbConnection')
   }
 } as const
 

@@ -24,13 +24,7 @@ interface ValidationResult {
  */
 export const CleanerPage: React.FC = () => {
   // State with sessionStorage persistence
-  const [orderNumbers, setOrderNumbers] = useState(() => {
-    return sessionStorage.getItem('cleaner_orderNumbers') || ''
-  })
-  const [materialCodes, setMaterialCodes] = useState(() => {
-    return sessionStorage.getItem('cleaner_materialCodes') || ''
-  })
-  const [dryRun, setDryRun] = useState(() => {
+  const [dryRun] = useState(() => {
     const saved = sessionStorage.getItem('cleaner_dryRun')
     return saved ? saved === 'true' : true
   })
@@ -92,13 +86,6 @@ export const CleanerPage: React.FC = () => {
     results = results.filter(r => !hiddenItems.has(r.materialCode))
     return results
   }, [validationResults, isAdmin, currentUsername, managers, selectedManagers, hiddenItems])
-  useEffect(() => {
-    sessionStorage.setItem('cleaner_orderNumbers', orderNumbers)
-  }, [orderNumbers])
-
-  useEffect(() => {
-    sessionStorage.setItem('cleaner_materialCodes', materialCodes)
-  }, [materialCodes])
 
   useEffect(() => {
     sessionStorage.setItem('cleaner_dryRun', dryRun.toString())
@@ -121,11 +108,11 @@ export const CleanerPage: React.FC = () => {
       const admin = await window.electron.auth.isAdmin()
       const user = await window.electron.auth.getCurrentUser()
       setIsAdmin(admin)
-      if (user) {
-        setCurrentUsername(user.username)
+      if (user && user.userInfo) {
+        setCurrentUsername(user.userInfo.username)
         if (!admin) {
           // Non-admin users can only see their own data
-          setSelectedManagers(new Set([user.username]))
+          setSelectedManagers(new Set([user.userInfo.username]))
         }
       }
 
@@ -345,64 +332,8 @@ export const CleanerPage: React.FC = () => {
     }
   }, [selectedItems, validationResults, loadManagers])
 
-  // Handle export results
-  const handleExportResults = useCallback(async () => {
-    if (validationResults.length === 0) {
-      setError('没有数据可导出')
-      return
-    }
-
-    try {
-      // Prepare data for export
-      const data = validationResults.map(result => ({
-        '选择': selectedItems.has(result.materialCode) ? '是' : '否',
-        '材料名称': result.materialName,
-        '材料代码': result.materialCode,
-        '规格': result.specification,
-        '型号': result.model,
-        '负责人': result.managerName || ''
-      }))
-
-      // Create CSV content
-      const headers = ['选择', '材料名称', '材料代码', '规格', '型号', '负责人']
-      const csvContent = [
-        headers.join(','),
-        ...data.map(row =>
-          headers.map(header => {
-            const value = row[header as keyof typeof row]
-            // Escape quotes and wrap in quotes if contains comma
-            const escaped = String(value).replace(/"/g, '""')
-            return escaped.includes(',') ? `"${escaped}"` : escaped
-          }).join(',')
-        )
-      ].join('\n')
-
-      // Create blob and download
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-      const link = document.createElement('a')
-      const url = URL.createObjectURL(blob)
-      link.setAttribute('href', url)
-      link.setAttribute('download', `物料状态校验结果_${new Date().getTime()}.csv`)
-      link.style.visibility = 'hidden'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '导出失败')
-    }
-  }, [validationResults, selectedItems])
-
-  // Handle execute deletion
+  // Handle execute deletion (清理)
   const handleExecuteDeletion = useCallback(async () => {
-    if (!orderNumbers.trim()) {
-      setError('请输入至少一个订单号')
-      return
-    }
-    if (!materialCodes.trim()) {
-      setError('请输入至少一个物料代码')
-      return
-    }
-
     if (!dryRun) {
       const confirmed = window.confirm('警告：正式执行将删除 ERP 系统中的物料数据，是否继续？')
       if (!confirmed) return
@@ -414,15 +345,35 @@ export const CleanerPage: React.FC = () => {
     setError(null)
 
     try {
-      const orderNumberList = orderNumbers
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
+      // Get cleaner data from backend (order numbers from shared Production IDs + material codes from DB)
+      const cleanerDataResult = await window.electron.validation.getCleanerData()
 
-      const materialCodeList = materialCodes
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
+      if (!cleanerDataResult.success) {
+        setError(cleanerDataResult.error || '获取清理数据失败')
+        setIsRunning(false)
+        return
+      }
+
+      const orderNumberList = cleanerDataResult.orderNumbers || []
+      const materialCodeList = cleanerDataResult.materialCodes || []
+
+      if (orderNumberList.length === 0) {
+        setError('没有订单号数据。请先到数据提取页面输入 Production ID。')
+        setIsRunning(false)
+        return
+      }
+
+      if (materialCodeList.length === 0) {
+        setError('没有物料代码数据。请确认已在物料清理界面勾选要删除的物料。')
+        setIsRunning(false)
+        return
+      }
+
+      console.log('[CleanerPage] Starting cleaner with:', {
+        orderNumbers: orderNumberList.length,
+        materialCodes: materialCodeList.length,
+        dryRun
+      })
 
       const response = await window.electron.cleaner.runCleaner({
         orderNumbers: orderNumberList,
@@ -441,20 +392,7 @@ export const CleanerPage: React.FC = () => {
       setIsRunning(false)
       setProgress(null)
     }
-  }, [orderNumbers, materialCodes, dryRun])
-
-  // Handle clean (alias for execute deletion)
-  const handleClean = useCallback(handleExecuteDeletion, [handleExecuteDeletion])
-
-  // Handle reset
-  const handleReset = useCallback(() => {
-    setOrderNumbers('')
-    setMaterialCodes('')
-    setDryRun(true)
-    setResult(null)
-    setError(null)
-    setProgress(null)
-  }, [])
+  }, [dryRun])
 
   // Handle hide checked items (for user mode)
   const handleHideChecked = useCallback(() => {
@@ -559,13 +497,6 @@ export const CleanerPage: React.FC = () => {
                 </button>
               </>
             )}
-            <button
-              className="btn btn-warning"
-              onClick={handleConfirmDeletion}
-              disabled={selectedItems.size === 0 || isRunning}
-            >
-              确认删除
-            </button>
           </div>
 
           {validationStats && (
@@ -575,26 +506,6 @@ export const CleanerPage: React.FC = () => {
               <span>已标记删除：{validationStats.markedCount}</span>
             </div>
           )}
-
-          {/* Additional action buttons */}
-          <div className="button-group" style={{ marginTop: '12px' }}>
-            <button
-              className="btn btn-secondary"
-              onClick={handleExportResults}
-              disabled={validationResults.length === 0}
-            >
-              导出结果
-            </button>
-            {isAdmin && (
-              <button
-                className="btn btn-primary"
-                onClick={handleExecuteDeletion}
-                disabled={!orderNumbers.trim() || !materialCodes.trim() || isRunning}
-              >
-                {isRunning ? '清理中...' : '执行删除'}
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Manager Filter (Admin only) */}
@@ -631,25 +542,44 @@ export const CleanerPage: React.FC = () => {
           <div className="validation-results-section">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h2 style={{ margin: 0 }}>校验结果</h2>
-              {/* User mode buttons: Hide Checked / Show All */}
-              {!isAdmin && (
+              {/* Action buttons: left group (Hide Checked, Show All, Confirm Delete) + right button (Execute Delete in red) */}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
+                  {!isAdmin && (
+                    <>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={handleHideChecked}
+                        disabled={selectedItems.size === 0}
+                      >
+                        隐藏勾选
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={handleShowAll}
+                        disabled={hiddenItems.size === 0}
+                      >
+                        显示全部
+                      </button>
+                    </>
+                  )}
                   <button
-                    className="btn btn-secondary"
-                    onClick={handleHideChecked}
-                    disabled={selectedItems.size === 0}
+                    className="btn btn-warning"
+                    onClick={handleConfirmDeletion}
+                    disabled={selectedItems.size === 0 || isRunning}
                   >
-                    隐藏勾选
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={handleShowAll}
-                    disabled={hiddenItems.size === 0}
-                  >
-                    显示全部
+                    确认删除
                   </button>
                 </div>
-              )}
+                <button
+                  className="btn btn-danger"
+                  onClick={handleExecuteDeletion}
+                  disabled={isRunning || validationResults.length === 0}
+                  style={{ marginLeft: '16px' }}
+                >
+                  开始清理
+                </button>
+              </div>
             </div>
             <table className="validation-results-table">
               <thead>
@@ -683,57 +613,6 @@ export const CleanerPage: React.FC = () => {
             </table>
           </div>
         )}
-
-        {/* Simple Input Section */}
-        <div className="input-section">
-          <h2>订单号和物料代码输入</h2>
-          <div className="input-row">
-            <div className="input-group">
-              <label>订单号列表</label>
-              <textarea
-                value={orderNumbers}
-                onChange={(e) => setOrderNumbers(e.target.value)}
-                placeholder="请输入订单号，每行一个"
-                rows={5}
-              />
-            </div>
-
-            <div className="input-group">
-              <label>物料代码列表</label>
-              <textarea
-                value={materialCodes}
-                onChange={(e) => setMaterialCodes(e.target.value)}
-                placeholder="请输入物料代码，每行一个"
-                rows={5}
-              />
-            </div>
-          </div>
-
-          <div className="dry-run-option">
-            <label>
-              <input
-                type="checkbox"
-                checked={dryRun}
-                onChange={(e) => setDryRun(e.target.checked)}
-                disabled={isRunning}
-              />
-              <span>干运行模式（不实际删除，仅预览）</span>
-            </label>
-          </div>
-
-          <div className="button-group">
-            <button
-              className="btn btn-primary"
-              onClick={handleClean}
-              disabled={isRunning || !orderNumbers.trim() || !materialCodes.trim()}
-            >
-              {isRunning ? '清理中...' : '开始清理'}
-            </button>
-            <button className="btn btn-secondary" onClick={handleReset} disabled={isRunning}>
-              重置
-            </button>
-          </div>
-        </div>
 
         {/* Progress Section */}
         {progress && (
@@ -848,12 +727,12 @@ export const CleanerPage: React.FC = () => {
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
           padding: 24px;
         }
-        .validation-section, .manager-filter-section, .input-section {
+        .validation-section, .manager-filter-section {
           margin-bottom: 24px;
           padding-bottom: 24px;
           border-bottom: 1px solid #e8e8e8;
         }
-        .validation-section h2, .manager-filter-section h3, .input-section h2 {
+        .validation-section h2, .manager-filter-section h3 {
           font-size: 18px;
           color: #333;
           margin-bottom: 16px;
@@ -910,6 +789,13 @@ export const CleanerPage: React.FC = () => {
         }
         .btn-warning:hover:not(:disabled) {
           background: #ffc069;
+        }
+        .btn-danger {
+          background: #ff4d4f;
+          color: #fff;
+        }
+        .btn-danger:hover:not(:disabled) {
+          background: #ff7875;
         }
         .validation-stats {
           display: flex;
@@ -970,46 +856,6 @@ export const CleanerPage: React.FC = () => {
         }
         .validation-results-table tr:hover {
           background: #e6f7ff;
-        }
-        .input-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 24px;
-          margin-bottom: 16px;
-        }
-        .input-group label {
-          display: block;
-          margin-bottom: 8px;
-          font-weight: 500;
-          color: #333;
-        }
-        .input-group textarea {
-          width: 100%;
-          padding: 12px;
-          border: 1px solid #d9d9d9;
-          border-radius: 6px;
-          font-size: 14px;
-          font-family: 'Consolas', 'Monaco', monospace;
-          resize: vertical;
-        }
-        .input-group textarea:focus {
-          outline: none;
-          border-color: #52c41a;
-          box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.2);
-        }
-        .dry-run-option {
-          margin-bottom: 16px;
-          padding: 12px;
-          background: #f5f5f5;
-          border-radius: 6px;
-        }
-        .dry-run-option label {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          cursor: pointer;
-          font-size: 14px;
-          color: #666;
         }
         .progress-section {
           margin-top: 24px;

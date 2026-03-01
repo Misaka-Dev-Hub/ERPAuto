@@ -13,8 +13,9 @@ import LoginDialog from './components/LoginDialog'
 import UserSelectionDialog, { type UserInfo as SelectedUserInfo } from './components/UserSelectionDialog'
 import { ExtractorPage } from './pages/ExtractorPage'
 import { CleanerPage } from './pages/CleanerPage'
+import SettingsPage from './pages/SettingsPage'
 
-type Page = 'home' | 'extractor' | 'cleaner'
+type Page = 'home' | 'extractor' | 'cleaner' | 'settings'
 
 interface CurrentUser {
   username: string
@@ -354,6 +355,21 @@ function App(): React.JSX.Element {
             >
               物料清理
             </button>
+            <button
+              onClick={() => setCurrentPage('settings')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentPage === 'settings' ? '#1890ff' : '#f5f5f5',
+                color: currentPage === 'settings' ? '#fff' : '#666',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                cursor: 'pointer',
+                transition: 'all 0.3s'
+              }}
+            >
+              系统设置
+            </button>
           </nav>
         </div>
         <div>
@@ -379,13 +395,14 @@ function App(): React.JSX.Element {
           <div>
             <h1 style={{ fontSize: '24px', color: '#333', marginBottom: '24px' }}>主页面</h1>
             <p style={{ color: '#666', fontSize: '14px' }}>
-              请使用顶部导航栏切换到 数据提取 或 物料清理 页面
+              请使用顶部导航栏切换到 数据提取、物料清理 或 系统设置 页面
             </p>
           </div>
         )}
 
         {currentPage === 'extractor' && <ExtractorPage />}
         {currentPage === 'cleaner' && <CleanerPage />}
+        {currentPage === 'settings' && <SettingsPage />}
       </div>
     </div>
   )
