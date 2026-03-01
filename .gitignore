@@ -5,7 +5,21 @@ out
 .eslintcache
 *.log*
 
-#AI Agent
+# AI Agent
 .claude
 
+# Environment
 .env
+
+# Test outputs
+coverage/
+downloads/
+*.xlsx
+*.parsed.json
+
+# Test scripts (debug and manual)
+tests/debug/
+tests/manual/
+test-*.mjs
+test-*.js
+compare_*.js
