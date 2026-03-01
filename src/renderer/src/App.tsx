@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect } from 'react'
 import LoginDialog from './components/LoginDialog'
+import UserSelectionDialog, { type UserInfo as SelectedUserInfo } from './components/UserSelectionDialog'
 import { ExtractorPage } from './pages/ExtractorPage'
 import { CleanerPage } from './pages/CleanerPage'
 
@@ -29,7 +30,12 @@ function App(): React.JSX.Element {
 
   // Dialog state
   const [showLoginDialog, setShowLoginDialog] = useState(false)
+  const [showUserSelection, setShowUserSelection] = useState(false)
+  const [allUsers, setAllUsers] = useState<SelectedUserInfo[]>([])
   const [errorMessage, setErrorMessage] = useState('')
+
+  // Track if current session is switched by Admin
+  const [isSwitchedByAdmin, setIsSwitchedByAdmin] = useState(false)
 
   // Navigation state
   const [currentPage, setCurrentPage] = useState<Page>('home')
@@ -69,9 +75,11 @@ function App(): React.JSX.Element {
 
         // Check if admin needs user selection
         if (result.requiresUserSelection) {
-          console.log('Admin user needs to select user - logging in anyway')
-          // For now, just log in as the current user
-          setIsAuthenticated(true)
+          console.log('Admin user needs to select user')
+          // Load all users for selection
+          const users = await window.electron.auth.getAllUsers()
+          setAllUsers(users)
+          setShowUserSelection(true)
         } else {
           console.log('Setting authenticated to true')
           setIsAuthenticated(true)
@@ -105,8 +113,10 @@ function App(): React.JSX.Element {
         // Check if admin needs user selection
         if (result.userInfo.userType === 'Admin') {
           setShowLoginDialog(false)
-          // TODO: Show user selection dialog
-          console.log('Admin user needs to select user')
+          // Load all users for selection
+          const users = await window.electron.auth.getAllUsers()
+          setAllUsers(users)
+          setShowUserSelection(true)
         } else {
           setIsAuthenticated(true)
           setShowLoginDialog(false)
@@ -126,13 +136,46 @@ function App(): React.JSX.Element {
     setShowLoginDialog(false)
   }
 
+  // Handle user selection
+  const handleUserSelect = async (user: SelectedUserInfo) => {
+    try {
+      const result = await window.electron.auth.switchUser(user)
+      if (result.success) {
+        setCurrentUser({
+          username: result.userInfo?.username || user.username,
+          userType: result.userInfo?.userType || user.userType
+        })
+        setIsAuthenticated(true)
+        setShowUserSelection(false)
+        // Mark as switched by Admin
+        setIsSwitchedByAdmin(true)
+      }
+    } catch (error) {
+      console.error('User selection error:', error)
+      showError('切换用户失败')
+    }
+  }
+
+  // Handle user selection cancel
+  const handleUserSelectionCancel = () => {
+    // User cancelled selection, logout and show login dialog
+    window.electron.auth.logout()
+    setShowUserSelection(false)
+    setShowLoginDialog(true)
+  }
+
   // Handle logout
   const handleLogout = async () => {
     await window.electron.auth.logout()
     setIsAuthenticated(false)
     setCurrentUser(null)
+    setIsSwitchedByAdmin(false)
     setShowLoginDialog(true)
   }
+
+  // Check if should show logout button
+  // Show logout if: user is Admin, OR user was switched by Admin
+  const shouldShowLogout = currentUser?.userType === 'Admin' || isSwitchedByAdmin
 
   // Show loading state during authentication
   if (isAuthenticating) {
@@ -183,12 +226,21 @@ function App(): React.JSX.Element {
           onError={showError}
         />
 
+        {/* User Selection Dialog for Admin */}
+        <UserSelectionDialog
+          isOpen={showUserSelection}
+          users={allUsers}
+          currentUsername={currentUser?.username || ''}
+          onSelectUser={handleUserSelect}
+          onCancel={handleUserSelectionCancel}
+        />
+
         {errorMessage && (
           <div className="error-toast">{errorMessage}</div>
         )}
 
         {/* If showLoginDialog is false but not authenticated, show a message */}
-        {!showLoginDialog && (
+        {!showLoginDialog && !showUserSelection && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -257,17 +309,19 @@ function App(): React.JSX.Element {
           </span>
         </div>
         <div>
-          <button onClick={handleLogout} style={{
-            padding: '8px 16px',
-            backgroundColor: '#ff4d4f',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '14px',
-            cursor: 'pointer'
-          }}>
-            退出登录
-          </button>
+          {shouldShowLogout && (
+            <button onClick={handleLogout} style={{
+              padding: '8px 16px',
+              backgroundColor: '#ff4d4f',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '14px',
+              cursor: 'pointer'
+            }}>
+              退出登录
+            </button>
+          )}
         </div>
       </header>
 
