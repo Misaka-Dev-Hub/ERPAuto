@@ -7,3 +7,5 @@ out
 
 #AI Agent
 .claude
+
+.env
