@@ -16,31 +16,54 @@ export function registerExtractorHandlers(): void {
       let authService: ErpAuthService | null = null
 
       try {
+        // Check environment variables
+        const erpUrl = process.env.ERP_URL || ''
+        const erpUsername = process.env.ERP_USERNAME || ''
+        const erpPassword = process.env.ERP_PASSWORD || ''
+
+        console.log('[Extractor] Config:', {
+          url: erpUrl ? '***' : 'EMPTY',
+          username: erpUsername ? '***' : 'EMPTY'
+        })
+
+        if (!erpUrl || !erpUsername || !erpPassword) {
+          throw new Error(
+            'ERP 配置不完整。请检查 .env 文件中的 ERP_URL, ERP_USERNAME, ERP_PASSWORD'
+          )
+        }
+
         // Create auth service and login
         authService = new ErpAuthService({
-          url: process.env.ERP_URL || '',
-          username: process.env.ERP_USERNAME || '',
-          password: process.env.ERP_PASSWORD || '',
+          url: erpUrl,
+          username: erpUsername,
+          password: erpPassword,
           headless: true
         })
 
+        console.log('[Extractor] Logging in to ERP...')
         await authService.login()
+        console.log('[Extractor] Login successful')
 
         // Create extractor service and run extraction
         const extractor = new ExtractorService(authService)
+        console.log('[Extractor] Starting extraction for orders:', input.orderNumbers)
         const result = await extractor.extract(input)
+        console.log('[Extractor] Extraction completed:', result)
 
         return { success: true, data: result }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
-        return { success: false, error: message }
+        console.error('[Extractor] Error:', message)
+        console.error('[Extractor] Stack:', error instanceof Error ? error.stack : 'N/A')
+        return { success: false, error: `提取失败：${message}` }
       } finally {
         // Clean up: close browser
         if (authService) {
           try {
             await authService.close()
-          } catch {
-            // Ignore cleanup errors
+            console.log('[Extractor] Browser closed')
+          } catch (closeError) {
+            console.warn('[Extractor] Error closing browser:', closeError)
           }
         }
       }

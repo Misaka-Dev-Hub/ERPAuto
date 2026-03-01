@@ -124,7 +124,10 @@ export const ExtractorPage: React.FC = () => {
         {error && (
           <div className="error-section">
             <h3>错误</h3>
-            <p>{error}</p>
+            <div className="error-message" title="双击可选中复制">
+              {error}
+            </div>
+            <p className="error-hint">💡 提示：双击错误信息可选中复制</p>
           </div>
         )}
 
@@ -286,9 +289,27 @@ export const ExtractorPage: React.FC = () => {
           margin: 0 0 8px 0;
           font-size: 16px;
         }
-        .error-section p {
-          color: #666;
-          margin: 0;
+        .error-message {
+          background: #fff;
+          padding: 12px;
+          border-radius: 4px;
+          font-family: 'Consolas', 'Monaco', monospace;
+          font-size: 13px;
+          color: #333;
+          border: 1px solid #ffccc7;
+          user-select: text;
+          -webkit-user-select: text;
+          cursor: text;
+          white-space: pre-wrap;
+          word-break: break-all;
+        }
+        .error-message:hover {
+          background: #fffbfc;
+        }
+        .error-hint {
+          color: #999;
+          font-size: 12px;
+          margin: 8px 0 0 0;
         }
         .result-section {
           margin-top: 24px;
