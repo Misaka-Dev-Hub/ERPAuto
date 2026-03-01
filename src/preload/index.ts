@@ -4,6 +4,8 @@ import type { MySqlConfig, SqlServerConfig } from '../main/types/ipc-api.types'
 import type { ExtractorInput } from '../main/types/extractor.types'
 import type { CleanerInput } from '../main/types/cleaner.types'
 import type { ResolverInput } from '../main/ipc/resolver-handler'
+import type { LoginRequest } from '../main/ipc/auth-handler'
+import type { UserInfo } from '../main/types/user.types'
 
 // Custom APIs for renderer
 const api = {
@@ -30,6 +32,18 @@ const api = {
   resolver: {
     resolve: (input: ResolverInput) => ipcRenderer.invoke('resolver:resolve', input),
     validateFormat: (inputs: string[]) => ipcRenderer.invoke('resolver:validateFormat', inputs)
+  },
+
+  // Authentication service
+  auth: {
+    getComputerName: () => ipcRenderer.invoke('auth:getComputerName'),
+    silentLogin: () => ipcRenderer.invoke('auth:silentLogin'),
+    login: (request: LoginRequest) => ipcRenderer.invoke('auth:login', request),
+    logout: () => ipcRenderer.invoke('auth:logout'),
+    getCurrentUser: () => ipcRenderer.invoke('auth:getCurrentUser'),
+    getAllUsers: () => ipcRenderer.invoke('auth:getAllUsers'),
+    switchUser: (userInfo: UserInfo) => ipcRenderer.invoke('auth:switchUser', userInfo),
+    isAdmin: () => ipcRenderer.invoke('auth:isAdmin')
   },
 
   // Database service

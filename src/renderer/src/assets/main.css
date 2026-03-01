@@ -1,37 +1,18 @@
 @import './base.css';
 
 body {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
+  display: block;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
   background-image: url('./wavy-lines.svg');
   background-size: cover;
   user-select: none;
 }
 
-code {
-  font-weight: 600;
-  padding: 3px 5px;
-  border-radius: 2px;
-  background-color: var(--color-background-mute);
-  font-family:
-    ui-monospace,
-    SFMono-Regular,
-    SF Mono,
-    Menlo,
-    Consolas,
-    Liberation Mono,
-    monospace;
-  font-size: 85%;
-}
-
 #root {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  margin-bottom: 80px;
+  width: 100%;
+  min-height: 100vh;
 }
 
 .logo {
