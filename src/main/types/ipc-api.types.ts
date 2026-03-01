@@ -101,7 +101,9 @@ export interface CleanerAPI {
    * Run ERP cleaner service
    * @param input - Cleaner input parameters
    */
-  runCleaner: (input: CleanerInput) => Promise<CleanerResult>
+  runCleaner: (
+    input: CleanerInput
+  ) => Promise<{ success: boolean; data?: CleanerResult; error?: string }>
 }
 
 /**

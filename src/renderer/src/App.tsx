@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Versions from './components/Versions'
 import { ExtractorPage } from './pages/ExtractorPage'
+import { CleanerPage } from './pages/CleanerPage'
 import electronLogo from './assets/electron.svg'
 
 type Page = 'home' | 'extractor' | 'cleaner'
@@ -12,6 +13,8 @@ function App(): React.JSX.Element {
     switch (currentPage) {
       case 'extractor':
         return <ExtractorPage />
+      case 'cleaner':
+        return <CleanerPage />
       default:
         return (
           <>
@@ -34,6 +37,17 @@ function App(): React.JSX.Element {
                   }}
                 >
                   数据提取
+                </a>
+              </div>
+              <div className="action">
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setCurrentPage('cleaner')
+                  }}
+                >
+                  物料清理
                 </a>
               </div>
               <div className="action">
