@@ -9,6 +9,7 @@ import { registerCleanerHandlers } from './cleaner-handler'
 import { registerDatabaseHandlers } from './database-handler'
 import { registerResolverHandlers } from './resolver-handler'
 import { registerAuthHandlers } from './auth-handler'
+import { registerValidationHandlers } from './validation-handler'
 
 /**
  * Register all IPC handlers
@@ -20,4 +21,5 @@ export function registerIpcHandlers(): void {
   registerDatabaseHandlers()
   registerResolverHandlers()
   registerAuthHandlers()
+  registerValidationHandlers()
 }

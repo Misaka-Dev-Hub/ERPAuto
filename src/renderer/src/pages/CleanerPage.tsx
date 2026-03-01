@@ -1,38 +1,399 @@
-import React, { useState } from 'react'
-import { OrderNumberInput } from '../components/OrderNumberInput'
-import { MaterialCodeInput } from '../components/MaterialCodeInput'
+import React, { useState, useCallback, useEffect } from 'react'
 
-interface CleanerResult {
-  ordersProcessed: number
-  materialsDeleted: number
-  materialsSkipped: number
-  errors: string[]
-  details: Array<{
-    orderNumber: string
-    materialsDeleted: number
-    materialsSkipped: number
-    errors: string[]
-  }>
-}
-
-interface CleanerProgress {
-  message: string
-  progress?: number
+/**
+ * Material validation result interface
+ */
+interface ValidationResult {
+  materialName: string
+  materialCode: string
+  specification: string
+  model: string
+  managerName: string
+  isMarkedForDeletion: boolean
+  matchedTypeKeyword?: string
 }
 
 /**
- * CleanerPage - Main page for ERP material cleaning
+ * CleanerPage with material validation functionality
+ *
+ * This component provides the same functionality as the Python MaterialValidationTab:
+ * - Material validation from database (full table or filtered by ProductionID)
+ * - Checkbox selection for materials to delete
+ * - Manager-based filtering (Admin only)
+ * - Two-phase deletion: confirm (mark in DB) + execute (delete from ERP)
  */
 export const CleanerPage: React.FC = () => {
-  const [orderNumbers, setOrderNumbers] = useState('')
-  const [materialCodes, setMaterialCodes] = useState('')
-  const [dryRun, setDryRun] = useState(true)
+  // State with sessionStorage persistence
+  const [orderNumbers, setOrderNumbers] = useState(() => {
+    return sessionStorage.getItem('cleaner_orderNumbers') || ''
+  })
+  const [materialCodes, setMaterialCodes] = useState(() => {
+    return sessionStorage.getItem('cleaner_materialCodes') || ''
+  })
+  const [dryRun, setDryRun] = useState(() => {
+    const saved = sessionStorage.getItem('cleaner_dryRun')
+    return saved ? saved === 'true' : true
+  })
+  const [validationMode, setValidationMode] = useState<'database_full' | 'database_filtered'>(() => {
+    const saved = sessionStorage.getItem('cleaner_validationMode') as 'database_full' | 'database_filtered'
+    return saved || 'database_filtered'
+  })
+  const [useSharedProductionIds, setUseSharedProductionIds] = useState(() => {
+    const saved = sessionStorage.getItem('cleaner_useSharedProductionIds')
+    return saved ? saved === 'true' : true
+  })
+
   const [isRunning, setIsRunning] = useState(false)
-  const [progress, setProgress] = useState<CleanerProgress | null>(null)
-  const [result, setResult] = useState<CleanerResult | null>(null)
+  const [progress, setProgress] = useState<{ message: string; progress?: number } | null>(null)
+  const [result, setResult] = useState<{
+    ordersProcessed: number
+    materialsDeleted: number
+    materialsSkipped: number
+    errors: string[]
+    details: Array<{
+      orderNumber: string
+      materialsDeleted: number
+      materialsSkipped: number
+      errors: string[]
+    }>
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const handleClean = async () => {
+  // Validation state
+  const [validationResults, setValidationResults] = useState<ValidationResult[]>([])
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
+  const [managers, setManagers] = useState<string[]>([])
+  const [selectedManagers, setSelectedManagers] = useState<Set<string>>(new Set())
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [currentUsername, setCurrentUsername] = useState<string>('')
+  const [isValidationRunning, setIsValidationRunning] = useState(false)
+  const [validationStats, setValidationStats] = useState<{
+    totalRecords: number
+    matchedCount: number
+    markedCount: number
+  } | null>(null)
+
+  // Hidden items state (for user mode hide checked feature)
+  const [hiddenItems, setHiddenItems] = useState<Set<string>>(new Set())
+
+  // Filter validation results by selected managers and hidden items
+  const filteredResults = React.useMemo(() => {
+    let results = validationResults
+    if (!isAdmin && currentUsername) {
+      // Non-admin users only see their own data
+      results = results.filter(r => r.managerName === currentUsername || !r.managerName)
+    } else if (managers.length > 0 && selectedManagers.size > 0) {
+      // Admin users see selected managers' data
+      results = results.filter(
+        r => selectedManagers.has(r.managerName) || !r.managerName
+      )
+    }
+    // Filter out hidden items
+    results = results.filter(r => !hiddenItems.has(r.materialCode))
+    return results
+  }, [validationResults, isAdmin, currentUsername, managers, selectedManagers, hiddenItems])
+  useEffect(() => {
+    sessionStorage.setItem('cleaner_orderNumbers', orderNumbers)
+  }, [orderNumbers])
+
+  useEffect(() => {
+    sessionStorage.setItem('cleaner_materialCodes', materialCodes)
+  }, [materialCodes])
+
+  useEffect(() => {
+    sessionStorage.setItem('cleaner_dryRun', dryRun.toString())
+  }, [dryRun])
+
+  useEffect(() => {
+    sessionStorage.setItem('cleaner_validationMode', validationMode)
+  }, [validationMode])
+
+  useEffect(() => {
+    sessionStorage.setItem('cleaner_useSharedProductionIds', useSharedProductionIds.toString())
+  }, [useSharedProductionIds])
+
+  // Shared Production IDs state
+  const [sharedProductionIdsCount, setSharedProductionIdsCount] = useState(0)
+
+  // Check admin status and get shared Production IDs on mount
+  React.useEffect(() => {
+    const initializePage = async () => {
+      const admin = await window.electron.auth.isAdmin()
+      const user = await window.electron.auth.getCurrentUser()
+      setIsAdmin(admin)
+      if (user) {
+        setCurrentUsername(user.username)
+        if (!admin) {
+          // Non-admin users can only see their own data
+          setSelectedManagers(new Set([user.username]))
+        }
+      }
+
+      // Get shared Production IDs
+      try {
+        const result = await window.electron.validation.getSharedProductionIds()
+        setSharedProductionIdsCount(result.productionIds.length)
+      } catch (err) {
+        console.error('Failed to get shared Production IDs:', err)
+      }
+    }
+    initializePage()
+  }, [])
+
+  // Load managers for filter (Admin only)
+  const loadManagers = useCallback(async () => {
+    if (!isAdmin) return
+    try {
+      const response = await window.electron.materials.getManagers()
+      setManagers(response.managers)
+      // Select all managers by default
+      setSelectedManagers(new Set(response.managers))
+    } catch (err) {
+      console.error('Failed to load managers:', err)
+    }
+  }, [isAdmin])
+
+  // Handle validation
+  const handleValidation = useCallback(async () => {
+    setIsValidationRunning(true)
+    setError(null)
+    setValidationResults([])
+    setSelectedItems(new Set())
+    setValidationStats(null)
+
+    try {
+      const response = await window.electron.validation.validate({
+        mode: validationMode,
+        useSharedProductionIds: validationMode === 'database_filtered' ? useSharedProductionIds : undefined
+      })
+
+      if (response.success && response.results) {
+        setValidationResults(response.results)
+        setValidationStats(response.stats || null)
+
+        // Auto-select items that are already marked for deletion
+        const markedCodes = new Set(
+          response.results
+            .filter(r => r.isMarkedForDeletion)
+            .map(r => r.materialCode)
+        )
+        setSelectedItems(markedCodes)
+
+        // Auto-select managers for admin users
+        if (isAdmin) {
+          const uniqueManagers = new Set(
+            response.results
+              .map(r => r.managerName)
+              .filter(Boolean)
+          )
+          setManagers([...uniqueManagers])
+          setSelectedManagers(uniqueManagers)
+        }
+      } else {
+        setError(response.error || '校验失败')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '校验过程中发生未知错误')
+    } finally {
+      setIsValidationRunning(false)
+    }
+  }, [validationMode, useSharedProductionIds, isAdmin])
+
+  // Handle checkbox toggle
+  const handleCheckboxToggle = useCallback((materialCode: string) => {
+    setSelectedItems(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(materialCode)) {
+        newSet.delete(materialCode)
+      } else {
+        newSet.add(materialCode)
+      }
+      return newSet
+    })
+  }, [])
+
+  // Handle select all
+  const handleSelectAll = useCallback(() => {
+    setSelectedItems(new Set(filteredResults.map(r => r.materialCode)))
+  }, [filteredResults])
+
+  // Handle deselect all
+  const handleDeselectAll = useCallback(() => {
+    setSelectedItems(new Set())
+  }, [])
+
+  // Handle confirm deletion (mark materials in database)
+  const handleConfirmDeletion = useCallback(async () => {
+    if (validationResults.length === 0) {
+      alert('没有可处理的数据')
+      return
+    }
+
+    // Collect all data
+    const materialsToUpsert: { materialCode: string; managerName: string }[] = []
+    const materialsToDelete: string[] = []
+    const missingManager: string[] = []
+
+    for (const result of validationResults) {
+      // Skip empty material codes
+      if (!result.materialCode || !result.materialCode.trim()) {
+        continue
+      }
+
+      const materialCode = result.materialCode.trim()
+      const isChecked = selectedItems.has(materialCode)
+
+      if (isChecked) {
+        // Checked: needs to be upserted
+        if (!result.managerName || !result.managerName.trim()) {
+          missingManager.push(materialCode)
+        } else {
+          materialsToUpsert.push({
+            materialCode,
+            managerName: result.managerName.trim()
+          })
+        }
+      } else {
+        // Unchecked: needs to be deleted
+        materialsToDelete.push(materialCode)
+      }
+    }
+
+    // Validate: checked items must have manager names
+    if (missingManager.length > 0) {
+      const msg = `以下已勾选的记录缺少负责人信息，无法保存：\n\n` +
+        missingManager.slice(0, 10).join('\n') +
+        (missingManager.length > 10 ? `\n... 共 ${missingManager.length} 条` : '')
+      alert(msg)
+      return
+    }
+
+    // Check if there's anything to do
+    if (materialsToUpsert.length === 0 && materialsToDelete.length === 0) {
+      alert('没有需要处理的记录')
+      return
+    }
+
+    // Build confirmation message
+    const confirmParts: string[] = []
+    if (materialsToUpsert.length > 0) {
+      confirmParts.push(`写入/更新 ${materialsToUpsert.length} 条记录`)
+    }
+    if (materialsToDelete.length > 0) {
+      confirmParts.push(`删除 ${materialsToDelete.length} 条记录`)
+    }
+
+    const confirmed = window.confirm(`确认以下操作吗？\n\n${confirmParts.join('\n')}`)
+    if (!confirmed) {
+      return
+    }
+
+    // Execute the operation
+    try {
+      setIsRunning(true)
+
+      // Upsert selected materials
+      let upsertSuccess = 0
+      let upsertFailed = 0
+      if (materialsToUpsert.length > 0) {
+        const upsertResult = await window.electron.materials.upsertBatch(materialsToUpsert)
+        if (upsertResult.success) {
+          upsertSuccess = upsertResult.stats?.success || 0
+          upsertFailed = upsertResult.stats?.failed || 0
+        } else {
+          throw new Error(upsertResult.error || '写入物料失败')
+        }
+      }
+
+      // Delete unselected materials
+      let deleteCount = 0
+      if (materialsToDelete.length > 0) {
+        const deleteResult = await window.electron.materials.delete(materialsToDelete)
+        if (deleteResult.success) {
+          deleteCount = deleteResult.count || 0
+        } else {
+          throw new Error(deleteResult.error || '删除物料失败')
+        }
+      }
+
+      // Show result message
+      const msgParts: string[] = []
+      if (upsertSuccess > 0) {
+        msgParts.push(`写入/更新成功：${upsertSuccess} 条`)
+      }
+      if (upsertFailed > 0) {
+        msgParts.push(`写入/更新失败：${upsertFailed} 条`)
+      }
+      if (deleteCount > 0) {
+        msgParts.push(`删除成功：${deleteCount} 条`)
+      }
+
+      const msg = `操作完成！\n\n${msgParts.join('\n')}`
+
+      if (upsertFailed > 0) {
+        alert(`完成（部分失败）\n\n${msg}`)
+      } else {
+        alert(msg)
+      }
+
+      // Reload managers to reflect changes
+      await loadManagers()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '操作失败')
+    } finally {
+      setIsRunning(false)
+    }
+  }, [selectedItems, validationResults, loadManagers])
+
+  // Handle export results
+  const handleExportResults = useCallback(async () => {
+    if (validationResults.length === 0) {
+      setError('没有数据可导出')
+      return
+    }
+
+    try {
+      // Prepare data for export
+      const data = validationResults.map(result => ({
+        '选择': selectedItems.has(result.materialCode) ? '是' : '否',
+        '材料名称': result.materialName,
+        '材料代码': result.materialCode,
+        '规格': result.specification,
+        '型号': result.model,
+        '负责人': result.managerName || ''
+      }))
+
+      // Create CSV content
+      const headers = ['选择', '材料名称', '材料代码', '规格', '型号', '负责人']
+      const csvContent = [
+        headers.join(','),
+        ...data.map(row =>
+          headers.map(header => {
+            const value = row[header as keyof typeof row]
+            // Escape quotes and wrap in quotes if contains comma
+            const escaped = String(value).replace(/"/g, '""')
+            return escaped.includes(',') ? `"${escaped}"` : escaped
+          }).join(',')
+        )
+      ].join('\n')
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `物料状态校验结果_${new Date().getTime()}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '导出失败')
+    }
+  }, [validationResults, selectedItems])
+
+  // Handle execute deletion
+  const handleExecuteDeletion = useCallback(async () => {
     if (!orderNumbers.trim()) {
       setError('请输入至少一个订单号')
       return
@@ -40,6 +401,11 @@ export const CleanerPage: React.FC = () => {
     if (!materialCodes.trim()) {
       setError('请输入至少一个物料代码')
       return
+    }
+
+    if (!dryRun) {
+      const confirmed = window.confirm('警告：正式执行将删除 ERP 系统中的物料数据，是否继续？')
+      if (!confirmed) return
     }
 
     setIsRunning(true)
@@ -50,15 +416,14 @@ export const CleanerPage: React.FC = () => {
     try {
       const orderNumberList = orderNumbers
         .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
 
       const materialCodeList = materialCodes
         .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
 
-      // Call cleaner API through electron
       const response = await window.electron.cleaner.runCleaner({
         orderNumbers: orderNumberList,
         materialCodes: materialCodeList,
@@ -76,37 +441,273 @@ export const CleanerPage: React.FC = () => {
       setIsRunning(false)
       setProgress(null)
     }
-  }
+  }, [orderNumbers, materialCodes, dryRun])
 
-  const handleReset = () => {
+  // Handle clean (alias for execute deletion)
+  const handleClean = useCallback(handleExecuteDeletion, [handleExecuteDeletion])
+
+  // Handle reset
+  const handleReset = useCallback(() => {
     setOrderNumbers('')
     setMaterialCodes('')
     setDryRun(true)
     setResult(null)
     setError(null)
     setProgress(null)
-  }
+  }, [])
+
+  // Handle hide checked items (for user mode)
+  const handleHideChecked = useCallback(() => {
+    const checkedCodes = filteredResults
+      .filter(r => selectedItems.has(r.materialCode))
+      .map(r => r.materialCode)
+
+    if (checkedCodes.length === 0) {
+      setError('没有已勾选的物料')
+      return
+    }
+
+    setHiddenItems(prev => new Set([...prev, ...checkedCodes]))
+  }, [filteredResults, selectedItems])
+
+  // Handle show all items
+  const handleShowAll = useCallback(() => {
+    setHiddenItems(new Set())
+  }, [])
 
   return (
     <div className="cleaner-page">
       <h1 className="page-title">ERP 物料清理</h1>
 
       <div className="cleaner-content">
-        {/* Input Section */}
-        <div className="input-section">
-          <OrderNumberInput
-            value={orderNumbers}
-            onChange={setOrderNumbers}
-            label="订单号列表"
-            placeholder="请输入订单号，每行一个"
-          />
+        {/* Validation Section (Admin only for mode selection) */}
+        <div className="validation-section">
+          <h2>物料校验</h2>
 
-          <MaterialCodeInput
-            value={materialCodes}
-            onChange={setMaterialCodes}
-            label="物料代码列表"
-            placeholder="请输入物料代码，每行一个"
-          />
+          {isAdmin && (
+            <div className="validation-mode-selector">
+              <label>
+                <input
+                  type="radio"
+                  checked={validationMode === 'database_full'}
+                  onChange={() => setValidationMode('database_full')}
+                  disabled={isValidationRunning}
+                />
+                数据库 - 全表校验
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  checked={validationMode === 'database_filtered'}
+                  onChange={() => setValidationMode('database_filtered')}
+                  disabled={isValidationRunning}
+                />
+                数据库 - ProductionID 过滤
+              </label>
+              {validationMode === 'database_filtered' && (
+                <div style={{ marginTop: '8px', marginLeft: '24px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      checked={useSharedProductionIds}
+                      onChange={(e) => setUseSharedProductionIds(e.target.checked)}
+                      disabled={isValidationRunning}
+                    />
+                    使用数据提取页面的 Production ID
+                  </label>
+                  {useSharedProductionIds && (
+                    <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: sharedProductionIdsCount > 0 ? '#52c41a' : '#fa8c16' }}>
+                      {sharedProductionIdsCount > 0
+                        ? `当前有 ${sharedProductionIdsCount} 个共享的 Production ID`
+                        : '暂无共享的 Production ID，请先在数据提取页面输入'}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!isAdmin && (
+            <p style={{ fontSize: '14px', color: '#666', marginBottom: '16px' }}>
+              当前模式：数据库 - ProductionID 过滤（使用数据提取页面的数据）
+            </p>
+          )}
+
+          <div className="button-group">
+            <button
+              className="btn btn-primary"
+              onClick={handleValidation}
+              disabled={isValidationRunning}
+            >
+              {isValidationRunning ? '校验中...' : '开始校验'}
+            </button>
+            {isAdmin && (
+              <>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleSelectAll}
+                  disabled={filteredResults.length === 0}
+                >
+                  全选
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleDeselectAll}
+                  disabled={selectedItems.size === 0}
+                >
+                  取消全选
+                </button>
+              </>
+            )}
+            <button
+              className="btn btn-warning"
+              onClick={handleConfirmDeletion}
+              disabled={selectedItems.size === 0 || isRunning}
+            >
+              确认删除
+            </button>
+          </div>
+
+          {validationStats && (
+            <div className="validation-stats">
+              <span>总记录数：{validationStats.totalRecords}</span>
+              <span>匹配到负责人：{validationStats.matchedCount}</span>
+              <span>已标记删除：{validationStats.markedCount}</span>
+            </div>
+          )}
+
+          {/* Additional action buttons */}
+          <div className="button-group" style={{ marginTop: '12px' }}>
+            <button
+              className="btn btn-secondary"
+              onClick={handleExportResults}
+              disabled={validationResults.length === 0}
+            >
+              导出结果
+            </button>
+            {isAdmin && (
+              <button
+                className="btn btn-primary"
+                onClick={handleExecuteDeletion}
+                disabled={!orderNumbers.trim() || !materialCodes.trim() || isRunning}
+              >
+                {isRunning ? '清理中...' : '执行删除'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Manager Filter (Admin only) */}
+        {isAdmin && managers.length > 0 && (
+          <div className="manager-filter-section">
+            <h3>筛选（按负责人）</h3>
+            <div className="manager-checkboxes">
+              {managers.map(manager => (
+                <label key={manager}>
+                  <input
+                    type="checkbox"
+                    checked={selectedManagers.has(manager)}
+                    onChange={(e) => {
+                      setSelectedManagers(prev => {
+                        const newSet = new Set(prev)
+                        if (e.target.checked) {
+                          newSet.add(manager)
+                        } else {
+                          newSet.delete(manager)
+                        }
+                        return newSet
+                      })
+                    }}
+                  />
+                  {manager}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Validation Results Table */}
+        {filteredResults.length > 0 && (
+          <div className="validation-results-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ margin: 0 }}>校验结果</h2>
+              {/* User mode buttons: Hide Checked / Show All */}
+              {!isAdmin && (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={handleHideChecked}
+                    disabled={selectedItems.size === 0}
+                  >
+                    隐藏勾选
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={handleShowAll}
+                    disabled={hiddenItems.size === 0}
+                  >
+                    显示全部
+                  </button>
+                </div>
+              )}
+            </div>
+            <table className="validation-results-table">
+              <thead>
+                <tr>
+                  <th>选择</th>
+                  <th>材料名称</th>
+                  <th>材料代码</th>
+                  <th>规格</th>
+                  <th>型号</th>
+                  <th>负责人</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredResults.map(result => (
+                  <tr key={result.materialCode}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedItems.has(result.materialCode)}
+                        onChange={() => handleCheckboxToggle(result.materialCode)}
+                      />
+                    </td>
+                    <td>{result.materialName}</td>
+                    <td>{result.materialCode}</td>
+                    <td>{result.specification}</td>
+                    <td>{result.model}</td>
+                    <td>{result.managerName || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Simple Input Section */}
+        <div className="input-section">
+          <h2>订单号和物料代码输入</h2>
+          <div className="input-row">
+            <div className="input-group">
+              <label>订单号列表</label>
+              <textarea
+                value={orderNumbers}
+                onChange={(e) => setOrderNumbers(e.target.value)}
+                placeholder="请输入订单号，每行一个"
+                rows={5}
+              />
+            </div>
+
+            <div className="input-group">
+              <label>物料代码列表</label>
+              <textarea
+                value={materialCodes}
+                onChange={(e) => setMaterialCodes(e.target.value)}
+                placeholder="请输入物料代码，每行一个"
+                rows={5}
+              />
+            </div>
+          </div>
 
           <div className="dry-run-option">
             <label>
@@ -150,7 +751,13 @@ export const CleanerPage: React.FC = () => {
         {error && (
           <div className="error-section">
             <h3>错误</h3>
-            <p>{error}</p>
+            <div className="error-message" title="双击可选中复制" onDoubleClick={(e) => {
+              const text = e.currentTarget.textContent
+              navigator.clipboard.writeText(text || '')
+            }}>
+              {error}
+            </div>
+            <p className="error-hint">💡 提示：双击错误信息可选中复制</p>
           </div>
         )}
 
@@ -226,7 +833,7 @@ export const CleanerPage: React.FC = () => {
       <style>{`
         .cleaner-page {
           padding: 24px;
-          max-width: 800px;
+          max-width: 1200px;
           margin: 0 auto;
         }
         .page-title {
@@ -241,16 +848,23 @@ export const CleanerPage: React.FC = () => {
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
           padding: 24px;
         }
-        .input-section {
+        .validation-section, .manager-filter-section, .input-section {
           margin-bottom: 24px;
+          padding-bottom: 24px;
+          border-bottom: 1px solid #e8e8e8;
         }
-        .dry-run-option {
+        .validation-section h2, .manager-filter-section h3, .input-section h2 {
+          font-size: 18px;
+          color: #333;
           margin-bottom: 16px;
-          padding: 12px;
-          background: #f5f5f5;
-          border-radius: 6px;
         }
-        .dry-run-option label {
+        .validation-mode-selector {
+          margin-bottom: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .validation-mode-selector label {
           display: flex;
           align-items: center;
           gap: 8px;
@@ -258,17 +872,10 @@ export const CleanerPage: React.FC = () => {
           font-size: 14px;
           color: #666;
         }
-        .dry-run-option input[type="checkbox"] {
-          width: 16px;
-          height: 16px;
-          cursor: pointer;
-        }
-        .dry-run-option input:disabled {
-          cursor: not-allowed;
-        }
         .button-group {
           display: flex;
           gap: 12px;
+          margin-bottom: 16px;
         }
         .btn {
           padding: 10px 24px;
@@ -296,6 +903,113 @@ export const CleanerPage: React.FC = () => {
         }
         .btn-secondary:hover:not(:disabled) {
           background: #e8e8e8;
+        }
+        .btn-warning {
+          background: #fa8c16;
+          color: #fff;
+        }
+        .btn-warning:hover:not(:disabled) {
+          background: #ffc069;
+        }
+        .validation-stats {
+          display: flex;
+          gap: 24px;
+          padding: 12px;
+          background: #f6ffed;
+          border: 1px solid #b7eb8f;
+          border-radius: 6px;
+          font-size: 14px;
+          color: #52c41a;
+        }
+        .validation-stats span {
+          font-weight: 500;
+        }
+        .manager-filter-section {
+          background: #fafafa;
+          padding: 16px;
+          border-radius: 6px;
+        }
+        .manager-checkboxes {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .manager-checkboxes label {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          cursor: pointer;
+          font-size: 14px;
+          color: #666;
+          background: #fff;
+          padding: 6px 12px;
+          border-radius: 4px;
+          border: 1px solid #d9d9d9;
+        }
+        .validation-results-section {
+          margin-bottom: 24px;
+        }
+        .validation-results-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 14px;
+        }
+        .validation-results-table th, .validation-results-table td {
+          padding: 12px;
+          border: 1px solid #e8e8e8;
+          text-align: left;
+          color: #000;
+        }
+        .validation-results-table th {
+          background: #fafafa;
+          font-weight: 600;
+          color: #333;
+        }
+        .validation-results-table tr:nth-child(even) {
+          background: #fafafa;
+        }
+        .validation-results-table tr:hover {
+          background: #e6f7ff;
+        }
+        .input-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 24px;
+          margin-bottom: 16px;
+        }
+        .input-group label {
+          display: block;
+          margin-bottom: 8px;
+          font-weight: 500;
+          color: #333;
+        }
+        .input-group textarea {
+          width: 100%;
+          padding: 12px;
+          border: 1px solid #d9d9d9;
+          border-radius: 6px;
+          font-size: 14px;
+          font-family: 'Consolas', 'Monaco', monospace;
+          resize: vertical;
+        }
+        .input-group textarea:focus {
+          outline: none;
+          border-color: #52c41a;
+          box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.2);
+        }
+        .dry-run-option {
+          margin-bottom: 16px;
+          padding: 12px;
+          background: #f5f5f5;
+          border-radius: 6px;
+        }
+        .dry-run-option label {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          font-size: 14px;
+          color: #666;
         }
         .progress-section {
           margin-top: 24px;
@@ -332,9 +1046,27 @@ export const CleanerPage: React.FC = () => {
           margin: 0 0 8px 0;
           font-size: 16px;
         }
-        .error-section p {
-          color: #666;
-          margin: 0;
+        .error-message {
+          background: #fff;
+          padding: 12px;
+          border-radius: 4px;
+          font-family: 'Consolas', 'Monaco', monospace;
+          font-size: 13px;
+          color: #333;
+          border: 1px solid #ffccc7;
+          user-select: text;
+          -webkit-user-select: text;
+          cursor: text;
+          white-space: pre-wrap;
+          word-break: break-all;
+        }
+        .error-message:hover {
+          background: #fffbfc;
+        }
+        .error-hint {
+          color: #999;
+          font-size: 12px;
+          margin: 8px 0 0 0;
         }
         .result-section {
           margin-top: 24px;
@@ -433,6 +1165,11 @@ export const CleanerPage: React.FC = () => {
           border-radius: 6px;
           font-size: 13px;
           color: #fa8c16;
+        }
+        @media (max-width: 768px) {
+          .input-row {
+            grid-template-columns: 1fr;
+          }
         }
       `}</style>
     </div>

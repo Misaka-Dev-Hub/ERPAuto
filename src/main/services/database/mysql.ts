@@ -78,17 +78,27 @@ export class MySqlService {
     }
 
     try {
-      const [rows, fields] = await this.connection.execute(sql, params)
+      const [result, fields] = await this.connection.execute(sql, params)
 
-      // Convert rows to plain objects and extract column names
-      const columns = fields.map((field) => field.name)
-      const rowCount = Array.isArray(rows) ? rows.length : 0
+      // Convert to plain objects and extract column names
+      const columns = Array.isArray(fields) ? fields.map((field) => field.name) : []
 
-      // Type assertion for rows - mysql2 returns different types based on query
-      const typedRows = Array.isArray(rows) ? (rows as Record<string, unknown>[]) : []
+      // Handle different result types
+      let rows: Record<string, unknown>[] = []
+      let rowCount = 0
+
+      if (Array.isArray(result)) {
+        // SELECT query - result is an array of rows
+        rows = result as Record<string, unknown>[]
+        rowCount = rows.length
+      } else if (typeof result === 'object' && result !== null) {
+        // INSERT/UPDATE/DELETE query - result is OkPacket
+        const okPacket = result as any
+        rowCount = okPacket.affectedRows || okPacket.changedRows || 0
+      }
 
       return {
-        rows: typedRows,
+        rows,
         columns,
         rowCount
       }

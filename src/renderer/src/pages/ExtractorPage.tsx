@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { OrderNumberInput } from '../components/OrderNumberInput'
 
 // Extractor result type (matches the type from main process)
@@ -18,12 +18,60 @@ interface ExtractorProgress {
  * ExtractorPage - Main page for ERP data extraction
  */
 export const ExtractorPage: React.FC = () => {
-  const [orderNumbers, setOrderNumbers] = useState('')
-  const [batchSize, setBatchSize] = useState(100)
+  const [orderNumbers, setOrderNumbers] = useState(() => {
+    // Restore from sessionStorage on mount
+    return sessionStorage.getItem('extractor_orderNumbers') || ''
+  })
+  const [batchSize, setBatchSize] = useState(() => {
+    const saved = sessionStorage.getItem('extractor_batchSize')
+    return saved ? parseInt(saved, 10) : 100
+  })
   const [isRunning, setIsRunning] = useState(false)
   const [progress, setProgress] = useState<ExtractorProgress | null>(null)
   const [result, setResult] = useState<ExtractorResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('unsaved')
+
+  // Save to sessionStorage when orderNumbers changes
+  useEffect(() => {
+    sessionStorage.setItem('extractor_orderNumbers', orderNumbers)
+    // Update shared Production IDs when orderNumbers changes
+    if (orderNumbers.trim()) {
+      const orderNumberList = orderNumbers
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+      window.electron.validation.setSharedProductionIds(orderNumberList)
+    }
+  }, [orderNumbers])
+
+  // Save to sessionStorage when batchSize changes
+  useEffect(() => {
+    sessionStorage.setItem('extractor_batchSize', batchSize.toString())
+  }, [batchSize])
+
+  const saveSharedProductionIds = async () => {
+    if (!orderNumbers.trim()) {
+      setError('请输入至少一个订单号')
+      return
+    }
+
+    setSaveStatus('saving')
+    try {
+      const orderNumberList = orderNumbers
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+
+      await window.electron.validation.setSharedProductionIds(orderNumberList)
+      console.log(`[Extractor] Stored ${orderNumberList.length} Production IDs for sharing`)
+      setSaveStatus('saved')
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存失败')
+      setSaveStatus('unsaved')
+    }
+  }
 
   const handleExtract = async () => {
     if (!orderNumbers.trim()) {
@@ -41,6 +89,10 @@ export const ExtractorPage: React.FC = () => {
         .split('\n')
         .map((line) => line.trim())
         .filter((line) => line.length > 0)
+
+      // Store Production IDs for sharing with cleaner page (before extraction starts)
+      await window.electron.validation.setSharedProductionIds(orderNumberList)
+      console.log(`[Extractor] Stored ${orderNumberList.length} Production IDs for sharing`)
 
       // Call extractor API through electron
       const response = await window.electron.extractor.runExtractor({
@@ -103,6 +155,14 @@ export const ExtractorPage: React.FC = () => {
               disabled={isRunning || !orderNumbers.trim()}
             >
               {isRunning ? '提取中...' : '开始提取'}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={saveSharedProductionIds}
+              disabled={isRunning || !orderNumbers.trim() || saveStatus === 'saved'}
+              title="保存订单号以便在清理页面使用"
+            >
+              {saveStatus === 'saving' ? '保存中...' : saveStatus === 'saved' ? '已保存' : '保存为共享 ID'}
             </button>
             <button className="btn btn-secondary" onClick={handleReset} disabled={isRunning}>
               重置
@@ -253,6 +313,10 @@ export const ExtractorPage: React.FC = () => {
         }
         .btn-secondary:hover:not(:disabled) {
           background: #e8e8e8;
+        }
+        .btn-secondary[data-saved="true"] {
+          background: #52c41a;
+          color: #fff;
         }
         .progress-section {
           margin-top: 24px;

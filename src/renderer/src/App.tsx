@@ -290,7 +290,7 @@ function App(): React.JSX.Element {
       minHeight: '100vh',
       backgroundColor: '#f5f7fa'
     }}>
-      {/* Header with user info and logout */}
+      {/* Header with user info, navigation and logout */}
       <header style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -300,13 +300,61 @@ function App(): React.JSX.Element {
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
         marginBottom: '16px'
       }}>
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
           <span style={{
             fontSize: '14px',
             color: '#666'
           }}>
             欢迎，{currentUser?.username} ({currentUser?.userType})
           </span>
+          {/* Navigation tabs */}
+          <nav style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => setCurrentPage('home')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentPage === 'home' ? '#1890ff' : '#f5f5f5',
+                color: currentPage === 'home' ? '#fff' : '#666',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                cursor: 'pointer',
+                transition: 'all 0.3s'
+              }}
+            >
+              主页
+            </button>
+            <button
+              onClick={() => setCurrentPage('extractor')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentPage === 'extractor' ? '#1890ff' : '#f5f5f5',
+                color: currentPage === 'extractor' ? '#fff' : '#666',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                cursor: 'pointer',
+                transition: 'all 0.3s'
+              }}
+            >
+              数据提取
+            </button>
+            <button
+              onClick={() => setCurrentPage('cleaner')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentPage === 'cleaner' ? '#1890ff' : '#f5f5f5',
+                color: currentPage === 'cleaner' ? '#fff' : '#666',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                cursor: 'pointer',
+                transition: 'all 0.3s'
+              }}
+            >
+              物料清理
+            </button>
+          </nav>
         </div>
         <div>
           {shouldShowLogout && (
@@ -330,34 +378,9 @@ function App(): React.JSX.Element {
         {currentPage === 'home' && (
           <div>
             <h1 style={{ fontSize: '24px', color: '#333', marginBottom: '24px' }}>主页面</h1>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '16px'
-            }}>
-              <div onClick={() => setCurrentPage('extractor')} style={{
-                padding: '24px',
-                backgroundColor: '#fff',
-                borderRadius: '8px',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-                cursor: 'pointer',
-                textAlign: 'center'
-              }}>
-                <h3 style={{ margin: '0 0 8px 0', color: '#1890ff' }}>数据提取</h3>
-                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>提取 ERP 数据</p>
-              </div>
-              <div onClick={() => setCurrentPage('cleaner')} style={{
-                padding: '24px',
-                backgroundColor: '#fff',
-                borderRadius: '8px',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-                cursor: 'pointer',
-                textAlign: 'center'
-              }}>
-                <h3 style={{ margin: '0 0 8px 0', color: '#52c41a' }}>物料清理</h3>
-                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>清理 ERP 物料</p>
-              </div>
-            </div>
+            <p style={{ color: '#666', fontSize: '14px' }}>
+              请使用顶部导航栏切换到 数据提取 或 物料清理 页面
+            </p>
           </div>
         )}
 

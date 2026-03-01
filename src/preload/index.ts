@@ -6,6 +6,7 @@ import type { CleanerInput } from '../main/types/cleaner.types'
 import type { ResolverInput } from '../main/ipc/resolver-handler'
 import type { LoginRequest } from '../main/ipc/auth-handler'
 import type { UserInfo } from '../main/types/user.types'
+import type { ValidationRequest } from '../main/types/validation.types'
 
 // Custom APIs for renderer
 const api = {
@@ -61,6 +62,28 @@ const api = {
     isSqlServerConnected: () => ipcRenderer.invoke('database:sqlserver:isConnected'),
     querySqlServer: (sql: string, params?: Record<string, unknown>) =>
       ipcRenderer.invoke('database:sqlserver:query', sql, params)
+  },
+
+  // Validation service
+  validation: {
+    validate: (request: ValidationRequest) => ipcRenderer.invoke('validation:validate', request),
+    setSharedProductionIds: (productionIds: string[]) =>
+      ipcRenderer.invoke('validation:setSharedProductionIds', productionIds),
+    getSharedProductionIds: () =>
+      ipcRenderer.invoke('validation:getSharedProductionIds')
+  },
+
+  // Materials service
+  materials: {
+    upsertBatch: (materials: { materialCode: string; managerName: string }[]) =>
+      ipcRenderer.invoke('materials:upsertBatch', { materials }),
+    delete: (materialCodes: string[]) =>
+      ipcRenderer.invoke('materials:delete', { materialCodes }),
+    getManagers: () => ipcRenderer.invoke('materials:getManagers'),
+    getByManager: (managerName: string) =>
+      ipcRenderer.invoke('materials:getByManager', managerName),
+    getAll: () => ipcRenderer.invoke('materials:getAll'),
+    getStatistics: () => ipcRenderer.invoke('materials:getStatistics')
   }
 } as const
 

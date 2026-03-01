@@ -8,6 +8,7 @@ import type {
   UserSelectionResponse,
   CurrentUserResponse
 } from '../main/ipc/auth-handler'
+import type { ValidationRequest, ValidationResponse } from '../main/types/validation.types'
 
 /**
  * Order number resolver API
@@ -69,6 +70,67 @@ export interface AuthAPI {
   isAdmin: () => Promise<boolean>
 }
 
+/**
+ * Validation API
+ */
+export interface ValidationAPI {
+  /**
+   * Run material validation
+   * @param request - Validation request
+   */
+  validate: (request: ValidationRequest) => Promise<ValidationResponse>
+  /**
+   * Set shared Production IDs from extractor page
+   * @param productionIds - List of Production IDs
+   */
+  setSharedProductionIds: (productionIds: string[]) => Promise<void>
+  /**
+   * Get shared Production IDs
+   */
+  getSharedProductionIds: () => Promise<{ productionIds: string[] }>
+}
+
+/**
+ * Materials API
+ */
+export interface MaterialsAPI {
+  /**
+   * Upsert batch materials to MaterialsToBeDeleted
+   * @param materials - List of materials with materialCode and managerName
+   */
+  upsertBatch: (materials: { materialCode: string; managerName: string }[]) => Promise<{
+    success: boolean
+    stats?: { total: number; success: number; failed: number }
+    error?: string
+  }>
+  /**
+   * Delete materials by material codes
+   * @param materialCodes - List of material codes to delete
+   */
+  delete: (materialCodes: string[]) => Promise<{
+    success: boolean
+    count?: number
+    error?: string
+  }>
+  /**
+   * Get unique manager names
+   */
+  getManagers: () => Promise<{ managers: string[] }>
+  /**
+   * Get materials by manager
+   * @param managerName - Manager name
+   */
+  getByManager: (managerName: string) => Promise<{ materials: unknown[] }>
+  /**
+   * Get all material records
+   */
+  getAll: () => Promise<{ materials: unknown[] }>
+  /**
+   * Get statistics
+   */
+  getStatistics: () => Promise<{ stats: unknown }>
+}
+
 declare global {
   interface Window {
     electron: {
@@ -93,6 +155,8 @@ declare global {
       database: DatabaseAPI
       resolver: ResolverAPI
       auth: AuthAPI
+      validation: ValidationAPI
+      materials: MaterialsAPI
     }
     api: unknown
   }
