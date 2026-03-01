@@ -37,8 +37,8 @@ export class ExtractorService {
     try {
       const session = this.authService.getSession();
 
-      // Navigate to extractor page
-      const popupPage = await this.navigateToExtractorPage(session);
+      // Navigate to extractor page and get popup page + work frame
+      const { popupPage, workFrame } = await this.navigateToExtractorPage(session);
 
       // Process orders in batches
       const batchSize = input.batchSize || 100;
@@ -51,7 +51,7 @@ export class ExtractorService {
         input.onProgress?.(`Processing batch ${i + 1}/${batches.length}`, progress);
 
         try {
-          const filePath = await this.downloadBatch(session, popupPage, batch, i, batches.length);
+          const filePath = await this.downloadBatch(session, popupPage, workFrame, batch, i, batches.length);
           result.downloadedFiles.push(filePath);
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error';
@@ -72,36 +72,48 @@ export class ExtractorService {
 
   /**
    * Navigate to extractor/query page
-   * Reference: Python extract() method lines 266-276
+   * Reference: Python extract() method lines 266-278
+   *
+   * Python workflow:
+   * 1. main_frame.locator("i").first.click() - Click menu icon
+   * 2. page.expect_popup() + get_by_title("离散备料计划维护").click() - Click menu item and wait for popup
+   * 3. page1.locator("#forwardFrame").content_frame - Get popup's forward frame
+   * 4. f_frame.locator("#mainiframe").content_frame - Get nested inner frame
+   * 5. setup_query_interface(work_frame) - Setup query interface
    */
-  private async navigateToExtractorPage(session: ErpSession): Promise<any> {
-    const { page } = session;
+  private async navigateToExtractorPage(session: ErpSession): Promise<{ popupPage: any; workFrame: any }> {
+    const { page, mainFrame } = session;
 
-    // Wait for main iframe
-    await page.waitForSelector(ERP_LOCATORS.main.mainIframe);
-
-    // Get main frame
-    const mainFrame = page.frameLocator(ERP_LOCATORS.main.mainIframe);
-
-    // Click icon to open menu (line 266)
+    // Step 1: Click menu icon (Python line 266)
+    // main_frame is #forwardFrame.content_frame returned from login
     await mainFrame.locator('i').first().click();
 
-    // Click discrete material plan menu item and expect popup (lines 267-271)
+    // Step 2: Click discrete material plan menu item and expect popup (Python lines 267-271)
     const popupPromise = page.waitForEvent('popup');
     await mainFrame.getByTitle('离散备料计划维护', { exact: true }).first().click();
     const popupPage = await popupPromise;
 
-    // Get nested frame structure (lines 273-276)
-    const forwardFrameLocator = popupPage.locator(ERP_LOCATORS.main.forwardFrame);
-    const innerFrameLocator = forwardFrameLocator.frameLocator(ERP_LOCATORS.main.innerIframe);
+    // Step 3 & 4: Get nested frame structure in popup window (Python lines 273-276)
+    // popup page contains #forwardFrame, which contains #mainiframe
+    const forwardFrameLocator = popupPage.locator('#forwardFrame');
+    const fFrame = await forwardFrameLocator.contentFrame();
 
-    // Wait for inner iframe to be visible
+    if (!fFrame) {
+      throw new Error('Failed to access popup forward frame');
+    }
+
+    const innerFrameLocator = fFrame.locator('#mainiframe');
     await innerFrameLocator.waitFor({ state: 'visible', timeout: 15000 });
+    const workFrame = await innerFrameLocator.contentFrame();
 
-    // Setup query interface (line 278)
-    await this.setupQueryInterface(innerFrameLocator);
+    if (!workFrame) {
+      throw new Error('Failed to access inner work frame');
+    }
 
-    return popupPage;
+    // Step 5: Setup query interface (Python line 278)
+    await this.setupQueryInterface(workFrame);
+
+    return { popupPage, workFrame };
   }
 
   /**
@@ -109,17 +121,17 @@ export class ExtractorService {
    * Reference: Python setup_query_interface() method lines 231-239
    */
   private async setupQueryInterface(innerFrame: any): Promise<void> {
-    // Click search icon (line 233)
-    await innerFrame.locator(ERP_LOCATORS.menu.searchIcon).click();
+    // Click search icon (Python line 233)
+    await innerFrame.locator('.search-name-wrapper > .iconfont').click();
 
-    // Click "订单号查询" menu item (line 234)
-    await innerFrame.locator(ERP_LOCATORS.menu.orderQuery).click();
+    // Click "订单号查询" menu item (Python line 234)
+    await innerFrame.getByText('订单号查询').click();
 
-    // Click "全部" tab (line 235)
+    // Click "全部" tab (Python line 235)
     await innerFrame.getByRole('tab', { name: '全部' }).click();
 
-    // Set limit to 5000 (lines 237-239)
-    const inputBox = innerFrame.locator(ERP_LOCATORS.menu.selectInput);
+    // Set limit to 5000 (Python lines 237-239)
+    const inputBox = innerFrame.locator('#rc_select_0');
     await inputBox.fill('5000');
     await inputBox.press('Enter');
   }
@@ -131,42 +143,37 @@ export class ExtractorService {
   private async downloadBatch(
     session: ErpSession,
     popupPage: any,
+    workFrame: any,
     orderNumbers: string[],
     batchIndex: number,
     totalBatches: number
   ): Promise<string> {
-    const forwardFrameLocator = popupPage.locator(ERP_LOCATORS.main.forwardFrame);
-    const workFrame = forwardFrameLocator.frameLocator(ERP_LOCATORS.main.innerIframe);
-
-    // Fill order numbers (lines 143-145)
-    const textbox = workFrame.getByRole('textbox', { name: ERP_LOCATORS.extractor.orderNumberInputRole });
+    // Fill order numbers (Python lines 143-145)
+    const textbox = workFrame.getByRole('textbox', { name: '来源生产订单号' });
     await textbox.fill('');
     await textbox.fill(orderNumbers.join(','));
 
-    // Click search button (line 147)
-    await workFrame.locator(ERP_LOCATORS.extractor.queryButton).click();
+    // Click search button (Python line 147)
+    await workFrame.locator('.search-component-searchBtn').click();
 
-    // Wait for loading (lines 148-153)
+    // Wait for loading (Python lines 148-153)
     await this.waitForLoading(workFrame);
 
-    // Click first row checkbox (line 155)
-    await workFrame
-      .locator(ERP_LOCATORS.extractor.firstRowSelector)
-      .getByLabel('')
-      .click();
+    // Click first row checkbox (Python line 155)
+    await workFrame.getByRole('row', { name: '序号' }).getByLabel('').click();
 
-    // Hover and click "更多" button (lines 156-157)
+    // Hover and click "更多" button (Python lines 156-157)
     await workFrame.getByRole('button', { name: '更多' }).hover();
     await workFrame.getByText('输出', { exact: true }).click();
 
-    // Set threshold (lines 159-164)
+    // Set threshold (Python lines 159-164)
     const thresholdBox = workFrame
       .locator('div')
       .filter({ hasText: /^行数阈值$/ })
       .locator('input[type="text"]');
     await thresholdBox.fill('300000');
 
-    // Setup download handler and click confirm (lines 166-172)
+    // Setup download handler and click confirm (Python lines 166-172)
     const downloadPath = path.join(
       this.downloadDir,
       `temp_batch_${batchIndex + 1}.xlsx`

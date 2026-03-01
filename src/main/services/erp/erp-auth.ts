@@ -9,9 +9,11 @@ import type { ErpConfig, ErpSession } from '../../types/erp.types';
 export class ErpAuthService {
   private config: ErpConfig;
   private session: ErpSession | null = null;
+  private ignoreHTTPSErrors: boolean;
 
   constructor(config: ErpConfig) {
     this.config = config;
+    this.ignoreHTTPSErrors = process.env.ERP_IGNORE_HTTPS_ERRORS === 'true';
   }
 
   /**
@@ -22,41 +24,103 @@ export class ErpAuthService {
       return this.session;
     }
 
-    // Launch browser
+    // Launch browser with SSL certificate errors ignored
     const browser = await chromium.launch({
-      headless: false, // Set to true for production
+      headless: this.config.headless ?? false, // Use config or default to false
       slowMo: 100, // Slow down for debugging
+      ignoreHTTPSErrors: true, // Ignore SSL certificate errors
+      args: [
+        '--ignore-certificate-errors',
+        '--ignore-ssl-errors',
+        '--ignore-certificate-errors-spki-list',
+        '--disable-web-security', // Disable web security for internal VPN
+      ],
     });
 
     const context = await browser.newContext({
       acceptDownloads: true,
       viewport: { width: 1920, height: 1080 },
+      ignoreHTTPSErrors: true, // Ignore SSL certificate errors
+      acceptAllDownloads: true, // Accept all downloads
+      // Disable web security for internal VPN
+      javaScriptEnabled: true,
     });
 
     const page = await context.newPage();
 
-    // Navigate to login page
-    await page.goto(this.config.url);
+    // Navigate to login page (use actual login URL from Python code)
+    const loginUrl = `${this.config.url}/yonbip/resources/uap/rbac/login/main/index.html`;
+    await page.goto(loginUrl);
 
-    // Wait for login form
-    await page.waitForSelector(ERP_LOCATORS.login.usernameInput);
+    // Wait for page to load
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
 
-    // Fill credentials
-    await page.fill(ERP_LOCATORS.login.usernameInput, this.config.username);
-    await page.fill(ERP_LOCATORS.login.passwordInput, this.config.password);
+    // Wait for iframe to be present
+    await page.waitForSelector('#forwardFrame', { state: 'attached', timeout: 15000 });
 
-    // Submit login
-    await page.click(ERP_LOCATORS.login.submitButton);
+    // Extract forwardFrame (Python: main_frame = page.locator("#forwardFrame").content_frame)
+    // This is the main working frame for all subsequent operations
+    const frameLocator = page.locator('#forwardFrame');
+    const contentFrame = await frameLocator.contentFrame();
 
-    // Wait for main page to load
-    await page.waitForURL(`${this.config.url}/**`);
-    await page.waitForSelector(ERP_LOCATORS.main.mainIframe, { timeout: 10000 });
+    if (!contentFrame) {
+      throw new Error('Failed to access forwardFrame content frame');
+    }
 
-    // Create session
+    // Store reference to main frame for later use (Python returns this as main_frame)
+    const mainFrame = contentFrame;
+
+    // Fill username using role-based locator (Python: get_by_role("textbox", name="用户名"))
+    try {
+      await contentFrame.getByRole('textbox', { name: '用户名' }).fill(this.config.username);
+    } catch (e) {
+      throw new Error(`Failed to find username input: ${e}`);
+    }
+
+    // Fill password using role-based locator (Python: get_by_role("textbox", name="密码"))
+    try {
+      await contentFrame.getByRole('textbox', { name: '密码' }).fill(this.config.password);
+    } catch (e) {
+      throw new Error(`Failed to find password input: ${e}`);
+    }
+
+    // Click login button using role-based locator (Python: get_by_role("button", name="登录"))
+    try {
+      await contentFrame.getByRole('button', { name: '登录' }).click();
+    } catch (e) {
+      throw new Error(`Failed to click login button: ${e}`);
+    }
+
+    // Wait for navigation after login
+    // The login will redirect to the main page which has a different structure
+    try {
+      await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+    } catch (e) {
+      console.log('Page load state check timed out, continuing...');
+    }
+
+    // Handle force login confirmation dialog if present (Python: get_by_role("button", name="确定"))
+    try {
+      const confirmBtn = mainFrame.getByRole('button', { name: '确定' });
+      const count = await confirmBtn.count();
+      if (count > 0) {
+        console.log('Force login detected, clicking confirm button');
+        await confirmBtn.first().click();
+        await page.waitForTimeout(2000);
+      } else {
+        console.log('Normal login, no confirmation dialog');
+      }
+    } catch (e) {
+      // No force login dialog, continue
+      console.log('Normal login, no confirmation dialog');
+    }
+
+    // Create session with mainFrame (Python returns main_frame as part of login result)
     this.session = {
       browser,
       context,
       page,
+      mainFrame, // Store forwardFrame content frame for subsequent operations
       isLoggedIn: true,
     };
 

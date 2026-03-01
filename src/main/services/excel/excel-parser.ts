@@ -28,6 +28,7 @@ export class ExcelParser {
   private CHINESE_TO_ENGLISH_MAPPING: Record<string, string> = {
     生产部门: 'productionDepartment',
     生产订单: 'productionOrder',
+    来源单号: 'productionOrder', // This is the order number we need!
     产品编码: 'productCode',
     产品名称: 'productName',
     产品规格: 'productSpecification',
@@ -76,8 +77,13 @@ export class ExcelParser {
       allRows.push(row.values as any[]);
     });
 
+    this.log(`Total rows read: ${allRows.length} (worksheet has ${worksheet.rowCount} rows)`);
+
     // Parse orders from rows
     const orders = this.parseOrders(allRows);
+
+    // Store orders for potential Excel export
+    (this as any).lastOrders = orders;
 
     // Flatten orders into material plans
     for (const order of orders) {
@@ -118,6 +124,106 @@ export class ExcelParser {
   }
 
   /**
+   * Save parsed orders to Excel file
+   * Compatible with Python excel_converter.py output format
+   * Uses the last parsed orders data
+   *
+   * @param outputPath - Output Excel file path
+   */
+  async saveAsExcel(outputPath: string): Promise<void> {
+    const orders = (this as any).lastOrders;
+    if (!orders) {
+      throw new Error('No parsed data available. Call parse() first.');
+    }
+
+    this.log('Saving parsed data to Excel:', outputPath);
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Data');
+
+    // Define columns matching Python excel_converter output format exactly
+    worksheet.columns = [
+      { header: '工厂', key: 'factory', width: 25 },
+      { header: '备料状态', key: 'materialStatus', width: 15 },
+      { header: '备料计划单号', key: 'planNumber', width: 25 },
+      { header: '来源单号', key: 'productionOrder', width: 20 },
+      { header: '备料类型', key: 'materialType', width: 15 },
+      { header: '产品编码', key: 'productCode', width: 15 },
+      { header: '产品名称', key: 'productName', width: 30 },
+      { header: '产品计划数量', key: 'productPlannedQuantity', width: 15 },
+      { header: '单位', key: 'productUnit', width: 10 },
+      { header: '用料部门', key: 'department', width: 15 },
+      { header: '备注', key: 'remark', width: 20 },
+      { header: '制单人', key: 'creator', width: 15 },
+      { header: '制单日期', key: 'createDate', width: 15 },
+      { header: '审批人', key: 'approver', width: 15 },
+      { header: '审批日期', key: 'approveDate', width: 15 },
+      { header: '序号', key: 'sequence', width: 10 },
+      { header: '材料编码', key: 'materialCode', width: 15 },
+      { header: '材料名称', key: 'materialName', width: 30 },
+      { header: '规格', key: 'specification', width: 30 },
+      { header: '型号', key: 'model', width: 20 },
+      { header: '图号', key: 'drawingNumber', width: 20 },
+      { header: '物料材质', key: 'material', width: 15 },
+      { header: '计划数量', key: 'quantity', width: 12 },
+      { header: '单位', key: 'unit', width: 10 },
+      { header: '需用日期', key: 'requiredDate', width: 15 },
+      { header: '发料仓库', key: 'warehouse', width: 15 },
+      { header: '单位用量', key: 'unitUsage', width: 12 },
+      { header: '累计出库数量', key: 'cumulativeOutboundQty', width: 15 },
+      { header: '打印人', key: 'printer', width: 15 },
+      { header: '打印日期', key: 'printDate', width: 20 },
+    ];
+
+    // Add data rows - merge orderInfo with each material
+    for (const order of orders) {
+      const { orderInfo, materials } = order;
+
+      for (const material of materials) {
+        worksheet.addRow({
+          // Order info (first 14 columns)
+          factory: orderInfo.factory || '',
+          materialStatus: orderInfo.materialStatus || '',
+          planNumber: orderInfo.planNumber || '',
+          productionOrder: orderInfo.productionOrder || '',
+          materialType: orderInfo.materialType || '',
+          productCode: orderInfo.productCode || '',
+          productName: orderInfo.productName || '',
+          productPlannedQuantity: orderInfo.plannedQuantity || '',
+          unit: orderInfo.unit || '',
+          department: orderInfo.department || '',
+          remark: orderInfo.remark || '',
+          creator: orderInfo.creator || '',
+          createDate: orderInfo.createDate || '',
+          approver: orderInfo.approver || '',
+          approveDate: orderInfo.approveDate || '',
+          // Material data (columns 15-28)
+          sequence: material.sequence || '',
+          materialCode: material.materialCode || '',
+          materialName: material.materialName || '',
+          specification: material.specification || '',
+          model: material.model || '',
+          drawingNumber: material.drawingNumber || '',
+          material: material.material || '',
+          quantity: material.quantity || 0,
+          unit: material.unit || '',
+          requiredDate: material.requiredDate || '',
+          warehouse: material.warehouse || '',
+          unitUsage: material.unitUsage || 0,
+          cumulativeOutboundQty: material.cumulativeOutboundQty || 0,
+          // Footer info (last 2 columns)
+          printer: orderInfo.printer || '',
+          printDate: orderInfo.printDate || '',
+        });
+      }
+    }
+
+    // Save workbook
+    await workbook.xlsx.writeFile(outputPath);
+    this.log(`Excel file saved: ${outputPath} (${orders.length} orders, ${worksheet.rowCount - 1} data rows)`);
+  }
+
+  /**
    * Parse orders from all rows
    * Reference: _parse_sheet() in Python code
    */
@@ -130,8 +236,6 @@ export class ExcelParser {
 
       // Check if this is an order title row
       if (row && row[2] && String(row[2]).includes('离散备料计划')) {
-        this.log('Found order at row', i + 1);
-
         // Parse order header info (next 4 rows)
         const orderInfo: OrderHeader = {};
         for (let j = 1; j <= 4; j++) {
@@ -140,20 +244,32 @@ export class ExcelParser {
           }
         }
 
-        // Skip empty rows to find table header
-        let tableRow = i + 5;
+        // Debug: check productionOrder extraction
+        this.log(`Order ${orders.length + 1}: productionOrder="${orderInfo.productionOrder}"`);
+
+        // Find table header row dynamically (look for "序号" in index 1)
+        // Note: worksheet.eachRow() skips empty rows, so we can't use fixed offsets
+        let tableRow = i + 1;
         while (
           tableRow < allRows.length &&
-          (!allRows[tableRow] || !allRows[tableRow][2])
+          allRows[tableRow] &&
+          allRows[tableRow][1] !== '序号'
         ) {
           tableRow++;
         }
 
+        if (tableRow >= allRows.length || !allRows[tableRow]) {
+          this.log('  ⚠️ Table header not found, skipping this order');
+          i++;
+          continue;
+        }
+
         // Check if this is the table header row
+        // ExcelJS is 1-indexed: index 0=null, index 1=序号, index 2=材料编码
         if (
           tableRow < allRows.length &&
           allRows[tableRow] &&
-          allRows[tableRow][2] === '序号'
+          allRows[tableRow][1] === '序号'
         ) {
           // Check if next row is empty (no data)
           const nextRow = tableRow + 1;
@@ -256,6 +372,8 @@ export class ExcelParser {
               materials,
             });
           }
+        } else {
+          this.log(`  ⚠️ Table header check failed at row ${tableRow + 1}, value="${allRows[tableRow] ? allRows[tableRow][1] : 'null'}"`);
         }
 
         // Move to next row after this order
@@ -265,6 +383,7 @@ export class ExcelParser {
       }
     }
 
+    this.log(`parseOrders: Returning ${orders.length} orders`);
     return orders;
   }
 
@@ -312,25 +431,30 @@ export class ExcelParser {
   /**
    * Parse material data row
    * Reference: material data extraction in Python code
-   * ExcelJS arrays are 1-indexed (index 0 is null), so data starts at index 2
+   * ExcelJS row.values arrays are 1-indexed:
+   * - Index 0: null
+   * - Index 1: 序号 (sequence)
+   * - Index 2: 材料编码 (materialCode)
+   * - Index 3: 材料名称 (materialName)
+   * - etc.
    * NOTE: This is an internal method that returns raw data structure
    */
   private parseMaterialRowInternal(row: any[], rowNumber: number): any | null {
-    // Extract 13 fields from material row (starting at index 2)
+    // Extract 13 fields from material row (ExcelJS is 1-indexed, so data starts at index 1)
     const material = {
-      sequence: row[2],
-      materialCode: row[3],
-      materialName: row[4],
-      specification: row[5],
-      model: row[6],
-      drawingNumber: row[7],
-      material: row[8],
-      quantity: this.parseFloat(row[9]),
-      unit: row[10],
-      requiredDate: row[11],
-      warehouse: row[12],
-      unitUsage: this.parseFloat(row[13]),
-      cumulativeOutboundQty: this.parseFloat(row[14]),
+      sequence: row[1],
+      materialCode: row[2],
+      materialName: row[3],
+      specification: row[4],
+      model: row[5],
+      drawingNumber: row[6],
+      material: row[7],
+      quantity: this.parseFloat(row[8]),
+      unit: row[9],
+      requiredDate: row[10],
+      warehouse: row[11],
+      unitUsage: this.parseFloat(row[12]),
+      cumulativeOutboundQty: this.parseFloat(row[13]),
       rowNumber,
     };
 
@@ -390,7 +514,7 @@ export class ExcelParser {
    * Parse material row
    * (Spec-compliant method for parsing material data)
    *
-   * @param values - Row values array from ExcelJS
+   * @param values - Row values array from ExcelJS (1-indexed, index 0 is null)
    * @param orderNumber - Order number for this material
    * @param productionId - Production ID for this material
    * @param rowNumber - Row number in Excel file
@@ -402,19 +526,25 @@ export class ExcelParser {
     productionId: string,
     rowNumber: number
   ): DiscreteMaterialPlan | null {
-    // ExcelJS arrays are 1-indexed, data starts at index 2
-    const materialCode = values[3]?.toString().trim();
-    const materialName = values[4]?.toString().trim();
-    const specification = values[5]?.toString().trim();
-    const model = values[6]?.toString().trim();
-    const drawingNumber = values[7]?.toString().trim();
-    const material = values[8]?.toString().trim();
-    const quantity = this.parseFloat(values[9]) || 0;
-    const unit = values[10]?.toString().trim() || '';
-    const requiredDate = values[11]?.toString().trim();
-    const warehouse = values[12]?.toString().trim();
-    const unitUsage = this.parseFloat(values[13]);
-    const cumulativeOutboundQty = this.parseFloat(values[14]);
+    // ExcelJS arrays are 1-indexed:
+    // Index 0: null
+    // Index 1: 序号
+    // Index 2: 材料编码
+    // Index 3: 材料名称
+    // Index 4: 规格
+    // etc.
+    const materialCode = values[2]?.toString().trim();
+    const materialName = values[3]?.toString().trim();
+    const specification = values[4]?.toString().trim();
+    const model = values[5]?.toString().trim();
+    const drawingNumber = values[6]?.toString().trim();
+    const material = values[7]?.toString().trim();
+    const quantity = this.parseFloat(values[8]) || 0;
+    const unit = values[9]?.toString().trim() || '';
+    const requiredDate = values[10]?.toString().trim();
+    const warehouse = values[11]?.toString().trim();
+    const unitUsage = this.parseFloat(values[12]);
+    const cumulativeOutboundQty = this.parseFloat(values[13]);
 
     // Skip if no material code
     if (!materialCode) {
