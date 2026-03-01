@@ -9,7 +9,7 @@ export const ERP_LOCATORS = {
   login: {
     usernameInput: '#username',
     passwordInput: '#password',
-    submitButton: 'button[type="submit"]',
+    submitButton: 'button[type="submit"]'
   },
 
   // Main Frame
@@ -22,7 +22,7 @@ export const ERP_LOCATORS = {
     // Inner iframe (inside forward frame)
     innerIframe: '#mainiframe',
     // Loading overlay text
-    loadingText: '加载中',
+    loadingText: '加载中'
   },
 
   // Extractor (Data Export) Page
@@ -43,7 +43,7 @@ export const ERP_LOCATORS = {
     // Export dialog - threshold input
     thresholdInputSelector: 'div:has-text(/^行数阈值$/) input[type="text"]',
     // Confirm button
-    confirmButton: 'internal:has-text="确定(Y)"',
+    confirmButton: 'internal:has-text="确定(Y)"'
   },
 
   // Menu navigation
@@ -55,7 +55,7 @@ export const ERP_LOCATORS = {
     // "All" tab
     allTab: 'internal:role=tab[name="全部"]',
     // Select input for setting limits
-    selectInput: '#rc_select_0',
+    selectInput: '#rc_select_0'
   },
 
   // Discrete material plan menu item
@@ -65,7 +65,7 @@ export const ERP_LOCATORS = {
   cleaner: {
     orderNumberInput: 'input[name="orderNumber"]',
     materialGrid: 'table.material-grid tbody tr',
-    saveButton: 'button:has-text("保存")',
+    saveButton: 'button:has-text("保存")'
   },
 
   // Common Elements
@@ -74,6 +74,6 @@ export const ERP_LOCATORS = {
     errorMessage: '.message.error',
     confirmDialog: '.confirm-dialog',
     confirmButton: 'button:has-text("确定")',
-    cancelButton: 'button:has-text("取消")',
-  },
-};
+    cancelButton: 'button:has-text("取消")'
+  }
+}

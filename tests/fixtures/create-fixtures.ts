@@ -1,25 +1,25 @@
-import ExcelJS from 'exceljs';
-import path from 'path';
+import ExcelJS from 'exceljs'
+import path from 'path'
 
 /**
  * Create test fixture Excel files for unit tests
  */
 
 async function createTestFixture() {
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('Sheet1');
+  const workbook = new ExcelJS.Workbook()
+  const worksheet = workbook.addWorksheet('Sheet1')
 
   // Row 1: Order title
-  worksheet.addRow([null, '离散备料计划']);
+  worksheet.addRow([null, '离散备料计划'])
 
   // Row 2-5: Order header info
-  worksheet.addRow([null, '生产部门：', null, '生产车间', '产品编码：', null, 'P001']);
-  worksheet.addRow([null, '生产订单：', null, 'SC202501001', '产品名称：', null, '测试产品A']);
-  worksheet.addRow([null, '产品规格：', null, '标准规格', '计划数量：', null, '100']);
-  worksheet.addRow([null, '单位：', null, '件', '需用日期：', null, '2025-02-15']);
+  worksheet.addRow([null, '生产部门：', null, '生产车间', '产品编码：', null, 'P001'])
+  worksheet.addRow([null, '生产订单：', null, 'SC202501001', '产品名称：', null, '测试产品A'])
+  worksheet.addRow([null, '产品规格：', null, '标准规格', '计划数量：', null, '100'])
+  worksheet.addRow([null, '单位：', null, '件', '需用日期：', null, '2025-02-15'])
 
   // Row 6: Empty row before table header
-  worksheet.addRow([]);
+  worksheet.addRow([])
 
   // Row 7: Table header
   worksheet.addRow([
@@ -36,8 +36,8 @@ async function createTestFixture() {
     '需用日期',
     '发料仓库',
     '单位用量',
-    '累计出库数量',
-  ]);
+    '累计出库数量'
+  ])
 
   // Row 8-10: Material data
   worksheet.addRow([
@@ -54,8 +54,8 @@ async function createTestFixture() {
     '2025-02-10',
     '仓库1',
     0.5,
-    0,
-  ]);
+    0
+  ])
   worksheet.addRow([
     null,
     2,
@@ -70,8 +70,8 @@ async function createTestFixture() {
     '2025-02-12',
     '仓库1',
     1.0,
-    20,
-  ]);
+    20
+  ])
   worksheet.addRow([
     null,
     3,
@@ -86,34 +86,34 @@ async function createTestFixture() {
     '2025-02-14',
     '仓库2',
     2.0,
-    50,
-  ]);
+    50
+  ])
 
   // Row 11: Footer info
-  worksheet.addRow([null, '制单人：', null, '张三', '打印人：', null, '李四']);
-  worksheet.addRow([null, '打印日期：', null, '2025-01-15']);
+  worksheet.addRow([null, '制单人：', null, '张三', '打印人：', null, '李四'])
+  worksheet.addRow([null, '打印日期：', null, '2025-01-15'])
 
   // Save file
-  const filePath = path.resolve(__dirname, 'test-export.xlsx');
-  await workbook.xlsx.writeFile(filePath);
-  console.log('Created test fixture:', filePath);
+  const filePath = path.resolve(__dirname, 'test-export.xlsx')
+  await workbook.xlsx.writeFile(filePath)
+  console.log('Created test fixture:', filePath)
 }
 
 async function createEmptyOrdersFixture() {
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('Sheet1');
+  const workbook = new ExcelJS.Workbook()
+  const worksheet = workbook.addWorksheet('Sheet1')
 
   // Row 1: Order title
-  worksheet.addRow([null, '离散备料计划']);
+  worksheet.addRow([null, '离散备料计划'])
 
   // Row 2-5: Order header info
-  worksheet.addRow([null, '生产部门：', null, '生产车间', '产品编码：', null, 'P002']);
-  worksheet.addRow([null, '生产订单：', null, 'SC202501002', '产品名称：', null, '测试产品B']);
-  worksheet.addRow([null, '产品规格：', null, '特殊规格', '计划数量：', null, '50']);
-  worksheet.addRow([null, '单位：', null, '套', '需用日期：', null, '2025-03-01']);
+  worksheet.addRow([null, '生产部门：', null, '生产车间', '产品编码：', null, 'P002'])
+  worksheet.addRow([null, '生产订单：', null, 'SC202501002', '产品名称：', null, '测试产品B'])
+  worksheet.addRow([null, '产品规格：', null, '特殊规格', '计划数量：', null, '50'])
+  worksheet.addRow([null, '单位：', null, '套', '需用日期：', null, '2025-03-01'])
 
   // Row 6: Empty row before table header
-  worksheet.addRow([]);
+  worksheet.addRow([])
 
   // Row 7: Table header
   worksheet.addRow([
@@ -130,27 +130,27 @@ async function createEmptyOrdersFixture() {
     '需用日期',
     '发料仓库',
     '单位用量',
-    '累计出库数量',
-  ]);
+    '累计出库数量'
+  ])
 
   // Row 8: Empty row (no data)
-  worksheet.addRow([]);
+  worksheet.addRow([])
 
   // Row 9: Footer info
-  worksheet.addRow([null, '制单人：', null, '王五', '打印人：', null, '赵六']);
-  worksheet.addRow([null, '打印日期：', null, '2025-01-16']);
+  worksheet.addRow([null, '制单人：', null, '王五', '打印人：', null, '赵六'])
+  worksheet.addRow([null, '打印日期：', null, '2025-01-16'])
 
   // Save file
-  const filePath = path.resolve(__dirname, 'test-empty-orders.xlsx');
-  await workbook.xlsx.writeFile(filePath);
-  console.log('Created empty orders fixture:', filePath);
+  const filePath = path.resolve(__dirname, 'test-empty-orders.xlsx')
+  await workbook.xlsx.writeFile(filePath)
+  console.log('Created empty orders fixture:', filePath)
 }
 
 async function main() {
-  console.log('Creating test fixture Excel files...');
-  await createTestFixture();
-  await createEmptyOrdersFixture();
-  console.log('Done!');
+  console.log('Creating test fixture Excel files...')
+  await createTestFixture()
+  await createEmptyOrdersFixture()
+  console.log('Done!')
 }
 
-main().catch(console.error);
+main().catch(console.error)

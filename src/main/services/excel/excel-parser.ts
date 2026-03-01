@@ -1,10 +1,6 @@
-import ExcelJS from 'exceljs';
-import type {
-  DiscreteMaterialPlan,
-  ExcelParseOptions,
-  OrderHeader,
-} from '../../types/excel.types';
-import path from 'path';
+import ExcelJS from 'exceljs'
+import type { DiscreteMaterialPlan, ExcelParseOptions, OrderHeader } from '../../types/excel.types'
+import path from 'path'
 
 /**
  * Excel Parser Service
@@ -21,8 +17,8 @@ export class ExcelParser {
   // Field name mapping for Python compatibility (from Python code)
   private FIELD_NAME_MAPPING: Record<string, string> = {
     计划数量: '产品计划数量',
-    单位: '产品单位',
-  };
+    单位: '产品单位'
+  }
 
   // Mapping from Chinese field names to English property names
   private CHINESE_TO_ENGLISH_MAPPING: Record<string, string> = {
@@ -40,18 +36,18 @@ export class ExcelParser {
     打印日期: 'printDate',
     // Mapped fields (after FIELD_NAME_MAPPING)
     产品计划数量: 'plannedQuantity',
-    产品单位: 'unit',
-  };
+    产品单位: 'unit'
+  }
 
-  private verbose: boolean;
+  private verbose: boolean
 
   constructor(options: ExcelParseOptions = {}) {
-    this.verbose = options.verbose || false;
+    this.verbose = options.verbose || false
   }
 
   private log(...args: any[]): void {
     if (this.verbose) {
-      console.log('[ExcelParser]', ...args);
+      console.log('[ExcelParser]', ...args)
     }
   }
 
@@ -59,40 +55,40 @@ export class ExcelParser {
    * Parse Excel file and extract material plans
    */
   async parse(filePath: string, options: ExcelParseOptions = {}): Promise<DiscreteMaterialPlan[]> {
-    this.log('Parsing Excel file:', filePath);
+    this.log('Parsing Excel file:', filePath)
 
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.readFile(filePath);
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.readFile(filePath)
 
-    const worksheet = workbook.worksheets[0];
+    const worksheet = workbook.worksheets[0]
     if (!worksheet) {
-      throw new Error('No worksheet found in file');
+      throw new Error('No worksheet found in file')
     }
 
-    const plans: DiscreteMaterialPlan[] = [];
-    const allRows: any[][] = [];
+    const plans: DiscreteMaterialPlan[] = []
+    const allRows: any[][] = []
 
     // Read all rows into memory
     worksheet.eachRow((row, rowNumber) => {
-      allRows.push(row.values as any[]);
-    });
+      allRows.push(row.values as any[])
+    })
 
-    this.log(`Total rows read: ${allRows.length} (worksheet has ${worksheet.rowCount} rows)`);
+    this.log(`Total rows read: ${allRows.length} (worksheet has ${worksheet.rowCount} rows)`)
 
     // Parse orders from rows
-    const orders = this.parseOrders(allRows);
+    const orders = this.parseOrders(allRows)
 
     // Store orders for potential Excel export
-    (this as any).lastOrders = orders;
+    ;(this as any).lastOrders = orders
 
     // Flatten orders into material plans
     for (const order of orders) {
-      const { orderInfo, materials } = order;
+      const { orderInfo, materials } = order
 
       // Skip empty orders if option is set
       if (options.skipEmptyOrders && materials.length === 0) {
-        this.log('Skipping empty order:', orderInfo.productionOrder);
-        continue;
+        this.log('Skipping empty order:', orderInfo.productionOrder)
+        continue
       }
 
       // Create a material plan for each material row
@@ -112,15 +108,15 @@ export class ExcelParser {
           warehouse: material.warehouse,
           unitUsage: material.unitUsage,
           cumulativeOutboundQty: material.cumulativeOutboundQty,
-          rowNumber: material.rowNumber,
-        };
-        plans.push(plan);
+          rowNumber: material.rowNumber
+        }
+        plans.push(plan)
       }
     }
 
-    this.log(`Parsed ${plans.length} material plans from ${orders.length} orders`);
+    this.log(`Parsed ${plans.length} material plans from ${orders.length} orders`)
 
-    return plans;
+    return plans
   }
 
   /**
@@ -131,15 +127,15 @@ export class ExcelParser {
    * @param outputPath - Output Excel file path
    */
   async saveAsExcel(outputPath: string): Promise<void> {
-    const orders = (this as any).lastOrders;
+    const orders = (this as any).lastOrders
     if (!orders) {
-      throw new Error('No parsed data available. Call parse() first.');
+      throw new Error('No parsed data available. Call parse() first.')
     }
 
-    this.log('Saving parsed data to Excel:', outputPath);
+    this.log('Saving parsed data to Excel:', outputPath)
 
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Data');
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet('Data')
 
     // Define columns matching Python excel_converter output format exactly
     worksheet.columns = [
@@ -172,12 +168,12 @@ export class ExcelParser {
       { header: '单位用量', key: 'unitUsage', width: 12 },
       { header: '累计出库数量', key: 'cumulativeOutboundQty', width: 15 },
       { header: '打印人', key: 'printer', width: 15 },
-      { header: '打印日期', key: 'printDate', width: 20 },
-    ];
+      { header: '打印日期', key: 'printDate', width: 20 }
+    ]
 
     // Add data rows - merge orderInfo with each material
     for (const order of orders) {
-      const { orderInfo, materials } = order;
+      const { orderInfo, materials } = order
 
       for (const material of materials) {
         worksheet.addRow({
@@ -213,14 +209,16 @@ export class ExcelParser {
           cumulativeOutboundQty: material.cumulativeOutboundQty || 0,
           // Footer info (last 2 columns)
           printer: orderInfo.printer || '',
-          printDate: orderInfo.printDate || '',
-        });
+          printDate: orderInfo.printDate || ''
+        })
       }
     }
 
     // Save workbook
-    await workbook.xlsx.writeFile(outputPath);
-    this.log(`Excel file saved: ${outputPath} (${orders.length} orders, ${worksheet.rowCount - 1} data rows)`);
+    await workbook.xlsx.writeFile(outputPath)
+    this.log(
+      `Excel file saved: ${outputPath} (${orders.length} orders, ${worksheet.rowCount - 1} data rows)`
+    )
   }
 
   /**
@@ -228,64 +226,54 @@ export class ExcelParser {
    * Reference: _parse_sheet() in Python code
    */
   private parseOrders(allRows: any[][]): Array<{ orderInfo: OrderHeader; materials: any[] }> {
-    const orders: Array<{ orderInfo: OrderHeader; materials: any[] }> = [];
-    let i = 0;
+    const orders: Array<{ orderInfo: OrderHeader; materials: any[] }> = []
+    let i = 0
 
     while (i < allRows.length) {
-      const row = allRows[i];
+      const row = allRows[i]
 
       // Check if this is an order title row
       if (row && row[2] && String(row[2]).includes('离散备料计划')) {
         // Parse order header info (next 4 rows)
-        const orderInfo: OrderHeader = {};
+        const orderInfo: OrderHeader = {}
         for (let j = 1; j <= 4; j++) {
           if (i + j < allRows.length && allRows[i + j]) {
-            this.parseHeaderRow(allRows[i + j], orderInfo);
+            this.parseHeaderRow(allRows[i + j], orderInfo)
           }
         }
 
         // Debug: check productionOrder extraction
-        this.log(`Order ${orders.length + 1}: productionOrder="${orderInfo.productionOrder}"`);
+        this.log(`Order ${orders.length + 1}: productionOrder="${orderInfo.productionOrder}"`)
 
         // Find table header row dynamically (look for "序号" in index 1)
         // Note: worksheet.eachRow() skips empty rows, so we can't use fixed offsets
-        let tableRow = i + 1;
-        while (
-          tableRow < allRows.length &&
-          allRows[tableRow] &&
-          allRows[tableRow][1] !== '序号'
-        ) {
-          tableRow++;
+        let tableRow = i + 1
+        while (tableRow < allRows.length && allRows[tableRow] && allRows[tableRow][1] !== '序号') {
+          tableRow++
         }
 
         if (tableRow >= allRows.length || !allRows[tableRow]) {
-          this.log('  ⚠️ Table header not found, skipping this order');
-          i++;
-          continue;
+          this.log('  ⚠️ Table header not found, skipping this order')
+          i++
+          continue
         }
 
         // Check if this is the table header row
         // ExcelJS is 1-indexed: index 0=null, index 1=序号, index 2=材料编码
-        if (
-          tableRow < allRows.length &&
-          allRows[tableRow] &&
-          allRows[tableRow][1] === '序号'
-        ) {
+        if (tableRow < allRows.length && allRows[tableRow] && allRows[tableRow][1] === '序号') {
           // Check if next row is empty (no data)
-          const nextRow = tableRow + 1;
+          const nextRow = tableRow + 1
           const isEmptyRow =
             nextRow < allRows.length &&
             allRows[nextRow] &&
-            allRows[nextRow].every(
-              (cell: any) => cell === null || String(cell).trim() === ''
-            );
+            allRows[nextRow].every((cell: any) => cell === null || String(cell).trim() === '')
 
           if (isEmptyRow) {
             // No data, find footer info
-            this.log('Order has no material data');
-            const materials: any[] = [];
-            const footerInfo: OrderHeader = {};
-            let dataRow = nextRow + 1;
+            this.log('Order has no material data')
+            const materials: any[] = []
+            const footerInfo: OrderHeader = {}
+            let dataRow = nextRow + 1
 
             while (dataRow < allRows.length && allRows[dataRow]) {
               if (
@@ -293,32 +281,32 @@ export class ExcelParser {
                 (String(allRows[dataRow][2]).includes('制单人') ||
                   String(allRows[dataRow][2]).includes('打印人'))
               ) {
-                this.parseHeaderRow(allRows[dataRow], footerInfo);
+                this.parseHeaderRow(allRows[dataRow], footerInfo)
                 if (dataRow + 1 < allRows.length && allRows[dataRow + 1]) {
-                  this.parseHeaderRow(allRows[dataRow + 1], footerInfo);
+                  this.parseHeaderRow(allRows[dataRow + 1], footerInfo)
                 }
-                break;
+                break
               }
-              dataRow++;
+              dataRow++
             }
 
             orders.push({
               orderInfo: { ...orderInfo, ...footerInfo },
-              materials,
-            });
+              materials
+            })
           } else {
             // Has data, extract materials
-            this.log('Order has material data');
-            const materials: any[] = [];
-            const footerInfo: OrderHeader = {};
-            let dataRow = tableRow + 1;
+            this.log('Order has material data')
+            const materials: any[] = []
+            const footerInfo: OrderHeader = {}
+            let dataRow = tableRow + 1
 
             while (dataRow < allRows.length && allRows[dataRow]) {
               // Check if CURRENT row is footer info (制单人/打印人)
               const isCurrentRowFooter =
                 allRows[dataRow][2] &&
                 (String(allRows[dataRow][2]).includes('制单人') ||
-                  String(allRows[dataRow][2]).includes('打印人'));
+                  String(allRows[dataRow][2]).includes('打印人'))
 
               // Check if NEXT row is footer info (to handle empty row before footer)
               const isNextRowFooter =
@@ -326,65 +314,67 @@ export class ExcelParser {
                 allRows[dataRow + 1] &&
                 allRows[dataRow + 1][2] &&
                 (String(allRows[dataRow + 1][2]).includes('制单人') ||
-                  String(allRows[dataRow + 1][2]).includes('打印人'));
+                  String(allRows[dataRow + 1][2]).includes('打印人'))
 
               if (isCurrentRowFooter) {
                 // Current row is footer, parse it and next row if exists
-                this.parseHeaderRow(allRows[dataRow], footerInfo);
+                this.parseHeaderRow(allRows[dataRow], footerInfo)
                 if (dataRow + 1 < allRows.length && allRows[dataRow + 1]) {
-                  this.parseHeaderRow(allRows[dataRow + 1], footerInfo);
+                  this.parseHeaderRow(allRows[dataRow + 1], footerInfo)
                 }
-                this.log('  Found footer row, stopping material parsing');
-                break;
+                this.log('  Found footer row, stopping material parsing')
+                break
               }
 
               if (isNextRowFooter) {
                 // Next row is footer, parse current row as material first
-                const material = this.parseMaterialRowInternal(allRows[dataRow], dataRow + 1);
+                const material = this.parseMaterialRowInternal(allRows[dataRow], dataRow + 1)
                 if (material) {
-                  this.log('  Parsed material:', material.materialCode);
-                  materials.push(material);
+                  this.log('  Parsed material:', material.materialCode)
+                  materials.push(material)
                 }
 
                 // Then parse footer rows
-                this.parseHeaderRow(allRows[dataRow + 1], footerInfo);
+                this.parseHeaderRow(allRows[dataRow + 1], footerInfo)
                 if (dataRow + 2 < allRows.length && allRows[dataRow + 2]) {
-                  this.parseHeaderRow(allRows[dataRow + 2], footerInfo);
+                  this.parseHeaderRow(allRows[dataRow + 2], footerInfo)
                 }
-                this.log('  Found footer in next row, stopping material parsing');
-                break;
+                this.log('  Found footer in next row, stopping material parsing')
+                break
               }
 
               // Extract material data
-              const material = this.parseMaterialRowInternal(allRows[dataRow], dataRow + 1);
+              const material = this.parseMaterialRowInternal(allRows[dataRow], dataRow + 1)
               if (material) {
-                this.log('  Parsed material:', material.materialCode);
-                materials.push(material);
+                this.log('  Parsed material:', material.materialCode)
+                materials.push(material)
               } else {
-                this.log('  Skipped material row at', dataRow + 1);
+                this.log('  Skipped material row at', dataRow + 1)
               }
 
-              dataRow++;
+              dataRow++
             }
 
             orders.push({
               orderInfo: { ...orderInfo, ...footerInfo },
-              materials,
-            });
+              materials
+            })
           }
         } else {
-          this.log(`  ⚠️ Table header check failed at row ${tableRow + 1}, value="${allRows[tableRow] ? allRows[tableRow][1] : 'null'}"`);
+          this.log(
+            `  ⚠️ Table header check failed at row ${tableRow + 1}, value="${allRows[tableRow] ? allRows[tableRow][1] : 'null'}"`
+          )
         }
 
         // Move to next row after this order
-        i = tableRow + 1;
+        i = tableRow + 1
       } else {
-        i++;
+        i++
       }
     }
 
-    this.log(`parseOrders: Returning ${orders.length} orders`);
-    return orders;
+    this.log(`parseOrders: Returning ${orders.length} orders`)
+    return orders
   }
 
   /**
@@ -392,38 +382,38 @@ export class ExcelParser {
    * Reference: _parse_header_row() in Python code
    */
   private parseHeaderRow(row: any[], info: OrderHeader): void {
-    let j = 0;
+    let j = 0
     while (j < row.length) {
-      const cell = row[j];
+      const cell = row[j]
       if (cell && String(cell).trim() && String(cell).includes('：')) {
         // Found field name
-        let fieldName = String(cell).replace('：', '').trim();
+        let fieldName = String(cell).replace('：', '').trim()
 
         // Apply field name mapping (from Python code)
         if (fieldName in this.FIELD_NAME_MAPPING) {
-          fieldName = this.FIELD_NAME_MAPPING[fieldName];
+          fieldName = this.FIELD_NAME_MAPPING[fieldName]
         }
 
         // Map Chinese field name to English property name
-        const englishFieldName = this.CHINESE_TO_ENGLISH_MAPPING[fieldName] || fieldName;
+        const englishFieldName = this.CHINESE_TO_ENGLISH_MAPPING[fieldName] || fieldName
 
         // Skip empty cells to find first non-field-name value
-        let k = j + 1;
+        let k = j + 1
         while (
           k < row.length &&
           (!row[k] || !String(row[k]).trim() || String(row[k]).includes('：'))
         ) {
-          k++;
+          k++
         }
 
         if (k < row.length && row[k] && !String(row[k]).includes('：')) {
-          info[englishFieldName as keyof OrderHeader] = String(row[k]).trim();
+          info[englishFieldName as keyof OrderHeader] = String(row[k]).trim()
         }
 
         // Skip processed value, continue to next field name
-        j = k + 1;
+        j = k + 1
       } else {
-        j++;
+        j++
       }
     }
   }
@@ -455,15 +445,15 @@ export class ExcelParser {
       warehouse: row[11],
       unitUsage: this.parseFloat(row[12]),
       cumulativeOutboundQty: this.parseFloat(row[13]),
-      rowNumber,
-    };
+      rowNumber
+    }
 
     // Skip if no material code
     if (!material.materialCode) {
-      return null;
+      return null
     }
 
-    return material;
+    return material
   }
 
   /**
@@ -471,10 +461,10 @@ export class ExcelParser {
    */
   private parseFloat(value: any): number | undefined {
     if (value === null || value === undefined) {
-      return undefined;
+      return undefined
     }
-    const parsed = parseFloat(String(value));
-    return isNaN(parsed) ? undefined : parsed;
+    const parsed = parseFloat(String(value))
+    return isNaN(parsed) ? undefined : parsed
   }
 
   /**
@@ -486,11 +476,8 @@ export class ExcelParser {
    */
   public isOrderRow(values: any[]): boolean {
     // ExcelJS arrays are 1-indexed, check index 2 for order title
-    const firstCell = values[2];
-    return (
-      typeof firstCell === 'string' &&
-      firstCell.includes('离散备料计划')
-    );
+    const firstCell = values[2]
+    return typeof firstCell === 'string' && firstCell.includes('离散备料计划')
   }
 
   /**
@@ -505,9 +492,9 @@ export class ExcelParser {
    */
   public extractOrderNumber(values: any[]): string {
     // Parse the row to extract order number using same logic as header parsing
-    const orderInfo: OrderHeader = {};
-    this.parseHeaderRow(values, orderInfo);
-    return orderInfo.productionOrder || '';
+    const orderInfo: OrderHeader = {}
+    this.parseHeaderRow(values, orderInfo)
+    return orderInfo.productionOrder || ''
   }
 
   /**
@@ -533,22 +520,22 @@ export class ExcelParser {
     // Index 3: 材料名称
     // Index 4: 规格
     // etc.
-    const materialCode = values[2]?.toString().trim();
-    const materialName = values[3]?.toString().trim();
-    const specification = values[4]?.toString().trim();
-    const model = values[5]?.toString().trim();
-    const drawingNumber = values[6]?.toString().trim();
-    const material = values[7]?.toString().trim();
-    const quantity = this.parseFloat(values[8]) || 0;
-    const unit = values[9]?.toString().trim() || '';
-    const requiredDate = values[10]?.toString().trim();
-    const warehouse = values[11]?.toString().trim();
-    const unitUsage = this.parseFloat(values[12]);
-    const cumulativeOutboundQty = this.parseFloat(values[13]);
+    const materialCode = values[2]?.toString().trim()
+    const materialName = values[3]?.toString().trim()
+    const specification = values[4]?.toString().trim()
+    const model = values[5]?.toString().trim()
+    const drawingNumber = values[6]?.toString().trim()
+    const material = values[7]?.toString().trim()
+    const quantity = this.parseFloat(values[8]) || 0
+    const unit = values[9]?.toString().trim() || ''
+    const requiredDate = values[10]?.toString().trim()
+    const warehouse = values[11]?.toString().trim()
+    const unitUsage = this.parseFloat(values[12])
+    const cumulativeOutboundQty = this.parseFloat(values[13])
 
     // Skip if no material code
     if (!materialCode) {
-      return null;
+      return null
     }
 
     return {
@@ -566,7 +553,7 @@ export class ExcelParser {
       warehouse,
       unitUsage,
       cumulativeOutboundQty,
-      rowNumber,
-    };
+      rowNumber
+    }
   }
 }

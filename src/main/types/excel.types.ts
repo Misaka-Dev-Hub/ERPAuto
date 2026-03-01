@@ -9,52 +9,52 @@
  */
 export interface DiscreteMaterialPlan {
   /** Order number (e.g., SC202501001) */
-  orderNumber: string;
+  orderNumber: string
 
   /** Production ID from order header */
-  productionId: string;
+  productionId: string
 
   /** Material code (材料编码) */
-  materialCode: string;
+  materialCode: string
 
   /** Material name (材料名称) */
-  materialName: string;
+  materialName: string
 
   /** Specification (规格) */
-  specification?: string;
+  specification?: string
 
   /** Model (型号) */
-  model?: string;
+  model?: string
 
   /** Drawing number (图号) */
-  drawingNumber?: string;
+  drawingNumber?: string
 
   /** Material (物料材质) */
-  material?: string;
+  material?: string
 
   /** Planned quantity (计划数量) */
-  quantity: number;
+  quantity: number
 
   /** Unit (单位) */
-  unit: string;
+  unit: string
 
   /** Required date (需用日期) */
-  requiredDate?: string;
+  requiredDate?: string
 
   /** Warehouse (发料仓库) */
-  warehouse?: string;
+  warehouse?: string
 
   /** Unit usage (单位用量) */
-  unitUsage?: number;
+  unitUsage?: number
 
   /** Cumulative outbound quantity (累计出库数量) */
-  cumulativeOutboundQty?: number;
+  cumulativeOutboundQty?: number
 
   /** Pending quantity (pending quantity for fulfillment) */
-  pendingQty?: number;
+  pendingQty?: number
 
   /** Row number in Excel file */
-  rowNumber?: number;
+  rowNumber?: number
 }
 
 /**
@@ -62,16 +62,16 @@ export interface DiscreteMaterialPlan {
  */
 export interface ExcelParseOptions {
   /** Skip orders with no material data */
-  skipEmptyOrders?: boolean;
+  skipEmptyOrders?: boolean
 
   /** Skip footer rows (制单人/打印人) */
-  skipFooter?: boolean;
+  skipFooter?: boolean
 
   /** Custom field mapping */
-  fieldMapping?: Record<string, string>;
+  fieldMapping?: Record<string, string>
 
   /** Verbose logging */
-  verbose?: boolean;
+  verbose?: boolean
 }
 
 /**
@@ -79,38 +79,38 @@ export interface ExcelParseOptions {
  */
 export interface OrderHeader {
   /** Order title (离散备料计划) */
-  title?: string;
+  title?: string
 
   /** Production department (生产部门) */
-  productionDepartment?: string;
+  productionDepartment?: string
 
   /** Production order (生产订单) */
-  productionOrder?: string;
+  productionOrder?: string
 
   /** Product code (产品编码) */
-  productCode?: string;
+  productCode?: string
 
   /** Product name (产品名称) */
-  productName?: string;
+  productName?: string
 
   /** Product specification (产品规格) */
-  productSpecification?: string;
+  productSpecification?: string
 
   /** Planned quantity (计划数量) */
-  plannedQuantity?: string;
+  plannedQuantity?: string
 
   /** Unit (单位) */
-  unit?: string;
+  unit?: string
 
   /** Required date (需用日期) */
-  requiredDate?: string;
+  requiredDate?: string
 
   /** Creator (制单人) */
-  creator?: string;
+  creator?: string
 
   /** Printer (打印人) */
-  printer?: string;
+  printer?: string
 
   /** Print date (打印日期) */
-  printDate?: string;
+  printDate?: string
 }
