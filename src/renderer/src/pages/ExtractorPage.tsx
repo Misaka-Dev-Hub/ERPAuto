@@ -122,6 +122,7 @@ const ExtractorPage: React.FC = () => {
 
           <textarea
             className="flex-1 w-full border border-slate-300 rounded-lg p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none shadow-inner bg-slate-50 h-full"
+            style={{ userSelect: 'text', cursor: 'text' }}
             placeholder="PO-20231024-001&#10;PO-20231024-002&#10;PO-20231024-003..."
             value={orderNumbers}
             onChange={(e) => setOrderNumbers(e.target.value)}

@@ -8,7 +8,6 @@ body {
   overflow: auto;
   background-image: url('./wavy-lines.svg');
   background-size: cover;
-  user-select: none;
 }
 
 #root {
