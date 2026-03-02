@@ -9,6 +9,8 @@
  */
 
 import { MySqlService } from '../database/mysql'
+import { SqlServerService } from '../database/sql-server'
+import sql from 'mssql'
 import type { UserInfo } from '../../types/user.types'
 
 /**
@@ -35,25 +37,69 @@ export const BIP_USERS_CONFIG = {
  */
 export class BIPUsersDAO {
   private mysqlService: MySqlService | null = null
+  private sqlServerService: SqlServerService | null = null
+  private dbType: 'mysql' | 'sqlserver' = 'mysql'
 
   /**
-   * Get MySQL service instance
+   * Constructor - determine database type from environment
    */
-  private async getMySqlService(): Promise<MySqlService> {
-    if (this.mysqlService && this.mysqlService.isConnected()) {
+  constructor() {
+    const dbType = process.env.DB_TYPE?.toLowerCase()
+    if (dbType === 'sqlserver' || dbType === 'mssql') {
+      this.dbType = 'sqlserver'
+    } else {
+      this.dbType = 'mysql'
+    }
+  }
+
+  /**
+   * Get the appropriate table name based on database type
+   */
+  private getTableName(): string {
+    return this.dbType === 'sqlserver'
+      ? BIP_USERS_CONFIG.TABLE_NAME_SQLSERVER
+      : BIP_USERS_CONFIG.TABLE_NAME_MYSQL
+  }
+
+  /**
+   * Get database service instance (MySQL or SQL Server)
+   */
+  private async getDatabaseService(): Promise<MySqlService | SqlServerService> {
+    if (this.dbType === 'sqlserver') {
+      if (this.sqlServerService && this.sqlServerService.isConnected()) {
+        return this.sqlServerService
+      }
+
+      this.sqlServerService = new SqlServerService({
+        server: process.env.DB_SERVER || 'localhost',
+        port: parseInt(process.env.DB_SQLSERVER_PORT || '1433', 10),
+        user: process.env.DB_USERNAME || 'sa',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || '',
+        options: {
+          encrypt: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes',
+          trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes'
+        }
+      })
+
+      await this.sqlServerService.connect()
+      return this.sqlServerService
+    } else {
+      if (this.mysqlService && this.mysqlService.isConnected()) {
+        return this.mysqlService
+      }
+
+      this.mysqlService = new MySqlService({
+        host: process.env.DB_MYSQL_HOST || 'localhost',
+        port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
+        user: process.env.DB_USERNAME || 'root',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || ''
+      })
+
+      await this.mysqlService.connect()
       return this.mysqlService
     }
-
-    this.mysqlService = new MySqlService({
-      host: process.env.DB_MYSQL_HOST || 'localhost',
-      port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
-      user: process.env.DB_USERNAME || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || ''
-    })
-
-    await this.mysqlService.connect()
-    return this.mysqlService
   }
 
   /**
@@ -64,25 +110,49 @@ export class BIPUsersDAO {
    */
   async authenticate(username: string, password: string): Promise<UserInfo | null> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `
-        SELECT ID, UserName, UserType
-        FROM ${BIP_USERS_CONFIG.TABLE_NAME_MYSQL}
-        WHERE UserName = ? AND Password = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          SELECT ID, UserName, UserType
+          FROM ${tableName}
+          WHERE UserName = @username AND Password = @password
+        `
 
-      const result = await mysqlService.query(sql, [username, password])
+        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+          username: { value: username, type: sql.NVarChar },
+          password: { value: password, type: sql.NVarChar }
+        })
 
-      if (result.rows.length > 0) {
-        const row = result.rows[0]
-        return {
-          id: row.ID as number,
-          username: row.UserName as string,
-          userType: row.UserType as 'Admin' | 'User' | 'Guest'
+        if (result.rows.length > 0) {
+          const row = result.rows[0]
+          return {
+            id: row.ID as number,
+            username: row.UserName as string,
+            userType: row.UserType as 'Admin' | 'User' | 'Guest'
+          }
         }
+        return null
+      } else {
+        const sql = `
+          SELECT ID, UserName, UserType
+          FROM ${tableName}
+          WHERE UserName = ? AND Password = ?
+        `
+
+        const result = await (dbService as MySqlService).query(sql, [username, password])
+
+        if (result.rows.length > 0) {
+          const row = result.rows[0]
+          return {
+            id: row.ID as number,
+            username: row.UserName as string,
+            userType: row.UserType as 'Admin' | 'User' | 'Guest'
+          }
+        }
+        return null
       }
-      return null
     } catch (error) {
       console.error('[BIPUsersDAO] Authenticate error:', error)
       return null
@@ -96,25 +166,48 @@ export class BIPUsersDAO {
    */
   async authenticateByComputerName(computerName: string): Promise<UserInfo | null> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `
-        SELECT ID, UserName, UserType
-        FROM ${BIP_USERS_CONFIG.TABLE_NAME_MYSQL}
-        WHERE ComputerNmae = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          SELECT ID, UserName, UserType
+          FROM ${tableName}
+          WHERE ComputerNmae = @computerName
+        `
 
-      const result = await mysqlService.query(sql, [computerName])
+        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+          computerName: { value: computerName, type: sql.NVarChar }
+        })
 
-      if (result.rows.length > 0) {
-        const row = result.rows[0]
-        return {
-          id: row.ID as number,
-          username: row.UserName as string,
-          userType: row.UserType as 'Admin' | 'User' | 'Guest'
+        if (result.rows.length > 0) {
+          const row = result.rows[0]
+          return {
+            id: row.ID as number,
+            username: row.UserName as string,
+            userType: row.UserType as 'Admin' | 'User' | 'Guest'
+          }
         }
+        return null
+      } else {
+        const sql = `
+          SELECT ID, UserName, UserType
+          FROM ${tableName}
+          WHERE ComputerNmae = ?
+        `
+
+        const result = await (dbService as MySqlService).query(sql, [computerName])
+
+        if (result.rows.length > 0) {
+          const row = result.rows[0]
+          return {
+            id: row.ID as number,
+            username: row.UserName as string,
+            userType: row.UserType as 'Admin' | 'User' | 'Guest'
+          }
+        }
+        return null
       }
-      return null
     } catch (error) {
       console.error('[BIPUsersDAO] Authenticate by computer name error:', error)
       return null
@@ -127,15 +220,18 @@ export class BIPUsersDAO {
    */
   async getAllUsers(): Promise<UserInfo[]> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
       const sql = `
         SELECT ID, UserName, UserType, CreateTime
-        FROM ${BIP_USERS_CONFIG.TABLE_NAME_MYSQL}
+        FROM ${tableName}
         ORDER BY UserName
       `
 
-      const result = await mysqlService.query(sql)
+      const result = this.dbType === 'sqlserver'
+        ? await (dbService as SqlServerService).query(sql)
+        : await (dbService as MySqlService).query(sql)
 
       return result.rows.map(row => ({
         id: row.ID as number,
@@ -164,29 +260,63 @@ export class BIPUsersDAO {
     computerName: string = ''
   ): Promise<boolean> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      let sql: string
-      let params: any[]
+      if (this.dbType === 'sqlserver') {
+        let sql: string
+        let params: Record<string, { value: unknown; type?: sql.ISqlType }>
 
-      if (computerName) {
-        sql = `
-          INSERT INTO ${BIP_USERS_CONFIG.TABLE_NAME_MYSQL}
-          (UserName, Password, UserType, ComputerNmae)
-          VALUES (?, ?, ?, ?)
-        `
-        params = [username, password, userType, computerName]
+        if (computerName) {
+          sql = `
+            INSERT INTO ${tableName}
+            (UserName, Password, UserType, ComputerNmae)
+            VALUES (@username, @password, @userType, @computerName)
+          `
+          params = {
+            username: { value: username, type: sql.NVarChar },
+            password: { value: password, type: sql.NVarChar },
+            userType: { value: userType, type: sql.NVarChar },
+            computerName: { value: computerName, type: sql.NVarChar }
+          }
+        } else {
+          sql = `
+            INSERT INTO ${tableName}
+            (UserName, Password, UserType)
+            VALUES (@username, @password, @userType)
+          `
+          params = {
+            username: { value: username, type: sql.NVarChar },
+            password: { value: password, type: sql.NVarChar },
+            userType: { value: userType, type: sql.NVarChar }
+          }
+        }
+
+        await (dbService as SqlServerService).queryWithParams(sql, params)
+        return true
       } else {
-        sql = `
-          INSERT INTO ${BIP_USERS_CONFIG.TABLE_NAME_MYSQL}
-          (UserName, Password, UserType)
-          VALUES (?, ?, ?)
-        `
-        params = [username, password, userType]
-      }
+        let sql: string
+        let params: any[]
 
-      await mysqlService.query(sql, params)
-      return true
+        if (computerName) {
+          sql = `
+            INSERT INTO ${tableName}
+            (UserName, Password, UserType, ComputerNmae)
+            VALUES (?, ?, ?, ?)
+          `
+          params = [username, password, userType, computerName]
+        } else {
+          sql = `
+            INSERT INTO ${tableName}
+            (UserName, Password, UserType)
+            VALUES (?, ?, ?)
+          `
+          params = [username, password, userType]
+        }
+
+        await (dbService as MySqlService).query(sql, params)
+        return true
+      }
     } catch (error) {
       console.error('[BIPUsersDAO] Create user error:', error)
       return false
@@ -201,16 +331,31 @@ export class BIPUsersDAO {
    */
   async updateUserType(username: string, userType: string): Promise<boolean> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `
-        UPDATE ${BIP_USERS_CONFIG.TABLE_NAME_MYSQL}
-        SET UserType = ?
-        WHERE UserName = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          UPDATE ${tableName}
+          SET UserType = @userType
+          WHERE UserName = @username
+        `
 
-      await mysqlService.query(sql, [userType, username])
-      return true
+        await (dbService as SqlServerService).queryWithParams(sql, {
+          username: { value: username, type: sql.NVarChar },
+          userType: { value: userType, type: sql.NVarChar }
+        })
+        return true
+      } else {
+        const sql = `
+          UPDATE ${tableName}
+          SET UserType = ?
+          WHERE UserName = ?
+        `
+
+        await (dbService as MySqlService).query(sql, [userType, username])
+        return true
+      }
     } catch (error) {
       console.error('[BIPUsersDAO] Update user type error:', error)
       return false
@@ -225,16 +370,31 @@ export class BIPUsersDAO {
    */
   async updatePassword(username: string, newPassword: string): Promise<boolean> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `
-        UPDATE ${BIP_USERS_CONFIG.TABLE_NAME_MYSQL}
-        SET Password = ?
-        WHERE UserName = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          UPDATE ${tableName}
+          SET Password = @newPassword
+          WHERE UserName = @username
+        `
 
-      await mysqlService.query(sql, [newPassword, username])
-      return true
+        await (dbService as SqlServerService).queryWithParams(sql, {
+          username: { value: username, type: sql.NVarChar },
+          newPassword: { value: newPassword, type: sql.NVarChar }
+        })
+        return true
+      } else {
+        const sql = `
+          UPDATE ${tableName}
+          SET Password = ?
+          WHERE UserName = ?
+        `
+
+        await (dbService as MySqlService).query(sql, [newPassword, username])
+        return true
+      }
     } catch (error) {
       console.error('[BIPUsersDAO] Update password error:', error)
       return false
@@ -248,15 +408,28 @@ export class BIPUsersDAO {
    */
   async deleteUser(username: string): Promise<boolean> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `
-        DELETE FROM ${BIP_USERS_CONFIG.TABLE_NAME_MYSQL}
-        WHERE UserName = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          DELETE FROM ${tableName}
+          WHERE UserName = @username
+        `
 
-      await mysqlService.query(sql, [username])
-      return true
+        await (dbService as SqlServerService).queryWithParams(sql, {
+          username: { value: username, type: sql.NVarChar }
+        })
+        return true
+      } else {
+        const sql = `
+          DELETE FROM ${tableName}
+          WHERE UserName = ?
+        `
+
+        await (dbService as MySqlService).query(sql, [username])
+        return true
+      }
     } catch (error) {
       console.error('[BIPUsersDAO] Delete user error:', error)
       return false
@@ -270,16 +443,30 @@ export class BIPUsersDAO {
    */
   async userExists(username: string): Promise<boolean> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `
-        SELECT COUNT(*) as count
-        FROM ${BIP_USERS_CONFIG.TABLE_NAME_MYSQL}
-        WHERE UserName = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          SELECT COUNT(*) as count
+          FROM ${tableName}
+          WHERE UserName = @username
+        `
 
-      const result = await mysqlService.query(sql, [username])
-      return result.rows.length > 0 && (result.rows[0].count as number) > 0
+        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+          username: { value: username, type: sql.NVarChar }
+        })
+        return result.rows.length > 0 && (result.rows[0].count as number) > 0
+      } else {
+        const sql = `
+          SELECT COUNT(*) as count
+          FROM ${tableName}
+          WHERE UserName = ?
+        `
+
+        const result = await (dbService as MySqlService).query(sql, [username])
+        return result.rows.length > 0 && (result.rows[0].count as number) > 0
+      }
     } catch (error) {
       console.error('[BIPUsersDAO] User exists error:', error)
       return false
@@ -293,6 +480,10 @@ export class BIPUsersDAO {
     if (this.mysqlService) {
       await this.mysqlService.disconnect()
       this.mysqlService = null
+    }
+    if (this.sqlServerService) {
+      await this.sqlServerService.disconnect()
+      this.sqlServerService = null
     }
   }
 }

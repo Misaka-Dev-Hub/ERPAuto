@@ -9,6 +9,8 @@
  */
 
 import { MySqlService } from './mysql'
+import { SqlServerService } from './sql-server'
+import sql from 'mssql'
 
 /**
  * Material record interface
@@ -41,6 +43,7 @@ export interface MaterialStats {
  * Configuration for MaterialsToBeDeleted table
  */
 export const MATERIALS_TO_BE_DELETED_CONFIG = {
+  TABLE_NAME_SQLSERVER: '[dbo].[MaterialsToBeDeleted]',
   TABLE_NAME_MYSQL: 'dbo_MaterialsToBeDeleted',
   COLUMNS: {
     ID: 'ID',
@@ -54,25 +57,69 @@ export const MATERIALS_TO_BE_DELETED_CONFIG = {
  */
 export class MaterialsToBeDeletedDAO {
   private mysqlService: MySqlService | null = null
+  private sqlServerService: SqlServerService | null = null
+  private dbType: 'mysql' | 'sqlserver' = 'mysql'
 
   /**
-   * Get MySQL service instance
+   * Constructor - determine database type from environment
    */
-  private async getMySqlService(): Promise<MySqlService> {
-    if (this.mysqlService && this.mysqlService.isConnected()) {
+  constructor() {
+    const dbType = process.env.DB_TYPE?.toLowerCase()
+    if (dbType === 'sqlserver' || dbType === 'mssql') {
+      this.dbType = 'sqlserver'
+    } else {
+      this.dbType = 'mysql'
+    }
+  }
+
+  /**
+   * Get the appropriate table name based on database type
+   */
+  private getTableName(): string {
+    return this.dbType === 'sqlserver'
+      ? MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_SQLSERVER
+      : MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL
+  }
+
+  /**
+   * Get database service instance (MySQL or SQL Server)
+   */
+  private async getDatabaseService(): Promise<MySqlService | SqlServerService> {
+    if (this.dbType === 'sqlserver') {
+      if (this.sqlServerService && this.sqlServerService.isConnected()) {
+        return this.sqlServerService
+      }
+
+      this.sqlServerService = new SqlServerService({
+        server: process.env.DB_SERVER || 'localhost',
+        port: parseInt(process.env.DB_SQLSERVER_PORT || '1433', 10),
+        user: process.env.DB_USERNAME || 'sa',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || '',
+        options: {
+          encrypt: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes',
+          trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes'
+        }
+      })
+
+      await this.sqlServerService.connect()
+      return this.sqlServerService
+    } else {
+      if (this.mysqlService && this.mysqlService.isConnected()) {
+        return this.mysqlService
+      }
+
+      this.mysqlService = new MySqlService({
+        host: process.env.DB_MYSQL_HOST || 'localhost',
+        port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
+        user: process.env.DB_USERNAME || 'root',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || ''
+      })
+
+      await this.mysqlService.connect()
       return this.mysqlService
     }
-
-    this.mysqlService = new MySqlService({
-      host: process.env.DB_MYSQL_HOST || 'localhost',
-      port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
-      user: process.env.DB_USERNAME || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || ''
-    })
-
-    await this.mysqlService.connect()
-    return this.mysqlService
   }
 
   // ==================== UPSERT (MERGE) ====================
@@ -90,15 +137,34 @@ export class MaterialsToBeDeletedDAO {
     }
 
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const code = materialCode.trim()
+      const manager = managerName?.trim() || null
 
-      const sql = `
-        INSERT INTO ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL} (MaterialCode, ManagerName)
-        VALUES (?, ?)
-        ON DUPLICATE KEY UPDATE ManagerName = VALUES(ManagerName)
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          MERGE ${tableName} AS target
+          USING (VALUES (@materialCode, @managerName)) AS source (MaterialCode, ManagerName)
+          ON target.MaterialCode = source.MaterialCode
+          WHEN MATCHED THEN UPDATE SET ManagerName = source.ManagerName
+          WHEN NOT MATCHED THEN INSERT (MaterialCode, ManagerName) VALUES (source.MaterialCode, source.ManagerName);
+        `
 
-      await mysqlService.query(sql, [materialCode.trim(), managerName?.trim() || null])
+        await (dbService as SqlServerService).queryWithParams(sql, {
+          materialCode: { value: code, type: sql.NVarChar },
+          managerName: { value: manager, type: sql.NVarChar }
+        })
+      } else {
+        const sql = `
+          INSERT INTO ${tableName} (MaterialCode, ManagerName)
+          VALUES (?, ?)
+          ON DUPLICATE KEY UPDATE ManagerName = VALUES(ManagerName)
+        `
+
+        await (dbService as MySqlService).query(sql, [code, manager])
+      }
+
       return true
     } catch (error) {
       console.error('[MaterialsToBeDeletedDAO] Upsert material error:', error)
@@ -123,7 +189,8 @@ export class MaterialsToBeDeletedDAO {
     }
 
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
       for (const material of materials) {
         const materialCode = material.materialCode?.trim()
@@ -135,13 +202,29 @@ export class MaterialsToBeDeletedDAO {
         }
 
         try {
-          const sql = `
-            INSERT INTO ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL} (MaterialCode, ManagerName)
-            VALUES (?, ?)
-            ON DUPLICATE KEY UPDATE ManagerName = VALUES(ManagerName)
-          `
+          if (this.dbType === 'sqlserver') {
+            const sql = `
+              MERGE ${tableName} AS target
+              USING (VALUES (@materialCode, @managerName)) AS source (MaterialCode, ManagerName)
+              ON target.MaterialCode = source.MaterialCode
+              WHEN MATCHED THEN UPDATE SET ManagerName = source.ManagerName
+              WHEN NOT MATCHED THEN INSERT (MaterialCode, ManagerName) VALUES (source.MaterialCode, source.ManagerName);
+            `
 
-          await mysqlService.query(sql, [materialCode, managerName || null])
+            await (dbService as SqlServerService).queryWithParams(sql, {
+              materialCode: { value: materialCode, type: sql.NVarChar },
+              managerName: { value: managerName || null, type: sql.NVarChar }
+            })
+          } else {
+            const sql = `
+              INSERT INTO ${tableName} (MaterialCode, ManagerName)
+              VALUES (?, ?)
+              ON DUPLICATE KEY UPDATE ManagerName = VALUES(ManagerName)
+            `
+
+            await (dbService as MySqlService).query(sql, [materialCode, managerName || null])
+          }
+
           stats.success++
         } catch (error) {
           console.error('[MaterialsToBeDeletedDAO] Error upserting material:', materialCode, error)
@@ -164,15 +247,19 @@ export class MaterialsToBeDeletedDAO {
    */
   async getAllMaterialCodes(): Promise<Set<string>> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
       const sql = `
         SELECT MaterialCode
-        FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}
+        FROM ${tableName}
         WHERE MaterialCode IS NOT NULL
       `
 
-      const result = await mysqlService.query(sql)
+      const result = this.dbType === 'sqlserver'
+        ? await (dbService as SqlServerService).query(sql)
+        : await (dbService as MySqlService).query(sql)
+
       return new Set(result.rows.map(row => row.MaterialCode as string).filter(Boolean))
     } catch (error) {
       console.error('[MaterialsToBeDeletedDAO] Get all material codes error:', error)
@@ -186,16 +273,20 @@ export class MaterialsToBeDeletedDAO {
    */
   async getAllRecords(): Promise<MaterialRecord[]> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
       const sql = `
         SELECT ID, MaterialCode, ManagerName
-        FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}
+        FROM ${tableName}
         WHERE MaterialCode IS NOT NULL
         ORDER BY ManagerName, MaterialCode
       `
 
-      const result = await mysqlService.query(sql)
+      const result = this.dbType === 'sqlserver'
+        ? await (dbService as SqlServerService).query(sql)
+        : await (dbService as MySqlService).query(sql)
+
       return result.rows.map(row => ({
         id: row.ID as number,
         materialCode: row.MaterialCode as string,
@@ -214,21 +305,42 @@ export class MaterialsToBeDeletedDAO {
    */
   async getMaterialsByManager(managerName: string): Promise<MaterialRecord[]> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `
-        SELECT ID, MaterialCode, ManagerName
-        FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}
-        WHERE ManagerName = ? AND MaterialCode IS NOT NULL
-        ORDER BY MaterialCode
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          SELECT ID, MaterialCode, ManagerName
+          FROM ${tableName}
+          WHERE ManagerName = @managerName AND MaterialCode IS NOT NULL
+          ORDER BY MaterialCode
+        `
 
-      const result = await mysqlService.query(sql, [managerName])
-      return result.rows.map(row => ({
-        id: row.ID as number,
-        materialCode: row.MaterialCode as string,
-        managerName: row.ManagerName as string
-      }))
+        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+          managerName: { value: managerName, type: sql.NVarChar }
+        })
+
+        return result.rows.map(row => ({
+          id: row.ID as number,
+          materialCode: row.MaterialCode as string,
+          managerName: row.ManagerName as string
+        }))
+      } else {
+        const sql = `
+          SELECT ID, MaterialCode, ManagerName
+          FROM ${tableName}
+          WHERE ManagerName = ? AND MaterialCode IS NOT NULL
+          ORDER BY MaterialCode
+        `
+
+        const result = await (dbService as MySqlService).query(sql, [managerName])
+
+        return result.rows.map(row => ({
+          id: row.ID as number,
+          materialCode: row.MaterialCode as string,
+          managerName: row.ManagerName as string
+        }))
+      }
     } catch (error) {
       console.error('[MaterialsToBeDeletedDAO] Get materials by manager error:', error)
       return []
@@ -241,16 +353,20 @@ export class MaterialsToBeDeletedDAO {
    */
   async getManagers(): Promise<string[]> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
       const sql = `
         SELECT DISTINCT ManagerName
-        FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}
+        FROM ${tableName}
         WHERE ManagerName IS NOT NULL
         ORDER BY ManagerName
       `
 
-      const result = await mysqlService.query(sql)
+      const result = this.dbType === 'sqlserver'
+        ? await (dbService as SqlServerService).query(sql)
+        : await (dbService as MySqlService).query(sql)
+
       return result.rows.map(row => row.ManagerName as string).filter(Boolean)
     } catch (error) {
       console.error('[MaterialsToBeDeletedDAO] Get managers error:', error)
@@ -265,24 +381,50 @@ export class MaterialsToBeDeletedDAO {
    */
   async getRecordByMaterialCode(materialCode: string): Promise<MaterialRecord | null> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const code = materialCode.trim()
 
-      const sql = `
-        SELECT ID, MaterialCode, ManagerName
-        FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}
-        WHERE MaterialCode = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          SELECT ID, MaterialCode, ManagerName
+          FROM ${tableName}
+          WHERE MaterialCode = @materialCode
+        `
 
-      const result = await mysqlService.query(sql, [materialCode.trim()])
-      if (result.rows.length === 0) {
-        return null
-      }
+        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+          materialCode: { value: code, type: sql.NVarChar }
+        })
 
-      const row = result.rows[0]
-      return {
-        id: row.ID as number,
-        materialCode: row.MaterialCode as string,
-        managerName: row.ManagerName as string
+        if (result.rows.length === 0) {
+          return null
+        }
+
+        const row = result.rows[0]
+        return {
+          id: row.ID as number,
+          materialCode: row.MaterialCode as string,
+          managerName: row.ManagerName as string
+        }
+      } else {
+        const sql = `
+          SELECT ID, MaterialCode, ManagerName
+          FROM ${tableName}
+          WHERE MaterialCode = ?
+        `
+
+        const result = await (dbService as MySqlService).query(sql, [code])
+
+        if (result.rows.length === 0) {
+          return null
+        }
+
+        const row = result.rows[0]
+        return {
+          id: row.ID as number,
+          materialCode: row.MaterialCode as string,
+          managerName: row.ManagerName as string
+        }
       }
     } catch (error) {
       console.error('[MaterialsToBeDeletedDAO] Get record by material code error:', error)
@@ -299,15 +441,31 @@ export class MaterialsToBeDeletedDAO {
    */
   async deleteByMaterialCode(materialCode: string): Promise<boolean> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const code = materialCode.trim()
 
-      const sql = `
-        DELETE FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}
-        WHERE MaterialCode = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          DELETE FROM ${tableName}
+          WHERE MaterialCode = @materialCode
+        `
 
-      const result = await mysqlService.query(sql, [materialCode.trim()])
-      return result.rowCount > 0
+        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+          materialCode: { value: code, type: sql.NVarChar }
+        })
+
+        return result.rowCount > 0
+      } else {
+        const sql = `
+          DELETE FROM ${tableName}
+          WHERE MaterialCode = ?
+        `
+
+        const result = await (dbService as MySqlService).query(sql, [code])
+
+        return result.rowCount > 0
+      }
     } catch (error) {
       console.error('[MaterialsToBeDeletedDAO] Delete by material code error:', error)
       return false
@@ -321,15 +479,30 @@ export class MaterialsToBeDeletedDAO {
    */
   async deleteByManager(managerName: string): Promise<number> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `
-        DELETE FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}
-        WHERE ManagerName = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          DELETE FROM ${tableName}
+          WHERE ManagerName = @managerName
+        `
 
-      const result = await mysqlService.query(sql, [managerName])
-      return result.rowCount
+        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+          managerName: { value: managerName, type: sql.NVarChar }
+        })
+
+        return result.rowCount
+      } else {
+        const sql = `
+          DELETE FROM ${tableName}
+          WHERE ManagerName = ?
+        `
+
+        const result = await (dbService as MySqlService).query(sql, [managerName])
+
+        return result.rowCount
+      }
     } catch (error) {
       console.error('[MaterialsToBeDeletedDAO] Delete by manager error:', error)
       return 0
@@ -342,11 +515,15 @@ export class MaterialsToBeDeletedDAO {
    */
   async deleteAllMaterials(): Promise<number> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `DELETE FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}`
+      const sql = `DELETE FROM ${tableName}`
 
-      const result = await mysqlService.query(sql)
+      const result = this.dbType === 'sqlserver'
+        ? await (dbService as SqlServerService).query(sql)
+        : await (dbService as MySqlService).query(sql)
+
       return result.rowCount
     } catch (error) {
       console.error('[MaterialsToBeDeletedDAO] Delete all materials error:', error)
@@ -368,19 +545,38 @@ export class MaterialsToBeDeletedDAO {
     const batchSize = 1000
 
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
       for (let i = 0; i < materialCodes.length; i += batchSize) {
         const batch = materialCodes.slice(i, i + batchSize)
-        const placeholders = batch.map(() => '?').join(',')
 
-        const sql = `
-          DELETE FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}
-          WHERE MaterialCode IN (${placeholders})
-        `
+        if (this.dbType === 'sqlserver') {
+          const placeholders = batch.map((_, idx) => `@p${idx}`).join(',')
+          const params: Record<string, { value: string; type: sql.ISqlType }> = {}
 
-        const result = await mysqlService.query(sql, batch)
-        totalDeleted += result.rowCount
+          batch.forEach((code, idx) => {
+            params[`p${idx}`] = { value: code.trim(), type: sql.NVarChar }
+          })
+
+          const sql = `
+            DELETE FROM ${tableName}
+            WHERE MaterialCode IN (${placeholders})
+          `
+
+          const result = await (dbService as SqlServerService).queryWithParams(sql, params)
+          totalDeleted += result.rowCount
+        } else {
+          const placeholders = batch.map(() => '?').join(',')
+
+          const sql = `
+            DELETE FROM ${tableName}
+            WHERE MaterialCode IN (${placeholders})
+          `
+
+          const result = await (dbService as MySqlService).query(sql, batch)
+          totalDeleted += result.rowCount
+        }
       }
     } catch (error) {
       console.error('[MaterialsToBeDeletedDAO] Delete by material codes error:', error)
@@ -398,16 +594,33 @@ export class MaterialsToBeDeletedDAO {
    */
   async materialExists(materialCode: string): Promise<boolean> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const code = materialCode.trim()
 
-      const sql = `
-        SELECT COUNT(*) as count
-        FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}
-        WHERE MaterialCode = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          SELECT COUNT(*) as count
+          FROM ${tableName}
+          WHERE MaterialCode = @materialCode
+        `
 
-      const result = await mysqlService.query(sql, [materialCode.trim()])
-      return result.rows.length > 0 && (result.rows[0].count as number) > 0
+        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+          materialCode: { value: code, type: sql.NVarChar }
+        })
+
+        return result.rows.length > 0 && (result.rows[0].count as number) > 0
+      } else {
+        const sql = `
+          SELECT COUNT(*) as count
+          FROM ${tableName}
+          WHERE MaterialCode = ?
+        `
+
+        const result = await (dbService as MySqlService).query(sql, [code])
+
+        return result.rows.length > 0 && (result.rows[0].count as number) > 0
+      }
     } catch (error) {
       console.error('[MaterialsToBeDeletedDAO] Material exists error:', error)
       return false
@@ -420,11 +633,15 @@ export class MaterialsToBeDeletedDAO {
    */
   async countAll(): Promise<number> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `SELECT COUNT(*) as count FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}`
+      const sql = `SELECT COUNT(*) as count FROM ${tableName}`
 
-      const result = await mysqlService.query(sql)
+      const result = this.dbType === 'sqlserver'
+        ? await (dbService as SqlServerService).query(sql)
+        : await (dbService as MySqlService).query(sql)
+
       return result.rows.length > 0 ? (result.rows[0].count as number) : 0
     } catch (error) {
       console.error('[MaterialsToBeDeletedDAO] Count all error:', error)
@@ -439,16 +656,32 @@ export class MaterialsToBeDeletedDAO {
    */
   async countByManager(managerName: string): Promise<number> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `
-        SELECT COUNT(*) as count
-        FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}
-        WHERE ManagerName = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          SELECT COUNT(*) as count
+          FROM ${tableName}
+          WHERE ManagerName = @managerName
+        `
 
-      const result = await mysqlService.query(sql, [managerName])
-      return result.rows.length > 0 ? (result.rows[0].count as number) : 0
+        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+          managerName: { value: managerName, type: sql.NVarChar }
+        })
+
+        return result.rows.length > 0 ? (result.rows[0].count as number) : 0
+      } else {
+        const sql = `
+          SELECT COUNT(*) as count
+          FROM ${tableName}
+          WHERE ManagerName = ?
+        `
+
+        const result = await (dbService as MySqlService).query(sql, [managerName])
+
+        return result.rows.length > 0 ? (result.rows[0].count as number) : 0
+      }
     } catch (error) {
       console.error('[MaterialsToBeDeletedDAO] Count by manager error:', error)
       return 0
@@ -461,30 +694,37 @@ export class MaterialsToBeDeletedDAO {
    */
   async getStatistics(): Promise<MaterialStats> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
       // Get total and unique managers
       const statsSql = `
         SELECT
           COUNT(*) as totalMaterials,
           COUNT(DISTINCT ManagerName) as uniqueManagers
-        FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}
+        FROM ${tableName}
         WHERE MaterialCode IS NOT NULL
       `
 
-      const statsResult = await mysqlService.query(statsSql)
+      const statsResult = this.dbType === 'sqlserver'
+        ? await (dbService as SqlServerService).query(statsSql)
+        : await (dbService as MySqlService).query(statsSql)
+
       const stats = statsResult.rows[0] || {}
 
       // Get materials per manager
       const managerSql = `
         SELECT ManagerName, COUNT(*) as count
-        FROM ${MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL}
+        FROM ${tableName}
         WHERE ManagerName IS NOT NULL
         GROUP BY ManagerName
         ORDER BY count DESC
       `
 
-      const managerResult = await mysqlService.query(managerSql)
+      const managerResult = this.dbType === 'sqlserver'
+        ? await (dbService as SqlServerService).query(managerSql)
+        : await (dbService as MySqlService).query(managerSql)
+
       const materialsPerManager = managerResult.rows.map(row => ({
         [row.ManagerName as string]: row.count as number
       }))
@@ -511,6 +751,10 @@ export class MaterialsToBeDeletedDAO {
     if (this.mysqlService) {
       await this.mysqlService.disconnect()
       this.mysqlService = null
+    }
+    if (this.sqlServerService) {
+      await this.sqlServerService.disconnect()
+      this.sqlServerService = null
     }
   }
 }

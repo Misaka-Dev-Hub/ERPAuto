@@ -78,11 +78,11 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
 
         <div className="login-body">
           <div className="form-group">
-            <label className="form-label">用户名:</label>
+            <label className="form-label text-slate-700">用户名:</label>
             <input
               ref={usernameInputRef}
               type="text"
-              className="form-input"
+              className="form-input border border-slate-300 rounded-md p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="请输入用户名"
@@ -90,11 +90,11 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
             />
           </div>
 
-          <div className="form-group">
-            <label className="form-label">密码:</label>
+          <div className="form-group mt-4">
+            <label className="form-label text-slate-700">密码:</label>
             <input
               type="password"
-              className="form-input"
+              className="form-input border border-slate-300 rounded-md p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="请输入密码"
@@ -103,20 +103,20 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
           </div>
         </div>
 
-        <div className="login-footer">
+        <div className="login-footer mt-6 flex justify-end gap-3">
           <button
-            className="btn btn-primary"
-            onClick={handleLogin}
-            disabled={isLoggingIn}
-          >
-            {isLoggingIn ? '登录中...' : '登录'}
-          </button>
-          <button
-            className="btn btn-secondary"
+            className="btn btn-secondary px-4 py-2 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
             onClick={onCancel}
             disabled={isLoggingIn}
           >
             取消
+          </button>
+          <button
+            className="btn btn-primary px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50"
+            onClick={handleLogin}
+            disabled={isLoggingIn}
+          >
+            {isLoggingIn ? '登录中...' : '登录'}
           </button>
         </div>
 
