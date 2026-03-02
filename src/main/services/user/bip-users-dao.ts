@@ -10,6 +10,7 @@
 
 import { MySqlService } from '../database/mysql'
 import { SqlServerService } from '../database/sql-server'
+import * as mssql from 'mssql'
 import sql from 'mssql'
 import type { UserInfo } from '../../types/user.types'
 
@@ -274,10 +275,10 @@ export class BIPUsersDAO {
             VALUES (@username, @password, @userType, @computerName)
           `
           params = {
-            username: { value: username, type: sql.NVarChar },
-            password: { value: password, type: sql.NVarChar },
-            userType: { value: userType, type: sql.NVarChar },
-            computerName: { value: computerName, type: sql.NVarChar }
+            username: { value: username, type: mssql.NVarChar },
+            password: { value: password, type: mssql.NVarChar },
+            userType: { value: userType, type: mssql.NVarChar },
+            computerName: { value: computerName, type: mssql.NVarChar }
           }
         } else {
           sql = `
@@ -286,13 +287,13 @@ export class BIPUsersDAO {
             VALUES (@username, @password, @userType)
           `
           params = {
-            username: { value: username, type: sql.NVarChar },
-            password: { value: password, type: sql.NVarChar },
-            userType: { value: userType, type: sql.NVarChar }
+            username: { value: username, type: mssql.NVarChar },
+            password: { value: password, type: mssql.NVarChar },
+            userType: { value: userType, type: mssql.NVarChar }
           }
         }
 
-        await (dbService as SqlServerService).queryWithParams(sqlString, params)
+        await (dbService as SqlServerService).queryWithParams(sql, params)
         return true
       } else {
         let sql: string
@@ -314,7 +315,7 @@ export class BIPUsersDAO {
           params = [username, password, userType]
         }
 
-        await (dbService as MySqlService).query(sqlString, params)
+        await (dbService as MySqlService).query(sql, params)
         return true
       }
     } catch (error) {
