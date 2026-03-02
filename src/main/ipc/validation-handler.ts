@@ -12,6 +12,7 @@ import { MySqlService } from '../services/database/mysql'
 import { SqlServerService } from '../services/database/sql-server'
 import { MaterialsToBeDeletedDAO } from '../services/database/materials-to-be-deleted-dao'
 import { DiscreteMaterialPlanDAO } from '../services/database/discrete-material-plan-dao'
+import { ValidationService } from '../services/validation/validation-service'
 import type {
   ValidationRequest,
   ValidationResponse,
@@ -88,26 +89,6 @@ async function getValidationDatabaseService(): Promise<MySqlService | SqlServerS
  * e.g., productionContractData_26年压力表合同数据 -> [productionContractData].[26年压力表合同数据]
  *      dbo_MaterialsToBeDeleted -> [dbo].[MaterialsToBeDeleted]
  */
-function getTableName(mysqlTableName: string): string {
-  const dbType = process.env.DB_TYPE?.toLowerCase()
-  if (dbType === 'sqlserver' || dbType === 'mssql') {
-    // Find the FIRST underscore to split schema and table name
-    // This handles patterns like: schema_tablename
-    const firstUnderscoreIndex = mysqlTableName.indexOf('_')
-    if (firstUnderscoreIndex > 0) {
-      const schema = mysqlTableName.substring(0, firstUnderscoreIndex)
-      const tableName = mysqlTableName.substring(firstUnderscoreIndex + 1)
-      return `[${schema}].[${tableName}]`
-    }
-    // If no underscore found, default to dbo schema
-    return `[dbo].[${mysqlTableName}]`
-  }
-  return mysqlTableName
-}
-
-/**
- * Read Production IDs from file
- */
 function readProductionIds(filePath: string): string[] {
   const fs = require('fs')
   const content = fs.readFileSync(filePath, 'utf-8')
@@ -118,89 +99,13 @@ function readProductionIds(filePath: string): string[] {
 }
 
 /**
- * Identify input type (production ID or order number)
- */
-function identifyInputType(input: string): 'production_id' | 'order_number' | 'unknown' {
-  // Order number: SC + 14 digits
-  if (/^SC\d{14}$/.test(input)) {
-    return 'order_number'
-  }
-  // Production ID: 2 digits + 1 letter + 1-6 digits
-  if (/^\d{2}[A-Za-z]\d{1,6}$/.test(input)) {
-    return 'production_id'
-  }
-  return 'unknown'
-}
-
-/**
- * Get source numbers from inputs
- */
-async function getSourceNumbersFromInputs(
-  inputs: string[],
-  dbService: MySqlService | SqlServerService
-): Promise<string[]> {
-  const productionIds: string[] = []
-  const orderNumbers: string[] = []
-  const dbType = process.env.DB_TYPE?.toLowerCase()
-  const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
-
-  for (const item of inputs) {
-    const type = identifyInputType(item)
-    if (type === 'order_number') {
-      orderNumbers.push(item)
-    } else if (type === 'production_id') {
-      productionIds.push(item)
-    }
-  }
-
-  // Query production contract data for production IDs
-  // Table name in MySQL: productionContractData_26年压力表合同数据
-  // Column name: 生产订单号 (SourceNumber)
-  if (productionIds.length > 0) {
-    const contractTableName = getTableName('productionContractData_26年压力表合同数据')
-
-    if (isSqlServer) {
-      const sql = require('mssql')
-      const placeholders = productionIds.map((_, idx) => `@p${idx}`).join(',')
-      const params: Record<string, { value: string; type: any }> = {}
-
-      productionIds.forEach((id, idx) => {
-        params[`p${idx}`] = { value: id, type: sql.NVarChar }
-      })
-
-      const contractSql = `
-        SELECT DISTINCT 生产订单号
-        FROM ${contractTableName}
-        WHERE 总排号 IN (${placeholders})
-      `
-      const contractResult = await (dbService as SqlServerService).queryWithParams(contractSql, params)
-      const dbOrderNumbers = contractResult.rows.map(
-        row => row.生产订单号 as string
-      )
-      orderNumbers.push(...dbOrderNumbers)
-    } else {
-      const placeholders = productionIds.map(() => '?').join(',')
-      const contractSql = `
-        SELECT DISTINCT 生产订单号
-        FROM ${contractTableName}
-        WHERE 总排号 IN (${placeholders})
-      `
-      const contractResult = await (dbService as MySqlService).query(contractSql, productionIds)
-      const dbOrderNumbers = contractResult.rows.map(
-        row => row.生产订单号 as string
-      )
-      orderNumbers.push(...dbOrderNumbers)
-    }
-  }
-
-  // Deduplicate
-  return [...new Set(orderNumbers)]
-}
-
-/**
  * Register IPC handlers for validation operations
  */
 export function registerValidationHandlers(): void {
+  const validationService = new ValidationService()
+  const dbType = process.env.DB_TYPE?.toLowerCase()
+  const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
+
   // ==================== VALIDATION ====================
 
   /**
@@ -219,8 +124,6 @@ export function registerValidationHandlers(): void {
 
         // Connect to database
         dbService = await getValidationDatabaseService()
-        const dbType = process.env.DB_TYPE?.toLowerCase()
-        const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
 
         let sourceNumbers: string[] | null = null
 
@@ -243,7 +146,7 @@ export function registerValidationHandlers(): void {
               }
             }
 
-            sourceNumbers = await getSourceNumbersFromInputs(sharedIds, dbService)
+            sourceNumbers = await validationService.getSourceNumbersFromInputs(sharedIds, dbService)
             console.log(
               `[Validation] Got ${sourceNumbers.length} source numbers from shared Production IDs`
             )
@@ -253,7 +156,7 @@ export function registerValidationHandlers(): void {
             console.log(
               `[Validation] Read ${inputs.length} inputs from file`
             )
-            sourceNumbers = await getSourceNumbersFromInputs(inputs, dbService)
+            sourceNumbers = await validationService.getSourceNumbersFromInputs(inputs, dbService)
             console.log(
               `[Validation] Got ${sourceNumbers.length} source numbers`
             )
@@ -288,13 +191,13 @@ export function registerValidationHandlers(): void {
         }
 
         // Get type keywords from MaterialsTypeToBeDeleted
-        const typeKeywordTableName = getTableName('dbo_MaterialsTypeToBeDeleted')
+        const typeKeywordTableName = validationService.getTableName('dbo_MaterialsTypeToBeDeleted')
         const typeKeywordSql = `
           SELECT MaterialName, ManagerName
           FROM ${typeKeywordTableName}
           WHERE MaterialName IS NOT NULL
         `
-        const typeKeywordResult = isSqlServer
+        const typeKeywordResult = validationService.isSqlServer()
           ? await (dbService as SqlServerService).query(typeKeywordSql)
           : await (dbService as MySqlService).query(typeKeywordSql)
 
@@ -304,13 +207,13 @@ export function registerValidationHandlers(): void {
         }))
 
         // Get marked material codes from MaterialsToBeDeleted
-        const markedTableName = getTableName('dbo_MaterialsToBeDeleted')
+        const markedTableName = validationService.getTableName('dbo_MaterialsToBeDeleted')
         const markedSql = `
           SELECT MaterialCode, ManagerName
           FROM ${markedTableName}
           WHERE MaterialCode IS NOT NULL AND ManagerName IS NOT NULL
         `
-        const markedResult = isSqlServer
+        const markedResult = validationService.isSqlServer()
           ? await (dbService as SqlServerService).query(markedSql)
           : await (dbService as MySqlService).query(markedSql)
 
@@ -323,42 +226,7 @@ export function registerValidationHandlers(): void {
         }
 
         // Match materials
-        const results: ValidationResult[] = []
-        for (const record of materialRecords) {
-          const materialName = (record.MaterialName as string) || ''
-          const materialCode = (record.MaterialCode as string) || ''
-          const specification = (record.Specification as string) || ''
-          const model = (record.Model as string) || ''
-
-          // Priority 1: Check MaterialsToBeDeleted (MaterialCode exact match)
-          let managerName = markedCodesDict.get(materialCode) || null
-          const isMarkedForDeletion = managerName !== null
-          let matchedTypeKeyword: string | undefined = undefined
-
-          // Priority 2: Match with MaterialsTypeToBeDeleted (MaterialName contains)
-          if (!managerName) {
-            for (const typeKeyword of typeKeywords) {
-              if (
-                typeKeyword.materialName &&
-                typeKeyword.materialName.includes(materialName)
-              ) {
-                matchedTypeKeyword = typeKeyword.materialName
-                managerName = typeKeyword.managerName
-                break
-              }
-            }
-          }
-
-          results.push({
-            materialName,
-            materialCode,
-            specification,
-            model,
-            managerName: managerName || '',
-            isMarkedForDeletion,
-            matchedTypeKeyword
-          })
-        }
+        const results = validationService.matchMaterials(materialRecords, markedCodesDict, typeKeywords)
 
         const markedCount = results.filter(r => r.isMarkedForDeletion).length
         const matchedCount = results.filter(r => r.managerName).length
@@ -479,8 +347,6 @@ export function registerValidationHandlers(): void {
 
       try {
         dbService = await getValidationDatabaseService()
-        const dbType = process.env.DB_TYPE?.toLowerCase()
-        const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
 
         const dao = new MaterialsToBeDeletedDAO()
         const materials = await dao.getMaterialsByManager(managerName)
@@ -490,12 +356,12 @@ export function registerValidationHandlers(): void {
 
         // Enrich with material details from DiscreteMaterialPlanData
         const enrichedMaterials: MaterialRecordSummary[] = []
-        const detailTableName = getTableName('dbo_DiscreteMaterialPlanData')
+        const detailTableName = validationService.getTableName('dbo_DiscreteMaterialPlanData')
 
         for (const mat of materials) {
           let detailResult: any
 
-          if (isSqlServer) {
+          if (validationService.isSqlServer()) {
             const sql = require('mssql')
             const detailSql = `
               SELECT TOP 1 MaterialName, Specification, Model
@@ -562,20 +428,18 @@ export function registerValidationHandlers(): void {
 
       try {
         dbService = await getValidationDatabaseService()
-        const dbType = process.env.DB_TYPE?.toLowerCase()
-        const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
 
         const dao = new MaterialsToBeDeletedDAO()
         const materials = await dao.getAllRecords()
         const markedCodes = await dao.getAllMaterialCodes()
 
         const enrichedMaterials: MaterialRecordSummary[] = []
-        const detailTableName = getTableName('dbo_DiscreteMaterialPlanData')
+        const detailTableName = validationService.getTableName('dbo_DiscreteMaterialPlanData')
 
         for (const mat of materials) {
           let detailResult: any
 
-          if (isSqlServer) {
+          if (validationService.isSqlServer()) {
             const sql = require('mssql')
             const detailSql = `
               SELECT TOP 1 MaterialName, Specification, Model
@@ -697,9 +561,6 @@ export function registerValidationHandlers(): void {
 
         const isAdmin = userInfo.userType === 'Admin'
         const username = userInfo.username
-        const dbType = process.env.DB_TYPE?.toLowerCase()
-        const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
-
         console.log(`[CleanerData] User: ${username}, isAdmin: ${isAdmin}`)
 
         // Connect to database
@@ -711,13 +572,13 @@ export function registerValidationHandlers(): void {
 
         if (sharedIds.length > 0) {
           console.log(`[CleanerData] Using ${sharedIds.length} shared Production IDs`)
-          orderNumbers = await getSourceNumbersFromInputs(sharedIds, dbService)
+          orderNumbers = await validationService.getSourceNumbersFromInputs(sharedIds, dbService)
           console.log(`[CleanerData] Got ${orderNumbers.length} order numbers`)
         }
 
         // 2. Get material codes from MaterialsToBeDeleted table
         let materialCodes: string[] = []
-        const markedTableName = getTableName('dbo_MaterialsToBeDeleted')
+        const markedTableName = validationService.getTableName('dbo_MaterialsToBeDeleted')
 
         if (isAdmin) {
           // Admin sees all materials
@@ -726,7 +587,7 @@ export function registerValidationHandlers(): void {
             FROM ${markedTableName}
             WHERE MaterialCode IS NOT NULL
           `
-          const result = isSqlServer
+          const result = validationService.isSqlServer()
             ? await (dbService as SqlServerService).query(allCodesSql)
             : await (dbService as MySqlService).query(allCodesSql)
 
@@ -736,7 +597,7 @@ export function registerValidationHandlers(): void {
           console.log(`[CleanerData] Admin user: got ${materialCodes.length} materials`)
         } else {
           // Regular users only see their own materials
-          if (isSqlServer) {
+          if (validationService.isSqlServer()) {
             const sql = require('mssql')
             const userMaterialsSql = `
               SELECT MaterialCode
