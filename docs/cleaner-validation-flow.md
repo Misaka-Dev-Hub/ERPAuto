@@ -944,11 +944,11 @@ flowchart TB
     BatchLoop --> SliceBatch[切片<br/>materialCodes.slice<br/>i, i+batchSize]
 
     SliceBatch --> CheckDB{检查dbType}
-    CheckDB -->|sqlserver| BuildSQLServer[构建参数化SQL<br/>@p0, @p1, ...]
-    CheckDB -->|其他| BuildMySQL[构建占位符SQL<br/>?, ?, ...]
+    CheckDB --> BuildSQLServer[SQL Server<br/>构建参数化SQL]
+    CheckDB --> BuildMySQL[MySQL<br/>构建占位符SQL]
 
-    BuildSQLServer --> ExecSQLServer[执行DELETE...IN]
-    BuildMySQL --> ExecMySQL[执行DELETE...IN]
+    BuildSQLServer --> ExecSQLServer[执行DELETE WHERE IN]
+    BuildMySQL --> ExecMySQL[执行DELETE WHERE IN]
 
     ExecSQLServer --> AddTotal[totalDeleted +=<br/>result.rowCount]
     ExecMySQL --> AddTotal
