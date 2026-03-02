@@ -340,7 +340,7 @@ export function registerValidationHandlers(): void {
             for (const typeKeyword of typeKeywords) {
               if (
                 typeKeyword.materialName &&
-                typeKeyword.materialName.includes(materialName)
+                materialName.includes(typeKeyword.materialName)
               ) {
                 matchedTypeKeyword = typeKeyword.materialName
                 managerName = typeKeyword.managerName
