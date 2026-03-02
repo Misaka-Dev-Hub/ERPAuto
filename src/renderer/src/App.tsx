@@ -9,10 +9,19 @@
  */
 
 import React, { useState, useEffect } from 'react'
+import {
+  LayoutDashboard,
+  Download,
+  Trash2,
+  Settings,
+  Database,
+  User,
+  LogOut
+} from 'lucide-react'
 import LoginDialog from './components/LoginDialog'
 import UserSelectionDialog, { type UserInfo as SelectedUserInfo } from './components/UserSelectionDialog'
-import { ExtractorPage } from './pages/ExtractorPage'
-import { CleanerPage } from './pages/CleanerPage'
+import ExtractorPage from './pages/ExtractorPage'
+import CleanerPage from './pages/CleanerPage'
 import SettingsPage from './pages/SettingsPage'
 
 type Page = 'home' | 'extractor' | 'cleaner' | 'settings'
@@ -39,7 +48,7 @@ function App(): React.JSX.Element {
   const [isSwitchedByAdmin, setIsSwitchedByAdmin] = useState(false)
 
   // Navigation state
-  const [currentPage, setCurrentPage] = useState<Page>('home')
+  const [currentPage, setCurrentPage] = useState<Page>('extractor') // Default to extractor for the new layout
 
   // Load error message from sessionStorage
   const showError = (message: string) => {
@@ -286,123 +295,90 @@ function App(): React.JSX.Element {
 
   // Show main content when authenticated
   console.log('Render: authenticated, currentUser:', currentUser, 'currentPage:', currentPage)
+
+  const navItems = [
+    { id: 'extractor', label: '数据提取 (Extractor)', icon: <Download size={18} /> },
+    { id: 'cleaner', label: '物料验证与清理 (Cleaner)', icon: <Trash2 size={18} /> },
+    { id: 'settings', label: '系统设置 (Settings)', icon: <Settings size={18} /> },
+  ];
+
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#f5f7fa'
-    }}>
-      {/* Header with user info, navigation and logout */}
-      <header style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '12px 24px',
-        backgroundColor: '#fff',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-        marginBottom: '16px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-          <span style={{
-            fontSize: '14px',
-            color: '#666'
-          }}>
-            欢迎，{currentUser?.username} ({currentUser?.userType})
-          </span>
-          {/* Navigation tabs */}
-          <nav style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => setCurrentPage('home')}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: currentPage === 'home' ? '#1890ff' : '#f5f5f5',
-                color: currentPage === 'home' ? '#fff' : '#666',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '14px',
-                cursor: 'pointer',
-                transition: 'all 0.3s'
-              }}
-            >
-              主页
-            </button>
-            <button
-              onClick={() => setCurrentPage('extractor')}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: currentPage === 'extractor' ? '#1890ff' : '#f5f5f5',
-                color: currentPage === 'extractor' ? '#fff' : '#666',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '14px',
-                cursor: 'pointer',
-                transition: 'all 0.3s'
-              }}
-            >
-              数据提取
-            </button>
-            <button
-              onClick={() => setCurrentPage('cleaner')}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: currentPage === 'cleaner' ? '#1890ff' : '#f5f5f5',
-                color: currentPage === 'cleaner' ? '#fff' : '#666',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '14px',
-                cursor: 'pointer',
-                transition: 'all 0.3s'
-              }}
-            >
-              物料清理
-            </button>
-            <button
-              onClick={() => setCurrentPage('settings')}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: currentPage === 'settings' ? '#1890ff' : '#f5f5f5',
-                color: currentPage === 'settings' ? '#fff' : '#666',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '14px',
-                cursor: 'pointer',
-                transition: 'all 0.3s'
-              }}
-            >
-              系统设置
-            </button>
-          </nav>
+    <div className="flex flex-col h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
+
+      {/* ================= 顶部导航与标题栏 ================= */}
+      <header
+        className="h-16 bg-slate-900 text-slate-300 flex items-center justify-between px-4 shadow-md z-20 flex-shrink-0"
+        style={{ WebkitAppRegion: 'drag' } as any}
+      >
+        <div className="flex items-center gap-6">
+          <div className="flex gap-2 pl-2">
+            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+          </div>
+
+          <div className="flex items-center gap-2 text-white font-bold text-lg cursor-pointer" onClick={() => setCurrentPage('home')} style={{ WebkitAppRegion: 'no-drag' } as any}>
+            <LayoutDashboard size={22} className="text-blue-500" />
+            <span>ERP Auto</span>
+          </div>
         </div>
-        <div>
-          {shouldShowLogout && (
-            <button onClick={handleLogout} style={{
-              padding: '8px 16px',
-              backgroundColor: '#ff4d4f',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '14px',
-              cursor: 'pointer'
-            }}>
-              退出登录
+
+        <nav className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setCurrentPage(item.id as Page)}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                currentPage === item.id
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700'
+              }`}
+            >
+              {item.icon}
+              {item.label}
             </button>
-          )}
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-4 text-sm" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <div className="flex items-center gap-2 text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
+            <Database size={14} className="text-green-500" />
+            <span className="text-slate-300">数据库已连接</span>
+          </div>
+          <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full">
+            <User size={16} className="text-slate-400" />
+            <span className="font-medium text-slate-200" title={`User Type: ${currentUser?.userType}`}>
+              {currentUser?.username}
+            </span>
+            {shouldShowLogout && (
+              <button
+                onClick={handleLogout}
+                className="ml-2 text-slate-400 hover:text-red-400 transition-colors"
+                title="退出登录"
+              >
+                <LogOut size={16} />
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* Main content */}
-      <div style={{ padding: '24px' }}>
-        {currentPage === 'home' && (
-          <div>
-            <h1 style={{ fontSize: '24px', color: '#333', marginBottom: '24px' }}>主页面</h1>
-            <p style={{ color: '#666', fontSize: '14px' }}>
-              请使用顶部导航栏切换到 数据提取、物料清理 或 系统设置 页面
-            </p>
-          </div>
-        )}
-
-        {currentPage === 'extractor' && <ExtractorPage />}
-        {currentPage === 'cleaner' && <CleanerPage />}
-        {currentPage === 'settings' && <SettingsPage />}
+      {/* ================= 主体内容区域 ================= */}
+      <div className="flex flex-1 overflow-hidden relative">
+        <main className="flex-1 overflow-y-auto bg-slate-50 p-6">
+          {currentPage === 'home' && (
+            <div className="max-w-4xl mx-auto mt-10 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <LayoutDashboard size={48} className="mx-auto text-blue-500 mb-4" />
+              <h1 className="text-3xl font-bold text-slate-800 mb-4">欢迎使用 ERP Auto</h1>
+              <p className="text-slate-500 text-lg max-w-2xl mx-auto">
+                自动化处理 ERP 系统中的数据提取和清理任务。请使用上方导航栏选择您需要的功能模块。
+              </p>
+            </div>
+          )}
+          {currentPage === 'extractor' && <ExtractorPage />}
+          {currentPage === 'cleaner' && <CleanerPage />}
+          {currentPage === 'settings' && <SettingsPage />}
+        </main>
       </div>
     </div>
   )
