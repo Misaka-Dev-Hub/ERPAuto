@@ -264,11 +264,11 @@ export class BIPUsersDAO {
       const tableName = this.getTableName()
 
       if (this.dbType === 'sqlserver') {
-        let sql: string
+        let sqlQuery: string
         let params: Record<string, { value: unknown; type?: sql.ISqlType }>
 
         if (computerName) {
-          sql = `
+          sqlQuery = `
             INSERT INTO ${tableName}
             (UserName, Password, UserType, ComputerNmae)
             VALUES (@username, @password, @userType, @computerName)
@@ -280,7 +280,7 @@ export class BIPUsersDAO {
             computerName: { value: computerName, type: sql.NVarChar }
           }
         } else {
-          sql = `
+          sqlQuery = `
             INSERT INTO ${tableName}
             (UserName, Password, UserType)
             VALUES (@username, @password, @userType)
@@ -292,21 +292,21 @@ export class BIPUsersDAO {
           }
         }
 
-        await (dbService as SqlServerService).queryWithParams(sqlString, params)
+        await (dbService as SqlServerService).queryWithParams(sqlQuery, params)
         return true
       } else {
-        let sql: string
+        let sqlQuery: string
         let params: any[]
 
         if (computerName) {
-          sql = `
+          sqlQuery = `
             INSERT INTO ${tableName}
             (UserName, Password, UserType, ComputerNmae)
             VALUES (?, ?, ?, ?)
           `
           params = [username, password, userType, computerName]
         } else {
-          sql = `
+          sqlQuery = `
             INSERT INTO ${tableName}
             (UserName, Password, UserType)
             VALUES (?, ?, ?)
@@ -314,7 +314,7 @@ export class BIPUsersDAO {
           params = [username, password, userType]
         }
 
-        await (dbService as MySqlService).query(sqlString, params)
+        await (dbService as MySqlService).query(sqlQuery, params)
         return true
       }
     } catch (error) {
