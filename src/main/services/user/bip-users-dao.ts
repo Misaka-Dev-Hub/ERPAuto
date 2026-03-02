@@ -114,13 +114,13 @@ export class BIPUsersDAO {
       const tableName = this.getTableName()
 
       if (this.dbType === 'sqlserver') {
-        const sql = `
+        const sqlString = `
           SELECT ID, UserName, UserType
           FROM ${tableName}
           WHERE UserName = @username AND Password = @password
         `
 
-        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+        const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
           username: { value: username, type: sql.NVarChar },
           password: { value: password, type: sql.NVarChar }
         })
@@ -135,13 +135,13 @@ export class BIPUsersDAO {
         }
         return null
       } else {
-        const sql = `
+        const sqlString = `
           SELECT ID, UserName, UserType
           FROM ${tableName}
           WHERE UserName = ? AND Password = ?
         `
 
-        const result = await (dbService as MySqlService).query(sql, [username, password])
+        const result = await (dbService as MySqlService).query(sqlString, [username, password])
 
         if (result.rows.length > 0) {
           const row = result.rows[0]
@@ -170,13 +170,13 @@ export class BIPUsersDAO {
       const tableName = this.getTableName()
 
       if (this.dbType === 'sqlserver') {
-        const sql = `
+        const sqlString = `
           SELECT ID, UserName, UserType
           FROM ${tableName}
           WHERE ComputerNmae = @computerName
         `
 
-        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+        const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
           computerName: { value: computerName, type: sql.NVarChar }
         })
 
@@ -190,13 +190,13 @@ export class BIPUsersDAO {
         }
         return null
       } else {
-        const sql = `
+        const sqlString = `
           SELECT ID, UserName, UserType
           FROM ${tableName}
           WHERE ComputerNmae = ?
         `
 
-        const result = await (dbService as MySqlService).query(sql, [computerName])
+        const result = await (dbService as MySqlService).query(sqlString, [computerName])
 
         if (result.rows.length > 0) {
           const row = result.rows[0]
@@ -223,15 +223,15 @@ export class BIPUsersDAO {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
 
-      const sql = `
+      const sqlString = `
         SELECT ID, UserName, UserType, CreateTime
         FROM ${tableName}
         ORDER BY UserName
       `
 
       const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sql)
-        : await (dbService as MySqlService).query(sql)
+        ? await (dbService as SqlServerService).query(sqlString)
+        : await (dbService as MySqlService).query(sqlString)
 
       return result.rows.map(row => ({
         id: row.ID as number,
@@ -292,7 +292,7 @@ export class BIPUsersDAO {
           }
         }
 
-        await (dbService as SqlServerService).queryWithParams(sql, params)
+        await (dbService as SqlServerService).queryWithParams(sqlString, params)
         return true
       } else {
         let sql: string
@@ -314,7 +314,7 @@ export class BIPUsersDAO {
           params = [username, password, userType]
         }
 
-        await (dbService as MySqlService).query(sql, params)
+        await (dbService as MySqlService).query(sqlString, params)
         return true
       }
     } catch (error) {
@@ -335,25 +335,25 @@ export class BIPUsersDAO {
       const tableName = this.getTableName()
 
       if (this.dbType === 'sqlserver') {
-        const sql = `
+        const sqlString = `
           UPDATE ${tableName}
           SET UserType = @userType
           WHERE UserName = @username
         `
 
-        await (dbService as SqlServerService).queryWithParams(sql, {
+        await (dbService as SqlServerService).queryWithParams(sqlString, {
           username: { value: username, type: sql.NVarChar },
           userType: { value: userType, type: sql.NVarChar }
         })
         return true
       } else {
-        const sql = `
+        const sqlString = `
           UPDATE ${tableName}
           SET UserType = ?
           WHERE UserName = ?
         `
 
-        await (dbService as MySqlService).query(sql, [userType, username])
+        await (dbService as MySqlService).query(sqlString, [userType, username])
         return true
       }
     } catch (error) {
@@ -374,25 +374,25 @@ export class BIPUsersDAO {
       const tableName = this.getTableName()
 
       if (this.dbType === 'sqlserver') {
-        const sql = `
+        const sqlString = `
           UPDATE ${tableName}
           SET Password = @newPassword
           WHERE UserName = @username
         `
 
-        await (dbService as SqlServerService).queryWithParams(sql, {
+        await (dbService as SqlServerService).queryWithParams(sqlString, {
           username: { value: username, type: sql.NVarChar },
           newPassword: { value: newPassword, type: sql.NVarChar }
         })
         return true
       } else {
-        const sql = `
+        const sqlString = `
           UPDATE ${tableName}
           SET Password = ?
           WHERE UserName = ?
         `
 
-        await (dbService as MySqlService).query(sql, [newPassword, username])
+        await (dbService as MySqlService).query(sqlString, [newPassword, username])
         return true
       }
     } catch (error) {
@@ -412,22 +412,22 @@ export class BIPUsersDAO {
       const tableName = this.getTableName()
 
       if (this.dbType === 'sqlserver') {
-        const sql = `
+        const sqlString = `
           DELETE FROM ${tableName}
           WHERE UserName = @username
         `
 
-        await (dbService as SqlServerService).queryWithParams(sql, {
+        await (dbService as SqlServerService).queryWithParams(sqlString, {
           username: { value: username, type: sql.NVarChar }
         })
         return true
       } else {
-        const sql = `
+        const sqlString = `
           DELETE FROM ${tableName}
           WHERE UserName = ?
         `
 
-        await (dbService as MySqlService).query(sql, [username])
+        await (dbService as MySqlService).query(sqlString, [username])
         return true
       }
     } catch (error) {
@@ -447,24 +447,24 @@ export class BIPUsersDAO {
       const tableName = this.getTableName()
 
       if (this.dbType === 'sqlserver') {
-        const sql = `
+        const sqlString = `
           SELECT COUNT(*) as count
           FROM ${tableName}
           WHERE UserName = @username
         `
 
-        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+        const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
           username: { value: username, type: sql.NVarChar }
         })
         return result.rows.length > 0 && (result.rows[0].count as number) > 0
       } else {
-        const sql = `
+        const sqlString = `
           SELECT COUNT(*) as count
           FROM ${tableName}
           WHERE UserName = ?
         `
 
-        const result = await (dbService as MySqlService).query(sql, [username])
+        const result = await (dbService as MySqlService).query(sqlString, [username])
         return result.rows.length > 0 && (result.rows[0].count as number) > 0
       }
     } catch (error) {

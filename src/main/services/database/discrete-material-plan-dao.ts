@@ -169,11 +169,11 @@ export class DiscreteMaterialPlanDAO {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
 
-      const sql = `SELECT * FROM ${tableName}`
+      const sqlString = `SELECT * FROM ${tableName}`
 
       const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sql)
-        : await (dbService as MySqlService).query(sql)
+        ? await (dbService as SqlServerService).query(sqlString)
+        : await (dbService as MySqlService).query(sqlString)
 
       return result.rows
     } catch (error) {
@@ -193,7 +193,7 @@ export class DiscreteMaterialPlanDAO {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
 
-      const sql = `
+      const sqlString = `
         WITH RankedRecords AS (
           SELECT
             *,
@@ -216,8 +216,8 @@ export class DiscreteMaterialPlanDAO {
       `
 
       const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sql)
-        : await (dbService as MySqlService).query(sql)
+        ? await (dbService as SqlServerService).query(sqlString)
+        : await (dbService as MySqlService).query(sqlString)
 
       return result.rows
     } catch (error) {
@@ -255,24 +255,24 @@ export class DiscreteMaterialPlanDAO {
             params[`p${idx}`] = { value: num, type: sql.NVarChar }
           })
 
-          const sql = `
+          const sqlString = `
             SELECT *
             FROM ${tableName}
             WHERE SourceNumber IN (${placeholders})
           `
 
-          const result = await (dbService as SqlServerService).queryWithParams(sql, params)
+          const result = await (dbService as SqlServerService).queryWithParams(sqlString, params)
           allResults.push(...result.rows)
         } else {
           const placeholders = batch.map(() => '?').join(',')
 
-          const sql = `
+          const sqlString = `
             SELECT *
             FROM ${tableName}
             WHERE SourceNumber IN (${placeholders})
           `
 
-          const result = await (dbService as MySqlService).query(sql, batch)
+          const result = await (dbService as MySqlService).query(sqlString, batch)
           allResults.push(...result.rows)
         }
       }
@@ -313,7 +313,7 @@ export class DiscreteMaterialPlanDAO {
             params[`p${idx}`] = { value: num, type: sql.NVarChar }
           })
 
-          const sql = `
+          const sqlString = `
             WITH RankedRecords AS (
               SELECT
                 *,
@@ -336,12 +336,12 @@ export class DiscreteMaterialPlanDAO {
             WHERE rn = 1
           `
 
-          const result = await (dbService as SqlServerService).queryWithParams(sql, params)
+          const result = await (dbService as SqlServerService).queryWithParams(sqlString, params)
           allResults.push(...result.rows)
         } else {
           const placeholders = batch.map(() => '?').join(',')
 
-          const sql = `
+          const sqlString = `
             WITH RankedRecords AS (
               SELECT
                 *,
@@ -364,7 +364,7 @@ export class DiscreteMaterialPlanDAO {
             WHERE rn = 1
           `
 
-          const result = await (dbService as MySqlService).query(sql, batch)
+          const result = await (dbService as MySqlService).query(sqlString, batch)
           allResults.push(...result.rows)
         }
       }
@@ -387,25 +387,25 @@ export class DiscreteMaterialPlanDAO {
       const tableName = this.getTableName()
 
       if (this.dbType === 'sqlserver') {
-        const sql = `
+        const sqlString = `
           SELECT *
           FROM ${tableName}
           WHERE SourceNumber = @sourceNumber
         `
 
-        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+        const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
           sourceNumber: { value: sourceNumber, type: sql.NVarChar }
         })
 
         return result.rows
       } else {
-        const sql = `
+        const sqlString = `
           SELECT *
           FROM ${tableName}
           WHERE SourceNumber = ?
         `
 
-        const result = await (dbService as MySqlService).query(sql, [sourceNumber])
+        const result = await (dbService as MySqlService).query(sqlString, [sourceNumber])
 
         return result.rows
       }
@@ -428,25 +428,25 @@ export class DiscreteMaterialPlanDAO {
       const tableName = this.getTableName()
 
       if (this.dbType === 'sqlserver') {
-        const sql = `
+        const sqlString = `
           SELECT *
           FROM ${tableName}
           WHERE PlanNumber = @planNumber
         `
 
-        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+        const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
           planNumber: { value: planNumber, type: sql.NVarChar }
         })
 
         return result.rows
       } else {
-        const sql = `
+        const sqlString = `
           SELECT *
           FROM ${tableName}
           WHERE PlanNumber = ?
         `
 
-        const result = await (dbService as MySqlService).query(sql, [planNumber])
+        const result = await (dbService as MySqlService).query(sqlString, [planNumber])
 
         return result.rows
       }
@@ -478,24 +478,24 @@ export class DiscreteMaterialPlanDAO {
           params[`p${idx}`] = { value: num, type: sql.NVarChar }
         })
 
-        const sql = `
+        const sqlString = `
           SELECT *
           FROM ${tableName}
           WHERE PlanNumber IN (${placeholders})
         `
 
-        const result = await (dbService as SqlServerService).queryWithParams(sql, params)
+        const result = await (dbService as SqlServerService).queryWithParams(sqlString, params)
         return result.rows
       } else {
         const placeholders = planNumbers.map(() => '?').join(',')
 
-        const sql = `
+        const sqlString = `
           SELECT *
           FROM ${tableName}
           WHERE PlanNumber IN (${placeholders})
         `
 
-        const result = await (dbService as MySqlService).query(sql, planNumbers)
+        const result = await (dbService as MySqlService).query(sqlString, planNumbers)
         return result.rows
       }
     } catch (error) {
@@ -515,11 +515,11 @@ export class DiscreteMaterialPlanDAO {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
 
-      const sql = `SELECT COUNT(*) as count FROM ${tableName}`
+      const sqlString = `SELECT COUNT(*) as count FROM ${tableName}`
 
       const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sql)
-        : await (dbService as MySqlService).query(sql)
+        ? await (dbService as SqlServerService).query(sqlString)
+        : await (dbService as MySqlService).query(sqlString)
 
       return result.rows.length > 0 ? (result.rows[0].count as number) : 0
     } catch (error) {
@@ -539,25 +539,25 @@ export class DiscreteMaterialPlanDAO {
       const tableName = this.getTableName()
 
       if (this.dbType === 'sqlserver') {
-        const sql = `
+        const sqlString = `
           SELECT COUNT(*) as count
           FROM ${tableName}
           WHERE PlanNumber = @planNumber
         `
 
-        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+        const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
           planNumber: { value: planNumber, type: sql.NVarChar }
         })
 
         return result.rows.length > 0 ? (result.rows[0].count as number) : 0
       } else {
-        const sql = `
+        const sqlString = `
           SELECT COUNT(*) as count
           FROM ${tableName}
           WHERE PlanNumber = ?
         `
 
-        const result = await (dbService as MySqlService).query(sql, [planNumber])
+        const result = await (dbService as MySqlService).query(sqlString, [planNumber])
 
         return result.rows.length > 0 ? (result.rows[0].count as number) : 0
       }
@@ -586,42 +586,42 @@ export class DiscreteMaterialPlanDAO {
             params[`p${idx}`] = { value: num, type: sql.NVarChar }
           })
 
-          const sql = `
+          const sqlString = `
             SELECT DISTINCT MaterialName
             FROM ${tableName}
             WHERE SourceNumber IN (${placeholders})
               AND MaterialName IS NOT NULL
           `
 
-          const result = await (dbService as SqlServerService).queryWithParams(sql, params)
+          const result = await (dbService as SqlServerService).queryWithParams(sqlString, params)
           return result.rows
             .map(row => row.MaterialName as string)
             .filter(Boolean)
         } else {
           const placeholders = sourceNumbers.map(() => '?').join(',')
 
-          const sql = `
+          const sqlString = `
             SELECT DISTINCT MaterialName
             FROM ${tableName}
             WHERE SourceNumber IN (${placeholders})
               AND MaterialName IS NOT NULL
           `
 
-          const result = await (dbService as MySqlService).query(sql, sourceNumbers)
+          const result = await (dbService as MySqlService).query(sqlString, sourceNumbers)
           return result.rows
             .map(row => row.MaterialName as string)
             .filter(Boolean)
         }
       } else {
-        const sql = `
+        const sqlString = `
           SELECT DISTINCT MaterialName
           FROM ${tableName}
           WHERE MaterialName IS NOT NULL
         `
 
         const result = this.dbType === 'sqlserver'
-          ? await (dbService as SqlServerService).query(sql)
-          : await (dbService as MySqlService).query(sql)
+          ? await (dbService as SqlServerService).query(sqlString)
+          : await (dbService as MySqlService).query(sqlString)
 
         return result.rows
           .map(row => row.MaterialName as string)
@@ -642,7 +642,7 @@ export class DiscreteMaterialPlanDAO {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
 
-      const sql = `
+      const sqlString = `
         SELECT
           COUNT(*) as totalRecords,
           COUNT(DISTINCT PlanNumber) as uniquePlans,
@@ -653,8 +653,8 @@ export class DiscreteMaterialPlanDAO {
       `
 
       const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sql)
-        : await (dbService as MySqlService).query(sql)
+        ? await (dbService as SqlServerService).query(sqlString)
+        : await (dbService as MySqlService).query(sqlString)
 
       return result.rows.length > 0 ? result.rows[0] : {}
     } catch (error) {

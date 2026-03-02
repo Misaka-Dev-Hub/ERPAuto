@@ -84,16 +84,22 @@ async function getValidationDatabaseService(): Promise<MySqlService | SqlServerS
 
 /**
  * Get table name based on database type
+ * Converts MySQL schema_tablename format to SQL Server [schema].[tablename] format
+ * e.g., productionContractData_26年压力表合同数据 -> [productionContractData].[26年压力表合同数据]
+ *      dbo_MaterialsToBeDeleted -> [dbo].[MaterialsToBeDeleted]
  */
 function getTableName(mysqlTableName: string): string {
   const dbType = process.env.DB_TYPE?.toLowerCase()
   if (dbType === 'sqlserver' || dbType === 'mssql') {
-    // Convert MySQL table name to SQL Server format
-    // e.g., dbo_MaterialsToBeDeleted -> [dbo].[MaterialsToBeDeleted]
-    if (mysqlTableName.startsWith('dbo_')) {
-      const tableName = mysqlTableName.substring(4)
-      return `[dbo].[${tableName}]`
+    // Find the FIRST underscore to split schema and table name
+    // This handles patterns like: schema_tablename
+    const firstUnderscoreIndex = mysqlTableName.indexOf('_')
+    if (firstUnderscoreIndex > 0) {
+      const schema = mysqlTableName.substring(0, firstUnderscoreIndex)
+      const tableName = mysqlTableName.substring(firstUnderscoreIndex + 1)
+      return `[${schema}].[${tableName}]`
     }
+    // If no underscore found, default to dbo schema
     return `[dbo].[${mysqlTableName}]`
   }
   return mysqlTableName
@@ -151,6 +157,8 @@ async function getSourceNumbersFromInputs(
   // Table name in MySQL: productionContractData_26年压力表合同数据
   // Column name: 生产订单号 (SourceNumber)
   if (productionIds.length > 0) {
+    const contractTableName = getTableName('productionContractData_26年压力表合同数据')
+
     if (isSqlServer) {
       const sql = require('mssql')
       const placeholders = productionIds.map((_, idx) => `@p${idx}`).join(',')
@@ -162,7 +170,7 @@ async function getSourceNumbersFromInputs(
 
       const contractSql = `
         SELECT DISTINCT 生产订单号
-        FROM productionContractData_26年压力表合同数据
+        FROM ${contractTableName}
         WHERE 总排号 IN (${placeholders})
       `
       const contractResult = await (dbService as SqlServerService).queryWithParams(contractSql, params)
@@ -174,7 +182,7 @@ async function getSourceNumbersFromInputs(
       const placeholders = productionIds.map(() => '?').join(',')
       const contractSql = `
         SELECT DISTINCT 生产订单号
-        FROM productionContractData_26年压力表合同数据
+        FROM ${contractTableName}
         WHERE 总排号 IN (${placeholders})
       `
       const contractResult = await (dbService as MySqlService).query(contractSql, productionIds)
