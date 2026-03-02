@@ -9,6 +9,8 @@
  */
 
 import { MySqlService } from './mysql'
+import { SqlServerService } from './sql-server'
+import sql from 'mssql'
 
 /**
  * Material plan record interface
@@ -50,6 +52,7 @@ export interface MaterialPlanRecord {
  * Configuration for DiscreteMaterialPlanData table
  */
 export const DISCRETE_MATERIAL_PLAN_CONFIG = {
+  TABLE_NAME_SQLSERVER: '[dbo].[DiscreteMaterialPlanData]',
   TABLE_NAME_MYSQL: 'dbo_DiscreteMaterialPlanData',
   COLUMNS: {
     ID: 'ID',
@@ -90,25 +93,69 @@ export const DISCRETE_MATERIAL_PLAN_CONFIG = {
  */
 export class DiscreteMaterialPlanDAO {
   private mysqlService: MySqlService | null = null
+  private sqlServerService: SqlServerService | null = null
+  private dbType: 'mysql' | 'sqlserver' = 'mysql'
 
   /**
-   * Get MySQL service instance
+   * Constructor - determine database type from environment
    */
-  private async getMySqlService(): Promise<MySqlService> {
-    if (this.mysqlService && this.mysqlService.isConnected()) {
+  constructor() {
+    const dbType = process.env.DB_TYPE?.toLowerCase()
+    if (dbType === 'sqlserver' || dbType === 'mssql') {
+      this.dbType = 'sqlserver'
+    } else {
+      this.dbType = 'mysql'
+    }
+  }
+
+  /**
+   * Get the appropriate table name based on database type
+   */
+  private getTableName(): string {
+    return this.dbType === 'sqlserver'
+      ? DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_SQLSERVER
+      : DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL
+  }
+
+  /**
+   * Get database service instance (MySQL or SQL Server)
+   */
+  private async getDatabaseService(): Promise<MySqlService | SqlServerService> {
+    if (this.dbType === 'sqlserver') {
+      if (this.sqlServerService && this.sqlServerService.isConnected()) {
+        return this.sqlServerService
+      }
+
+      this.sqlServerService = new SqlServerService({
+        server: process.env.DB_SERVER || 'localhost',
+        port: parseInt(process.env.DB_SQLSERVER_PORT || '1433', 10),
+        user: process.env.DB_USERNAME || 'sa',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || '',
+        options: {
+          encrypt: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes',
+          trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes'
+        }
+      })
+
+      await this.sqlServerService.connect()
+      return this.sqlServerService
+    } else {
+      if (this.mysqlService && this.mysqlService.isConnected()) {
+        return this.mysqlService
+      }
+
+      this.mysqlService = new MySqlService({
+        host: process.env.DB_MYSQL_HOST || 'localhost',
+        port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
+        user: process.env.DB_USERNAME || 'root',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || ''
+      })
+
+      await this.mysqlService.connect()
       return this.mysqlService
     }
-
-    this.mysqlService = new MySqlService({
-      host: process.env.DB_MYSQL_HOST || 'localhost',
-      port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
-      user: process.env.DB_USERNAME || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || ''
-    })
-
-    await this.mysqlService.connect()
-    return this.mysqlService
   }
 
   // ==================== QUERY ALL ====================
@@ -119,11 +166,15 @@ export class DiscreteMaterialPlanDAO {
    */
   async queryAll(): Promise<any[]> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `SELECT * FROM ${DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL}`
+      const sql = `SELECT * FROM ${tableName}`
 
-      const result = await mysqlService.query(sql)
+      const result = this.dbType === 'sqlserver'
+        ? await (dbService as SqlServerService).query(sql)
+        : await (dbService as MySqlService).query(sql)
+
       return result.rows
     } catch (error) {
       console.error('[DiscreteMaterialPlanDAO] Query all error:', error)
@@ -139,7 +190,8 @@ export class DiscreteMaterialPlanDAO {
    */
   async queryAllDistinctByMaterialCode(): Promise<any[]> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
       const sql = `
         WITH RankedRecords AS (
@@ -149,7 +201,7 @@ export class DiscreteMaterialPlanDAO {
               PARTITION BY MaterialCode
               ORDER BY CreateDate ASC, SequenceNumber ASC
             ) AS rn
-          FROM ${DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL}
+          FROM ${tableName}
           WHERE MaterialCode IS NOT NULL
         )
         SELECT
@@ -163,7 +215,10 @@ export class DiscreteMaterialPlanDAO {
         WHERE rn = 1
       `
 
-      const result = await mysqlService.query(sql)
+      const result = this.dbType === 'sqlserver'
+        ? await (dbService as SqlServerService).query(sql)
+        : await (dbService as MySqlService).query(sql)
+
       return result.rows
     } catch (error) {
       console.error('[DiscreteMaterialPlanDAO] Query all distinct by material code error:', error)
@@ -184,22 +239,42 @@ export class DiscreteMaterialPlanDAO {
     }
 
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
       const batchSize = 2000
       const allResults: any[] = []
 
       for (let i = 0; i < sourceNumbers.length; i += batchSize) {
         const batch = sourceNumbers.slice(i, i + batchSize)
-        const placeholders = batch.map(() => '?').join(',')
 
-        const sql = `
-          SELECT *
-          FROM ${DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL}
-          WHERE SourceNumber IN (${placeholders})
-        `
+        if (this.dbType === 'sqlserver') {
+          const placeholders = batch.map((_, idx) => `@p${idx}`).join(',')
+          const params: Record<string, { value: string; type: sql.ISqlType }> = {}
 
-        const result = await mysqlService.query(sql, batch)
-        allResults.push(...result.rows)
+          batch.forEach((num, idx) => {
+            params[`p${idx}`] = { value: num, type: sql.NVarChar }
+          })
+
+          const sql = `
+            SELECT *
+            FROM ${tableName}
+            WHERE SourceNumber IN (${placeholders})
+          `
+
+          const result = await (dbService as SqlServerService).queryWithParams(sql, params)
+          allResults.push(...result.rows)
+        } else {
+          const placeholders = batch.map(() => '?').join(',')
+
+          const sql = `
+            SELECT *
+            FROM ${tableName}
+            WHERE SourceNumber IN (${placeholders})
+          `
+
+          const result = await (dbService as MySqlService).query(sql, batch)
+          allResults.push(...result.rows)
+        }
       }
 
       return allResults
@@ -222,39 +297,76 @@ export class DiscreteMaterialPlanDAO {
     }
 
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
       const batchSize = 2000
       const allResults: any[] = []
 
       for (let i = 0; i < sourceNumbers.length; i += batchSize) {
         const batch = sourceNumbers.slice(i, i + batchSize)
-        const placeholders = batch.map(() => '?').join(',')
 
-        const sql = `
-          WITH RankedRecords AS (
+        if (this.dbType === 'sqlserver') {
+          const placeholders = batch.map((_, idx) => `@p${idx}`).join(',')
+          const params: Record<string, { value: string; type: sql.ISqlType }> = {}
+
+          batch.forEach((num, idx) => {
+            params[`p${idx}`] = { value: num, type: sql.NVarChar }
+          })
+
+          const sql = `
+            WITH RankedRecords AS (
+              SELECT
+                *,
+                ROW_NUMBER() OVER (
+                  PARTITION BY MaterialCode
+                  ORDER BY CreateDate ASC, SequenceNumber ASC
+                ) AS rn
+              FROM ${tableName}
+              WHERE SourceNumber IN (${placeholders})
+                AND MaterialCode IS NOT NULL
+            )
             SELECT
-              *,
-              ROW_NUMBER() OVER (
-                PARTITION BY MaterialCode
-                ORDER BY CreateDate ASC, SequenceNumber ASC
-              ) AS rn
-            FROM ${DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL}
-            WHERE SourceNumber IN (${placeholders})
-              AND MaterialCode IS NOT NULL
-          )
-          SELECT
-            Factory, MaterialStatus, PlanNumber, SourceNumber, MaterialType,
-            ProductCode, ProductName, ProductUnit, ProductPlanQuantity,
-            UseDepartment, Remark, Creator, CreateDate, Approver, ApproveDate,
-            SequenceNumber, MaterialCode, MaterialName, Specification, Model,
-            DrawingNumber, MaterialQuality, PlanQuantity, Unit, RequiredDate,
-            Warehouse, UnitUsage, CumulativeOutputQuantity, BOMVersion
-          FROM RankedRecords
-          WHERE rn = 1
-        `
+              Factory, MaterialStatus, PlanNumber, SourceNumber, MaterialType,
+              ProductCode, ProductName, ProductUnit, ProductPlanQuantity,
+              UseDepartment, Remark, Creator, CreateDate, Approver, ApproveDate,
+              SequenceNumber, MaterialCode, MaterialName, Specification, Model,
+              DrawingNumber, MaterialQuality, PlanQuantity, Unit, RequiredDate,
+              Warehouse, UnitUsage, CumulativeOutputQuantity, BOMVersion
+            FROM RankedRecords
+            WHERE rn = 1
+          `
 
-        const result = await mysqlService.query(sql, batch)
-        allResults.push(...result.rows)
+          const result = await (dbService as SqlServerService).queryWithParams(sql, params)
+          allResults.push(...result.rows)
+        } else {
+          const placeholders = batch.map(() => '?').join(',')
+
+          const sql = `
+            WITH RankedRecords AS (
+              SELECT
+                *,
+                ROW_NUMBER() OVER (
+                  PARTITION BY MaterialCode
+                  ORDER BY CreateDate ASC, SequenceNumber ASC
+                ) AS rn
+              FROM ${tableName}
+              WHERE SourceNumber IN (${placeholders})
+                AND MaterialCode IS NOT NULL
+            )
+            SELECT
+              Factory, MaterialStatus, PlanNumber, SourceNumber, MaterialType,
+              ProductCode, ProductName, ProductUnit, ProductPlanQuantity,
+              UseDepartment, Remark, Creator, CreateDate, Approver, ApproveDate,
+              SequenceNumber, MaterialCode, MaterialName, Specification, Model,
+              DrawingNumber, MaterialQuality, PlanQuantity, Unit, RequiredDate,
+              Warehouse, UnitUsage, CumulativeOutputQuantity, BOMVersion
+            FROM RankedRecords
+            WHERE rn = 1
+          `
+
+          const result = await (dbService as MySqlService).query(sql, batch)
+          allResults.push(...result.rows)
+        }
       }
 
       return allResults
@@ -271,16 +383,32 @@ export class DiscreteMaterialPlanDAO {
    */
   async queryBySourceNumber(sourceNumber: string): Promise<any[]> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `
-        SELECT *
-        FROM ${DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL}
-        WHERE SourceNumber = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          SELECT *
+          FROM ${tableName}
+          WHERE SourceNumber = @sourceNumber
+        `
 
-      const result = await mysqlService.query(sql, [sourceNumber])
-      return result.rows
+        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+          sourceNumber: { value: sourceNumber, type: sql.NVarChar }
+        })
+
+        return result.rows
+      } else {
+        const sql = `
+          SELECT *
+          FROM ${tableName}
+          WHERE SourceNumber = ?
+        `
+
+        const result = await (dbService as MySqlService).query(sql, [sourceNumber])
+
+        return result.rows
+      }
     } catch (error) {
       console.error('[DiscreteMaterialPlanDAO] Query by source number error:', error)
       return []
@@ -296,16 +424,32 @@ export class DiscreteMaterialPlanDAO {
    */
   async queryByPlanNumber(planNumber: string): Promise<any[]> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `
-        SELECT *
-        FROM ${DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL}
-        WHERE PlanNumber = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          SELECT *
+          FROM ${tableName}
+          WHERE PlanNumber = @planNumber
+        `
 
-      const result = await mysqlService.query(sql, [planNumber])
-      return result.rows
+        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+          planNumber: { value: planNumber, type: sql.NVarChar }
+        })
+
+        return result.rows
+      } else {
+        const sql = `
+          SELECT *
+          FROM ${tableName}
+          WHERE PlanNumber = ?
+        `
+
+        const result = await (dbService as MySqlService).query(sql, [planNumber])
+
+        return result.rows
+      }
     } catch (error) {
       console.error('[DiscreteMaterialPlanDAO] Query by plan number error:', error)
       return []
@@ -323,17 +467,37 @@ export class DiscreteMaterialPlanDAO {
     }
 
     try {
-      const mysqlService = await this.getMySqlService()
-      const placeholders = planNumbers.map(() => '?').join(',')
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `
-        SELECT *
-        FROM ${DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL}
-        WHERE PlanNumber IN (${placeholders})
-      `
+      if (this.dbType === 'sqlserver') {
+        const placeholders = planNumbers.map((_, idx) => `@p${idx}`).join(',')
+        const params: Record<string, { value: string; type: sql.ISqlType }> = {}
 
-      const result = await mysqlService.query(sql, planNumbers)
-      return result.rows
+        planNumbers.forEach((num, idx) => {
+          params[`p${idx}`] = { value: num, type: sql.NVarChar }
+        })
+
+        const sql = `
+          SELECT *
+          FROM ${tableName}
+          WHERE PlanNumber IN (${placeholders})
+        `
+
+        const result = await (dbService as SqlServerService).queryWithParams(sql, params)
+        return result.rows
+      } else {
+        const placeholders = planNumbers.map(() => '?').join(',')
+
+        const sql = `
+          SELECT *
+          FROM ${tableName}
+          WHERE PlanNumber IN (${placeholders})
+        `
+
+        const result = await (dbService as MySqlService).query(sql, planNumbers)
+        return result.rows
+      }
     } catch (error) {
       console.error('[DiscreteMaterialPlanDAO] Query by plan numbers error:', error)
       return []
@@ -348,11 +512,15 @@ export class DiscreteMaterialPlanDAO {
    */
   async countAll(): Promise<number> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `SELECT COUNT(*) as count FROM ${DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL}`
+      const sql = `SELECT COUNT(*) as count FROM ${tableName}`
 
-      const result = await mysqlService.query(sql)
+      const result = this.dbType === 'sqlserver'
+        ? await (dbService as SqlServerService).query(sql)
+        : await (dbService as MySqlService).query(sql)
+
       return result.rows.length > 0 ? (result.rows[0].count as number) : 0
     } catch (error) {
       console.error('[DiscreteMaterialPlanDAO] Count all error:', error)
@@ -367,16 +535,32 @@ export class DiscreteMaterialPlanDAO {
    */
   async countByPlanNumber(planNumber: string): Promise<number> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
-      const sql = `
-        SELECT COUNT(*) as count
-        FROM ${DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL}
-        WHERE PlanNumber = ?
-      `
+      if (this.dbType === 'sqlserver') {
+        const sql = `
+          SELECT COUNT(*) as count
+          FROM ${tableName}
+          WHERE PlanNumber = @planNumber
+        `
 
-      const result = await mysqlService.query(sql, [planNumber])
-      return result.rows.length > 0 ? (result.rows[0].count as number) : 0
+        const result = await (dbService as SqlServerService).queryWithParams(sql, {
+          planNumber: { value: planNumber, type: sql.NVarChar }
+        })
+
+        return result.rows.length > 0 ? (result.rows[0].count as number) : 0
+      } else {
+        const sql = `
+          SELECT COUNT(*) as count
+          FROM ${tableName}
+          WHERE PlanNumber = ?
+        `
+
+        const result = await (dbService as MySqlService).query(sql, [planNumber])
+
+        return result.rows.length > 0 ? (result.rows[0].count as number) : 0
+      }
     } catch (error) {
       console.error('[DiscreteMaterialPlanDAO] Count by plan number error:', error)
       return 0
@@ -390,32 +574,59 @@ export class DiscreteMaterialPlanDAO {
    */
   async getUniqueMaterialNames(sourceNumbers?: string[]): Promise<string[]> {
     try {
-      const mysqlService = await this.getMySqlService()
-
-      let sql: string
-      let params: any[] = []
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
       if (sourceNumbers && sourceNumbers.length > 0) {
-        const placeholders = sourceNumbers.map(() => '?').join(',')
-        sql = `
-          SELECT DISTINCT MaterialName
-          FROM ${DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL}
-          WHERE SourceNumber IN (${placeholders})
-            AND MaterialName IS NOT NULL
-        `
-        params = sourceNumbers
+        if (this.dbType === 'sqlserver') {
+          const placeholders = sourceNumbers.map((_, idx) => `@p${idx}`).join(',')
+          const params: Record<string, { value: string; type: sql.ISqlType }> = {}
+
+          sourceNumbers.forEach((num, idx) => {
+            params[`p${idx}`] = { value: num, type: sql.NVarChar }
+          })
+
+          const sql = `
+            SELECT DISTINCT MaterialName
+            FROM ${tableName}
+            WHERE SourceNumber IN (${placeholders})
+              AND MaterialName IS NOT NULL
+          `
+
+          const result = await (dbService as SqlServerService).queryWithParams(sql, params)
+          return result.rows
+            .map(row => row.MaterialName as string)
+            .filter(Boolean)
+        } else {
+          const placeholders = sourceNumbers.map(() => '?').join(',')
+
+          const sql = `
+            SELECT DISTINCT MaterialName
+            FROM ${tableName}
+            WHERE SourceNumber IN (${placeholders})
+              AND MaterialName IS NOT NULL
+          `
+
+          const result = await (dbService as MySqlService).query(sql, sourceNumbers)
+          return result.rows
+            .map(row => row.MaterialName as string)
+            .filter(Boolean)
+        }
       } else {
-        sql = `
+        const sql = `
           SELECT DISTINCT MaterialName
-          FROM ${DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL}
+          FROM ${tableName}
           WHERE MaterialName IS NOT NULL
         `
-      }
 
-      const result = await mysqlService.query(sql, params)
-      return result.rows
-        .map(row => row.MaterialName as string)
-        .filter(Boolean)
+        const result = this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(sql)
+          : await (dbService as MySqlService).query(sql)
+
+        return result.rows
+          .map(row => row.MaterialName as string)
+          .filter(Boolean)
+      }
     } catch (error) {
       console.error('[DiscreteMaterialPlanDAO] Get unique material names error:', error)
       return []
@@ -428,7 +639,8 @@ export class DiscreteMaterialPlanDAO {
    */
   async getStatistics(): Promise<any> {
     try {
-      const mysqlService = await this.getMySqlService()
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
 
       const sql = `
         SELECT
@@ -437,10 +649,13 @@ export class DiscreteMaterialPlanDAO {
           COUNT(DISTINCT SourceNumber) as uniqueOrders,
           MIN(CreateDate) as earliestRecord,
           MAX(CreateDate) as latestRecord
-        FROM ${DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL}
+        FROM ${tableName}
       `
 
-      const result = await mysqlService.query(sql)
+      const result = this.dbType === 'sqlserver'
+        ? await (dbService as SqlServerService).query(sql)
+        : await (dbService as MySqlService).query(sql)
+
       return result.rows.length > 0 ? result.rows[0] : {}
     } catch (error) {
       console.error('[DiscreteMaterialPlanDAO] Get statistics error:', error)
@@ -455,6 +670,10 @@ export class DiscreteMaterialPlanDAO {
     if (this.mysqlService) {
       await this.mysqlService.disconnect()
       this.mysqlService = null
+    }
+    if (this.sqlServerService) {
+      await this.sqlServerService.disconnect()
+      this.sqlServerService = null
     }
   }
 }
