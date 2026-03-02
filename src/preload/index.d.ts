@@ -9,7 +9,12 @@ import type {
   CurrentUserResponse
 } from '../main/ipc/auth-handler'
 import type { ValidationRequest, ValidationResponse } from '../main/types/validation.types'
-import type { SettingsData, UserType, ConnectionTestResult, SaveSettingsResult } from '../main/types/settings.types'
+import type {
+  SettingsData,
+  UserType,
+  ConnectionTestResult,
+  SaveSettingsResult
+} from '../main/types/settings.types'
 
 /**
  * Order number resolver API

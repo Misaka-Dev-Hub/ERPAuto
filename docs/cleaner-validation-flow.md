@@ -108,19 +108,13 @@ const handleValidation = async () => {
       setValidationResults(response.results)
       // 自动勾选已标记物料
       const markedCodes = new Set(
-        response.results
-          .filter(r => r.isMarkedForDeletion)
-          .map(r => r.materialCode)
+        response.results.filter((r) => r.isMarkedForDeletion).map((r) => r.materialCode)
       )
       setSelectedItems(markedCodes)
 
       // 管理员更新负责人列表
       if (isAdmin) {
-        const uniqueManagers = new Set(
-          response.results
-            .map(r => r.managerName)
-            .filter(Boolean)
-        )
+        const uniqueManagers = new Set(response.results.map((r) => r.managerName).filter(Boolean))
         setManagers([...uniqueManagers])
         setSelectedManagers(uniqueManagers)
       }
@@ -350,10 +344,7 @@ for (const record of materialRecords) {
   // 优先级2: 匹配 MaterialsTypeToBeDeleted (MaterialName 包含匹配)
   if (!managerName) {
     for (const typeKeyword of typeKeywords) {
-      if (
-        typeKeyword.materialName &&
-        typeKeyword.materialName.includes(materialName)
-      ) {
+      if (typeKeyword.materialName && typeKeyword.materialName.includes(materialName)) {
         matchedTypeKeyword = typeKeyword.materialName
         managerName = typeKeyword.managerName
         break
@@ -419,7 +410,7 @@ graph TB
 interface ValidationRequest {
   mode: 'database_full' | 'database_filtered'
   useSharedProductionIds?: boolean
-  productionIdFile?: string  // 可选，文件路径
+  productionIdFile?: string // 可选，文件路径
 }
 ```
 
@@ -431,8 +422,8 @@ interface ValidationResponse {
   results?: ValidationResult[]
   stats?: {
     totalRecords: number
-    matchedCount: number    // 有负责人(包括类型匹配)
-    markedCount: number     // 已标记删除
+    matchedCount: number // 有负责人(包括类型匹配)
+    markedCount: number // 已标记删除
   }
   error?: string
 }
@@ -446,9 +437,9 @@ interface ValidationResult {
   materialCode: string
   specification: string
   model: string
-  managerName: string          // 负责人名称
+  managerName: string // 负责人名称
   isMarkedForDeletion: boolean // 是否精确匹配MaterialsToBeDeleted
-  matchedTypeKeyword?: string  // 如果匹配了类型关键词，记录匹配项
+  matchedTypeKeyword?: string // 如果匹配了类型关键词，记录匹配项
 }
 ```
 
@@ -644,7 +635,8 @@ const handleConfirmDeletion = async () => {
 
   // 5. 用户确认
   const confirmParts: string[] = []
-  if (materialsToUpsert.length > 0) confirmParts.push(`写入/更新 ${materialsToUpsert.length} 条记录`)
+  if (materialsToUpsert.length > 0)
+    confirmParts.push(`写入/更新 ${materialsToUpsert.length} 条记录`)
   if (materialsToDelete.length > 0) confirmParts.push(`删除 ${materialsToDelete.length} 条记录`)
 
   if (!window.confirm(`确认以下操作吗？\n\n${confirmParts.join('\n')}`)) return
@@ -686,14 +678,14 @@ const handleConfirmDeletion = async () => {
 
 **数据分类逻辑**:
 
-| 物料状态 | 勾选状态 | 负责人信息 | 处理方式 |
-|---------|---------|-----------|---------|
-| 已标记删除 | ✅ 勾选 | ✅ 有 | 保存/更新到数据库 |
-| 已标记删除 | ✅ 勾选 | ❌ 无 | 拒绝操作，弹出警告 |
-| 已标记删除 | ❌ 未勾选 | - | 从数据库删除 |
-| 未标记删除 | ✅ 勾选 | ✅ 有 | 保存/更新到数据库 |
-| 未标记删除 | ✅ 勾选 | ❌ 无 | 拒绝操作，弹出警告 |
-| 未标记删除 | ❌ 未勾选 | - | 从数据库删除 |
+| 物料状态   | 勾选状态  | 负责人信息 | 处理方式           |
+| ---------- | --------- | ---------- | ------------------ |
+| 已标记删除 | ✅ 勾选   | ✅ 有      | 保存/更新到数据库  |
+| 已标记删除 | ✅ 勾选   | ❌ 无      | 拒绝操作，弹出警告 |
+| 已标记删除 | ❌ 未勾选 | -          | 从数据库删除       |
+| 未标记删除 | ✅ 勾选   | ✅ 有      | 保存/更新到数据库  |
+| 未标记删除 | ✅ 勾选   | ❌ 无      | 拒绝操作，弹出警告 |
+| 未标记删除 | ❌ 未勾选 | -          | 从数据库删除       |
 
 ---
 
@@ -976,12 +968,14 @@ for (let i = 0; i < materialCodes.length; i += batchSize) {
 **SQL示例**:
 
 **MySQL**:
+
 ```sql
 DELETE FROM dbo_MaterialsToDeleted
 WHERE MaterialCode IN (?, ?, ?, ..., ?)  -- 最多1000个占位符
 ```
 
 **SQL Server**:
+
 ```sql
 DELETE FROM [dbo].[MaterialsToBeDeleted]
 WHERE MaterialCode IN (@p0, @p1, @p2, ..., @p999)  -- 最多1000个参数
@@ -1116,8 +1110,8 @@ graph TB
 ```typescript
 interface MaterialUpsertBatchRequest {
   materials: {
-    materialCode: string   // 物料代码
-    managerName: string    // 负责人名称
+    materialCode: string // 物料代码
+    managerName: string // 负责人名称
   }[]
 }
 ```
@@ -1126,7 +1120,7 @@ interface MaterialUpsertBatchRequest {
 
 ```typescript
 interface MaterialDeleteRequest {
-  materialCodes: string[]  // 要删除的物料代码数组
+  materialCodes: string[] // 要删除的物料代码数组
 }
 ```
 
@@ -1135,8 +1129,8 @@ interface MaterialDeleteRequest {
 ```typescript
 interface MaterialOperationResponse {
   success: boolean
-  stats?: UpsertStats     // upsert操作返回
-  count?: number          // delete操作返回
+  stats?: UpsertStats // upsert操作返回
+  count?: number // delete操作返回
   error?: string
 }
 ```
@@ -1145,9 +1139,9 @@ interface MaterialOperationResponse {
 
 ```typescript
 interface UpsertStats {
-  total: number    // 总处理数量
-  success: number  // 成功数量
-  failed: number   // 失败数量
+  total: number // 总处理数量
+  success: number // 成功数量
+  failed: number // 失败数量
 }
 ```
 
@@ -1210,29 +1204,29 @@ flowchart TB
 
 ### 8. 与"获取校验状态"流程的对比
 
-| 对比维度 | 获取校验状态 | 确认删除(同步数据库) |
-|---------|------------|-------------------|
-| **操作方向** | 数据库 → 前端 (读取) | 前端 → 数据库 (写入) |
-| **主要操作** | SELECT 查询 | MERGE/INSERT + DELETE |
-| **数据量** | 可能很大(全表查询) | 取决于用户勾选数量 |
-| **事务性** | 只读，无需事务 | 写操作，逐条处理 |
-| **用户交互** | 单次点击 | 点击 → 确认对话框 → 执行 |
-| **错误处理** | 整体失败或成功 | 部分失败继续处理 |
-| **结果反馈** | 校验结果列表 | 操作统计(成功/删除条数) |
-| **副作用** | 无 | 修改数据库内容 |
-| **权限要求** | 读取权限 | 写入+删除权限 |
+| 对比维度     | 获取校验状态         | 确认删除(同步数据库)     |
+| ------------ | -------------------- | ------------------------ |
+| **操作方向** | 数据库 → 前端 (读取) | 前端 → 数据库 (写入)     |
+| **主要操作** | SELECT 查询          | MERGE/INSERT + DELETE    |
+| **数据量**   | 可能很大(全表查询)   | 取决于用户勾选数量       |
+| **事务性**   | 只读，无需事务       | 写操作，逐条处理         |
+| **用户交互** | 单次点击             | 点击 → 确认对话框 → 执行 |
+| **错误处理** | 整体失败或成功       | 部分失败继续处理         |
+| **结果反馈** | 校验结果列表         | 操作统计(成功/删除条数)  |
+| **副作用**   | 无                   | 修改数据库内容           |
+| **权限要求** | 读取权限             | 写入+删除权限            |
 
 ---
 
 ## 文件索引
 
-| 文件路径 | 说明 | 关键行号 |
-|---------|------|---------|
-| `src/renderer/src/pages/CleanerPage.tsx` | 前端清理页面 | 117-155 (handleValidation)<br>166-226 (handleConfirmDeletion) |
-| `src/main/ipc/validation-handler.ts` | IPC处理器 | 209-392 (validation:validate)<br>399-422 (materials:upsertBatch)<br>427-449 (materials:delete) |
-| `src/main/services/database/discrete-material-plan-dao.ts` | 物料计划DAO | 191-227 (queryAllDistinctByMaterialCode) |
-| `src/main/services/database/discrete-material-plan-dao.ts` | 物料计划DAO | 294-377 (queryBySourceNumbersDistinct) |
-| `src/main/services/database/materials-to-be-deleted-dao.ts` | 待删除物料DAO | 180-240 (upsertBatch)<br>248-268 (getAllMaterialCodes)<br>539-586 (deleteByMaterialCodes) |
+| 文件路径                                                    | 说明          | 关键行号                                                                                       |
+| ----------------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------- |
+| `src/renderer/src/pages/CleanerPage.tsx`                    | 前端清理页面  | 117-155 (handleValidation)<br>166-226 (handleConfirmDeletion)                                  |
+| `src/main/ipc/validation-handler.ts`                        | IPC处理器     | 209-392 (validation:validate)<br>399-422 (materials:upsertBatch)<br>427-449 (materials:delete) |
+| `src/main/services/database/discrete-material-plan-dao.ts`  | 物料计划DAO   | 191-227 (queryAllDistinctByMaterialCode)                                                       |
+| `src/main/services/database/discrete-material-plan-dao.ts`  | 物料计划DAO   | 294-377 (queryBySourceNumbersDistinct)                                                         |
+| `src/main/services/database/materials-to-be-deleted-dao.ts` | 待删除物料DAO | 180-240 (upsertBatch)<br>248-268 (getAllMaterialCodes)<br>539-586 (deleteByMaterialCodes)      |
 
 ---
 

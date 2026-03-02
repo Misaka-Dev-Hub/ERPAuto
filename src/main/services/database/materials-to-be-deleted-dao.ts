@@ -11,6 +11,9 @@
 import { MySqlService } from './mysql'
 import { SqlServerService } from './sql-server'
 import sql from 'mssql'
+import { createLogger } from '../logger'
+
+const log = createLogger('MaterialsToBeDeletedDAO')
 
 /**
  * Material record interface
@@ -132,7 +135,7 @@ export class MaterialsToBeDeletedDAO {
    */
   async upsertMaterial(materialCode: string, managerName: string): Promise<boolean> {
     if (!materialCode || !materialCode.trim()) {
-      console.error('[MaterialsToBeDeletedDAO] MaterialCode cannot be empty')
+      log.error('MaterialCode cannot be empty')
       return false
     }
 
@@ -167,7 +170,9 @@ export class MaterialsToBeDeletedDAO {
 
       return true
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Upsert material error:', error)
+      log.error('Upsert material error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return false
     }
   }
@@ -177,7 +182,9 @@ export class MaterialsToBeDeletedDAO {
    * @param materials - List of materials with materialCode and managerName
    * @returns Statistics object
    */
-  async upsertBatch(materials: { materialCode: string; managerName: string }[]): Promise<UpsertStats> {
+  async upsertBatch(
+    materials: { materialCode: string; managerName: string }[]
+  ): Promise<UpsertStats> {
     if (!materials || materials.length === 0) {
       return { total: 0, success: 0, failed: 0 }
     }
@@ -227,12 +234,17 @@ export class MaterialsToBeDeletedDAO {
 
           stats.success++
         } catch (error) {
-          console.error('[MaterialsToBeDeletedDAO] Error upserting material:', materialCode, error)
+          log.error('Error upserting material', {
+            materialCode,
+            error: error instanceof Error ? error.message : String(error)
+          })
           stats.failed++
         }
       }
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Batch upsert error:', error)
+      log.error('Batch upsert error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       stats.failed = stats.total - stats.success
     }
 
@@ -256,13 +268,16 @@ export class MaterialsToBeDeletedDAO {
         WHERE MaterialCode IS NOT NULL
       `
 
-      const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sqlString)
-        : await (dbService as MySqlService).query(sqlString)
+      const result =
+        this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(sqlString)
+          : await (dbService as MySqlService).query(sqlString)
 
-      return new Set(result.rows.map(row => row.MaterialCode as string).filter(Boolean))
+      return new Set(result.rows.map((row) => row.MaterialCode as string).filter(Boolean))
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Get all material codes error:', error)
+      log.error('Get all material codes error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return new Set()
     }
   }
@@ -283,17 +298,20 @@ export class MaterialsToBeDeletedDAO {
         ORDER BY ManagerName, MaterialCode
       `
 
-      const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sqlString)
-        : await (dbService as MySqlService).query(sqlString)
+      const result =
+        this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(sqlString)
+          : await (dbService as MySqlService).query(sqlString)
 
-      return result.rows.map(row => ({
+      return result.rows.map((row) => ({
         id: row.ID as number,
         materialCode: row.MaterialCode as string,
         managerName: row.ManagerName as string
       }))
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Get all records error:', error)
+      log.error('Get all records error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return []
     }
   }
@@ -320,7 +338,7 @@ export class MaterialsToBeDeletedDAO {
           managerName: { value: managerName, type: sql.NVarChar }
         })
 
-        return result.rows.map(row => ({
+        return result.rows.map((row) => ({
           id: row.ID as number,
           materialCode: row.MaterialCode as string,
           managerName: row.ManagerName as string
@@ -335,14 +353,16 @@ export class MaterialsToBeDeletedDAO {
 
         const result = await (dbService as MySqlService).query(sqlString, [managerName])
 
-        return result.rows.map(row => ({
+        return result.rows.map((row) => ({
           id: row.ID as number,
           materialCode: row.MaterialCode as string,
           managerName: row.ManagerName as string
         }))
       }
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Get materials by manager error:', error)
+      log.error('Get materials by manager error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return []
     }
   }
@@ -363,13 +383,16 @@ export class MaterialsToBeDeletedDAO {
         ORDER BY ManagerName
       `
 
-      const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sqlString)
-        : await (dbService as MySqlService).query(sqlString)
+      const result =
+        this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(sqlString)
+          : await (dbService as MySqlService).query(sqlString)
 
-      return result.rows.map(row => row.ManagerName as string).filter(Boolean)
+      return result.rows.map((row) => row.ManagerName as string).filter(Boolean)
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Get managers error:', error)
+      log.error('Get managers error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return []
     }
   }
@@ -427,7 +450,9 @@ export class MaterialsToBeDeletedDAO {
         }
       }
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Get record by material code error:', error)
+      log.error('Get record by material code error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return null
     }
   }
@@ -467,7 +492,9 @@ export class MaterialsToBeDeletedDAO {
         return result.rowCount > 0
       }
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Delete by material code error:', error)
+      log.error('Delete by material code error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return false
     }
   }
@@ -504,7 +531,9 @@ export class MaterialsToBeDeletedDAO {
         return result.rowCount
       }
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Delete by manager error:', error)
+      log.error('Delete by manager error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return 0
     }
   }
@@ -520,13 +549,16 @@ export class MaterialsToBeDeletedDAO {
 
       const sqlString = `DELETE FROM ${tableName}`
 
-      const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sqlString)
-        : await (dbService as MySqlService).query(sqlString)
+      const result =
+        this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(sqlString)
+          : await (dbService as MySqlService).query(sqlString)
 
       return result.rowCount
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Delete all materials error:', error)
+      log.error('Delete all materials error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return 0
     }
   }
@@ -579,7 +611,9 @@ export class MaterialsToBeDeletedDAO {
         }
       }
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Delete by material codes error:', error)
+      log.error('Delete by material codes error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
     }
 
     return totalDeleted
@@ -622,7 +656,9 @@ export class MaterialsToBeDeletedDAO {
         return result.rows.length > 0 && (result.rows[0].count as number) > 0
       }
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Material exists error:', error)
+      log.error('Material exists error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return false
     }
   }
@@ -638,13 +674,16 @@ export class MaterialsToBeDeletedDAO {
 
       const sqlString = `SELECT COUNT(*) as count FROM ${tableName}`
 
-      const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sqlString)
-        : await (dbService as MySqlService).query(sqlString)
+      const result =
+        this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(sqlString)
+          : await (dbService as MySqlService).query(sqlString)
 
       return result.rows.length > 0 ? (result.rows[0].count as number) : 0
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Count all error:', error)
+      log.error('Count all error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return 0
     }
   }
@@ -683,7 +722,9 @@ export class MaterialsToBeDeletedDAO {
         return result.rows.length > 0 ? (result.rows[0].count as number) : 0
       }
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Count by manager error:', error)
+      log.error('Count by manager error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return 0
     }
   }
@@ -706,9 +747,10 @@ export class MaterialsToBeDeletedDAO {
         WHERE MaterialCode IS NOT NULL
       `
 
-      const statsResult = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(statsSql)
-        : await (dbService as MySqlService).query(statsSql)
+      const statsResult =
+        this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(statsSql)
+          : await (dbService as MySqlService).query(statsSql)
 
       const stats = statsResult.rows[0] || {}
 
@@ -721,11 +763,12 @@ export class MaterialsToBeDeletedDAO {
         ORDER BY count DESC
       `
 
-      const managerResult = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(managerSql)
-        : await (dbService as MySqlService).query(managerSql)
+      const managerResult =
+        this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(managerSql)
+          : await (dbService as MySqlService).query(managerSql)
 
-      const materialsPerManager = managerResult.rows.map(row => ({
+      const materialsPerManager = managerResult.rows.map((row) => ({
         [row.ManagerName as string]: row.count as number
       }))
 
@@ -735,7 +778,9 @@ export class MaterialsToBeDeletedDAO {
         materialsPerManager
       }
     } catch (error) {
-      console.error('[MaterialsToBeDeletedDAO] Get statistics error:', error)
+      log.error('Get statistics error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return {
         totalMaterials: 0,
         uniqueManagers: 0,

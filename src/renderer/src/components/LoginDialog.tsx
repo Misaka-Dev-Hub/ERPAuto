@@ -120,9 +120,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
           </button>
         </div>
 
-        <div className="login-version">
-          v1.0
-        </div>
+        <div className="login-version">v1.0</div>
       </div>
 
       <style>{`

@@ -38,8 +38,8 @@ const ExtractorPage: React.FC = () => {
     if (orderNumbers.trim()) {
       const orderNumberList = orderNumbers
         .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
       window.electron.validation.setSharedProductionIds(orderNumberList)
     }
   }, [orderNumbers])
@@ -104,7 +104,10 @@ const ExtractorPage: React.FC = () => {
 
   useEffect(() => {
     if (progress) {
-      setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] [Info] ${progress.message}`])
+      setLogs((prev) => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] [Info] ${progress.message}`
+      ])
     }
   }, [progress])
 
@@ -114,7 +117,9 @@ const ExtractorPage: React.FC = () => {
       <aside className="w-80 bg-white border border-slate-200 flex flex-col shadow-sm z-10 flex-shrink-0 animate-in slide-in-from-left duration-300 rounded-xl overflow-hidden h-full">
         <div className="flex-1 flex flex-col p-5 space-y-3 h-full">
           <div>
-            <label className="text-sm font-medium text-slate-700">支持输入总排号或者生产订单号</label>
+            <label className="text-sm font-medium text-slate-700">
+              支持输入总排号或者生产订单号
+            </label>
             <p className="text-xs text-slate-500 leading-relaxed mt-1">
               在此输入的数据将在“数据提取”与“物料清理”模块中自动共享，每行一个。
             </p>
@@ -130,8 +135,20 @@ const ExtractorPage: React.FC = () => {
           ></textarea>
 
           <div className="flex items-center justify-between text-xs text-slate-500 pt-2">
-            <span>共解析: <strong className="text-slate-700">{orderNumbers.split('\n').filter(l => l.trim()).length}</strong> 个订单</span>
-            <button className="text-slate-400 hover:text-slate-600" onClick={handleReset} disabled={isRunning}>清空</button>
+            <span>
+              共解析:{' '}
+              <strong className="text-slate-700">
+                {orderNumbers.split('\n').filter((l) => l.trim()).length}
+              </strong>{' '}
+              个订单
+            </span>
+            <button
+              className="text-slate-400 hover:text-slate-600"
+              onClick={handleReset}
+              disabled={isRunning}
+            >
+              清空
+            </button>
           </div>
         </div>
       </aside>
@@ -144,7 +161,9 @@ const ExtractorPage: React.FC = () => {
               <Download size={20} className="text-blue-600" />
               批量数据提取
             </h2>
-            <p className="text-sm text-slate-500">将遍历左侧列表中的所有生产订单，依次自动执行数据导出并保存。</p>
+            <p className="text-sm text-slate-500">
+              将遍历左侧列表中的所有生产订单，依次自动执行数据导出并保存。
+            </p>
             {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
           </div>
 
@@ -161,21 +180,27 @@ const ExtractorPage: React.FC = () => {
         {/* 结果展示 */}
         {result && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col gap-4">
-             <h3 className="text-emerald-600 font-semibold text-lg border-b pb-2">提取结果</h3>
-             <div className="grid grid-cols-3 gap-4">
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
-                  <span className="text-slate-500 text-sm">下载文件数</span>
-                  <span className="text-2xl font-bold text-slate-800">{result.downloadedFiles.length}</span>
-                </div>
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
-                  <span className="text-slate-500 text-sm">记录数</span>
-                  <span className="text-2xl font-bold text-slate-800">{result.recordCount}</span>
-                </div>
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
-                  <span className="text-slate-500 text-sm">错误数</span>
-                  <span className={`text-2xl font-bold ${result.errors.length > 0 ? 'text-red-500' : 'text-slate-800'}`}>{result.errors.length}</span>
-                </div>
-             </div>
+            <h3 className="text-emerald-600 font-semibold text-lg border-b pb-2">提取结果</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
+                <span className="text-slate-500 text-sm">下载文件数</span>
+                <span className="text-2xl font-bold text-slate-800">
+                  {result.downloadedFiles.length}
+                </span>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
+                <span className="text-slate-500 text-sm">记录数</span>
+                <span className="text-2xl font-bold text-slate-800">{result.recordCount}</span>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
+                <span className="text-slate-500 text-sm">错误数</span>
+                <span
+                  className={`text-2xl font-bold ${result.errors.length > 0 ? 'text-red-500' : 'text-slate-800'}`}
+                >
+                  {result.errors.length}
+                </span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -187,12 +212,26 @@ const ExtractorPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs text-slate-500">进度: {progress?.progress || 0}%</span>
-              <button className="text-xs text-slate-400 hover:text-white transition-colors" onClick={() => setLogs([])}>清空</button>
+              <button
+                className="text-xs text-slate-400 hover:text-white transition-colors"
+                onClick={() => setLogs([])}
+              >
+                清空
+              </button>
             </div>
           </div>
           <div className="flex-1 p-4 font-mono text-sm overflow-y-auto leading-relaxed">
             {logs.map((log, index) => (
-              <div key={index} className={log.includes('[System]') ? 'text-emerald-500' : log.includes('error') || log.includes('失败') ? 'text-red-400' : 'text-slate-400'}>
+              <div
+                key={index}
+                className={
+                  log.includes('[System]')
+                    ? 'text-emerald-500'
+                    : log.includes('error') || log.includes('失败')
+                      ? 'text-red-400'
+                      : 'text-slate-400'
+                }
+              >
                 {log}
               </div>
             ))}

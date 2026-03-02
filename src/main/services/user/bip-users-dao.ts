@@ -229,11 +229,12 @@ export class BIPUsersDAO {
         ORDER BY UserName
       `
 
-      const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sqlString)
-        : await (dbService as MySqlService).query(sqlString)
+      const result =
+        this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(sqlString)
+          : await (dbService as MySqlService).query(sqlString)
 
-      return result.rows.map(row => ({
+      return result.rows.map((row) => ({
         id: row.ID as number,
         username: row.UserName as string,
         userType: row.UserType as 'Admin' | 'User' | 'Guest',

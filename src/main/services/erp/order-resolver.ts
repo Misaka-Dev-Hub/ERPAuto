@@ -156,7 +156,7 @@ export class OrderNumberResolver {
       // Update mappings with database results
       for (const mapping of mappings) {
         if (mapping.inputType === 'productionId') {
-          const dbResult = productionIdMappings.find(m => m.input === mapping.input)
+          const dbResult = productionIdMappings.find((m) => m.input === mapping.input)
           if (dbResult) {
             mapping.orderNumber = dbResult.orderNumber
             mapping.isValid = dbResult.isValid
@@ -265,7 +265,7 @@ export class OrderNumberResolver {
       const message = error instanceof Error ? error.message : '未知数据库错误'
 
       // Return all as failed with error
-      return productionIds.map(pid => ({
+      return productionIds.map((pid) => ({
         input: pid,
         productionId: pid,
         isValid: false,
@@ -294,7 +294,7 @@ export class OrderNumberResolver {
       `
 
       const result = await this.mysqlService.query(query, orderNumbers)
-      return result.rows.map(row => row[DB_CONFIG.FIELD_ORDER_NUMBER] as string)
+      return result.rows.map((row) => row[DB_CONFIG.FIELD_ORDER_NUMBER] as string)
     } catch (error) {
       console.warn('[OrderResolver] Failed to verify order numbers:', error)
       return orderNumbers // Skip verification on error
@@ -345,9 +345,7 @@ export class OrderNumberResolver {
    * @returns List of valid production order numbers
    */
   getValidOrderNumbers(mappings: OrderMapping[]): string[] {
-    return mappings
-      .filter(m => m.isValid && m.orderNumber)
-      .map(m => m.orderNumber!)
+    return mappings.filter((m) => m.isValid && m.orderNumber).map((m) => m.orderNumber!)
   }
 
   /**
@@ -356,8 +354,6 @@ export class OrderNumberResolver {
    * @returns List of warning messages
    */
   getWarnings(mappings: OrderMapping[]): string[] {
-    return mappings
-      .filter(m => !m.isValid && m.error)
-      .map(m => m.error!)
+    return mappings.filter((m) => !m.isValid && m.error).map((m) => m.error!)
   }
 }

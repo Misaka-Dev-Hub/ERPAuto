@@ -45,7 +45,7 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
       return
     }
 
-    const selectedUser = users.find(u => u.id === selectedUserId)
+    const selectedUser = users.find((u) => u.id === selectedUserId)
     if (selectedUser) {
       onSelectUser(selectedUser)
     }
@@ -102,17 +102,12 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
           >
             确认
           </button>
-          <button
-            className="btn btn-secondary"
-            onClick={onCancel}
-          >
+          <button className="btn btn-secondary" onClick={onCancel}>
             取消
           </button>
         </div>
 
-        <div className="user-selection-hint-footer">
-          双击用户可直接选择
-        </div>
+        <div className="user-selection-hint-footer">双击用户可直接选择</div>
       </div>
 
       <style>{`

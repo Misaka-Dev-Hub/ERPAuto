@@ -11,6 +11,9 @@
 import { MySqlService } from './mysql'
 import { SqlServerService } from './sql-server'
 import sql from 'mssql'
+import { createLogger } from '../logger'
+
+const log = createLogger('DiscreteMaterialPlanDAO')
 
 /**
  * Material plan record interface
@@ -171,13 +174,16 @@ export class DiscreteMaterialPlanDAO {
 
       const sqlString = `SELECT * FROM ${tableName}`
 
-      const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sqlString)
-        : await (dbService as MySqlService).query(sqlString)
+      const result =
+        this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(sqlString)
+          : await (dbService as MySqlService).query(sqlString)
 
       return result.rows
     } catch (error) {
-      console.error('[DiscreteMaterialPlanDAO] Query all error:', error)
+      log.error('Query all error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return []
     }
   }
@@ -215,13 +221,16 @@ export class DiscreteMaterialPlanDAO {
         WHERE rn = 1
       `
 
-      const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sqlString)
-        : await (dbService as MySqlService).query(sqlString)
+      const result =
+        this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(sqlString)
+          : await (dbService as MySqlService).query(sqlString)
 
       return result.rows
     } catch (error) {
-      console.error('[DiscreteMaterialPlanDAO] Query all distinct by material code error:', error)
+      log.error('Query all distinct by material code error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return []
     }
   }
@@ -279,7 +288,9 @@ export class DiscreteMaterialPlanDAO {
 
       return allResults
     } catch (error) {
-      console.error('[DiscreteMaterialPlanDAO] Query by source numbers error:', error)
+      log.error('Query by source numbers error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return []
     }
   }
@@ -371,7 +382,9 @@ export class DiscreteMaterialPlanDAO {
 
       return allResults
     } catch (error) {
-      console.error('[DiscreteMaterialPlanDAO] Query by source numbers distinct error:', error)
+      log.error('Query by source numbers distinct error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return []
     }
   }
@@ -410,7 +423,9 @@ export class DiscreteMaterialPlanDAO {
         return result.rows
       }
     } catch (error) {
-      console.error('[DiscreteMaterialPlanDAO] Query by source number error:', error)
+      log.error('Query by source number error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return []
     }
   }
@@ -451,7 +466,9 @@ export class DiscreteMaterialPlanDAO {
         return result.rows
       }
     } catch (error) {
-      console.error('[DiscreteMaterialPlanDAO] Query by plan number error:', error)
+      log.error('Query by plan number error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return []
     }
   }
@@ -499,7 +516,9 @@ export class DiscreteMaterialPlanDAO {
         return result.rows
       }
     } catch (error) {
-      console.error('[DiscreteMaterialPlanDAO] Query by plan numbers error:', error)
+      log.error('Query by plan numbers error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return []
     }
   }
@@ -517,13 +536,16 @@ export class DiscreteMaterialPlanDAO {
 
       const sqlString = `SELECT COUNT(*) as count FROM ${tableName}`
 
-      const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sqlString)
-        : await (dbService as MySqlService).query(sqlString)
+      const result =
+        this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(sqlString)
+          : await (dbService as MySqlService).query(sqlString)
 
       return result.rows.length > 0 ? (result.rows[0].count as number) : 0
     } catch (error) {
-      console.error('[DiscreteMaterialPlanDAO] Count all error:', error)
+      log.error('Count all error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return 0
     }
   }
@@ -562,7 +584,9 @@ export class DiscreteMaterialPlanDAO {
         return result.rows.length > 0 ? (result.rows[0].count as number) : 0
       }
     } catch (error) {
-      console.error('[DiscreteMaterialPlanDAO] Count by plan number error:', error)
+      log.error('Count by plan number error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return 0
     }
   }
@@ -594,9 +618,7 @@ export class DiscreteMaterialPlanDAO {
           `
 
           const result = await (dbService as SqlServerService).queryWithParams(sqlString, params)
-          return result.rows
-            .map(row => row.MaterialName as string)
-            .filter(Boolean)
+          return result.rows.map((row) => row.MaterialName as string).filter(Boolean)
         } else {
           const placeholders = sourceNumbers.map(() => '?').join(',')
 
@@ -608,9 +630,7 @@ export class DiscreteMaterialPlanDAO {
           `
 
           const result = await (dbService as MySqlService).query(sqlString, sourceNumbers)
-          return result.rows
-            .map(row => row.MaterialName as string)
-            .filter(Boolean)
+          return result.rows.map((row) => row.MaterialName as string).filter(Boolean)
         }
       } else {
         const sqlString = `
@@ -619,16 +639,17 @@ export class DiscreteMaterialPlanDAO {
           WHERE MaterialName IS NOT NULL
         `
 
-        const result = this.dbType === 'sqlserver'
-          ? await (dbService as SqlServerService).query(sqlString)
-          : await (dbService as MySqlService).query(sqlString)
+        const result =
+          this.dbType === 'sqlserver'
+            ? await (dbService as SqlServerService).query(sqlString)
+            : await (dbService as MySqlService).query(sqlString)
 
-        return result.rows
-          .map(row => row.MaterialName as string)
-          .filter(Boolean)
+        return result.rows.map((row) => row.MaterialName as string).filter(Boolean)
       }
     } catch (error) {
-      console.error('[DiscreteMaterialPlanDAO] Get unique material names error:', error)
+      log.error('Get unique material names error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return []
     }
   }
@@ -652,13 +673,16 @@ export class DiscreteMaterialPlanDAO {
         FROM ${tableName}
       `
 
-      const result = this.dbType === 'sqlserver'
-        ? await (dbService as SqlServerService).query(sqlString)
-        : await (dbService as MySqlService).query(sqlString)
+      const result =
+        this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(sqlString)
+          : await (dbService as MySqlService).query(sqlString)
 
       return result.rows.length > 0 ? result.rows[0] : {}
     } catch (error) {
-      console.error('[DiscreteMaterialPlanDAO] Get statistics error:', error)
+      log.error('Get statistics error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return {}
     }
   }

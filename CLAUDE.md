@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 ### Running the Application
+
 ```bash
 npm run dev              # Start development server with hot reload
 npm run build            # Full build with type checking
@@ -14,6 +15,7 @@ npm run build:linux      # Build Linux AppImage
 ```
 
 ### Code Quality
+
 ```bash
 npm run lint             # ESLint check
 npm run format           # Prettier format
@@ -23,6 +25,7 @@ npm run typecheck:web    # TypeScript check for renderer only
 ```
 
 ### Testing
+
 ```bash
 npm run test             # Run unit tests (Vitest)
 npm run test:coverage    # Run tests with coverage report
@@ -80,6 +83,7 @@ The main process is organized around domain-specific services in `src/main/servi
 ### IPC Handler Pattern
 
 All IPC communication follows a consistent pattern:
+
 - Handlers are in `src/main/ipc/`, organized by domain (8 modules)
 - Each handler module exports a `register*Handlers()` function
 - All handlers are registered in `src/main/ipc/index.ts`

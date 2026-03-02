@@ -9,7 +9,11 @@
 import { ipcMain } from 'electron'
 import { MySqlService } from '../services/database/mysql'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
+import { createLogger } from '../services/logger'
+import { DatabaseQueryError } from '../types/errors'
 import type { OrderMapping, ResolutionStats } from '../services/erp/order-resolver'
+
+const log = createLogger('ResolverHandler')
 
 /**
  * Resolver input from renderer
@@ -69,6 +73,7 @@ export function registerResolverHandlers(): void {
         }
 
         // Create MySQL service
+        log.info('Connecting to MySQL for resolution', { inputCount: input.inputs.length })
         mysqlService = new MySqlService(mysqlConfig)
         await mysqlService.connect()
 
@@ -81,6 +86,12 @@ export function registerResolverHandlers(): void {
         const warnings = resolver.getWarnings(mappings)
         const stats = resolver.getStats(mappings)
 
+        log.info('Resolution completed', {
+          inputCount: input.inputs.length,
+          validCount: validOrderNumbers.length,
+          warningCount: warnings.length
+        })
+
         return {
           success: true,
           mappings,
@@ -90,6 +101,7 @@ export function registerResolverHandlers(): void {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
+        log.error('Resolution failed', { error: message })
         return {
           success: false,
           error: `解析失败：${message}`
@@ -99,8 +111,11 @@ export function registerResolverHandlers(): void {
         if (mysqlService) {
           try {
             await mysqlService.disconnect()
+            log.debug('MySQL disconnected')
           } catch (closeError) {
-            console.warn('[Resolver] Error disconnecting MySQL:', closeError)
+            log.warn('Error disconnecting MySQL', {
+              error: closeError instanceof Error ? closeError.message : String(closeError)
+            })
           }
         }
       }
@@ -112,7 +127,10 @@ export function registerResolverHandlers(): void {
    */
   ipcMain.handle(
     'resolver:validateFormat',
-    async (_event, inputs: string[]): Promise<{
+    async (
+      _event,
+      inputs: string[]
+    ): Promise<{
       success: boolean
       results?: Array<{ input: string; type: 'productionId' | 'orderNumber' | 'unknown' }>
       error?: string
@@ -122,14 +140,17 @@ export function registerResolverHandlers(): void {
           isConnected: () => false
         } as MySqlService)
 
-        const results = inputs.map(input => ({
+        const results = inputs.map((input) => ({
           input,
           type: resolver.recognizeType(input)
         }))
 
+        log.debug('Format validation completed', { inputCount: inputs.length })
+
         return { success: true, results }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
+        log.error('Format validation failed', { error: message })
         return {
           success: false,
           error: `验证失败：${message}`

@@ -12,7 +12,10 @@
 
 import { ipcMain } from 'electron'
 import { SessionManager } from '../services/user/session-manager'
+import { createLogger } from '../services/logger'
 import type { UserInfo } from '../types/user.types'
+
+const log = createLogger('AuthHandler')
 
 /**
  * Login request
@@ -75,110 +78,115 @@ export function registerAuthHandlers(): void {
   /**
    * Silent login by computer name
    */
-  ipcMain.handle(
-    'auth:silentLogin',
-    async (): Promise<SilentLoginResponse> => {
-      try {
-        const success = await sessionManager.loginByComputerName()
-        const userInfo = sessionManager.getUserInfo()
+  ipcMain.handle('auth:silentLogin', async (): Promise<SilentLoginResponse> => {
+    try {
+      log.info('Attempting silent login')
+      const success = await sessionManager.loginByComputerName()
+      const userInfo = sessionManager.getUserInfo()
 
-        if (success && userInfo) {
-          // Check if admin needs user selection
-          const requiresUserSelection = userInfo.userType === 'Admin'
+      if (success && userInfo) {
+        // Check if admin needs user selection
+        const requiresUserSelection = userInfo.userType === 'Admin'
 
-          return {
-            success: true,
-            userInfo,
-            requiresUserSelection
-          }
-        }
+        log.info('Silent login successful', {
+          username: userInfo.username,
+          userType: userInfo.userType,
+          requiresUserSelection
+        })
 
         return {
-          success: false,
-          requiresUserSelection: false
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        return {
-          success: false,
-          error: `无感登录失败：${message}`
+          success: true,
+          userInfo,
+          requiresUserSelection
         }
       }
+
+      log.warn('Silent login failed - no matching user')
+      return {
+        success: false,
+        requiresUserSelection: false
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      log.error('Silent login error', { error: message })
+      return {
+        success: false,
+        error: `无感登录失败：${message}`
+      }
     }
-  )
+  })
 
   /**
    * Login with username and password
    */
-  ipcMain.handle(
-    'auth:login',
-    async (_event, request: LoginRequest): Promise<LoginResponse> => {
-      try {
-        const { username, password } = request
+  ipcMain.handle('auth:login', async (_event, request: LoginRequest): Promise<LoginResponse> => {
+    try {
+      const { username, password } = request
 
-        if (!username || !password) {
-          return {
-            success: false,
-            error: '请输入用户名和密码'
-          }
-        }
-
-        const success = await sessionManager.login(username, password)
-        const userInfo = sessionManager.getUserInfo()
-
-        if (success && userInfo) {
-          return {
-            success: true,
-            userInfo
-          }
-        }
-
+      if (!username || !password) {
+        log.warn('Login attempt with missing credentials')
         return {
           success: false,
-          error: '用户名或密码错误'
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        return {
-          success: false,
-          error: `登录失败：${message}`
+          error: '请输入用户名和密码'
         }
       }
+
+      log.info('Login attempt', { username })
+      const success = await sessionManager.login(username, password)
+      const userInfo = sessionManager.getUserInfo()
+
+      if (success && userInfo) {
+        log.info('Login successful', { username, userType: userInfo.userType })
+        return {
+          success: true,
+          userInfo
+        }
+      }
+
+      log.warn('Login failed - invalid credentials', { username })
+      return {
+        success: false,
+        error: '用户名或密码错误'
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      log.error('Login error', { error: message })
+      return {
+        success: false,
+        error: `登录失败：${message}`
+      }
     }
-  )
+  })
 
   /**
    * Logout
    */
   ipcMain.handle('auth:logout', async (): Promise<void> => {
+    const userInfo = sessionManager.getUserInfo()
+    log.info('User logout', { username: userInfo?.username })
     sessionManager.logout()
   })
 
   /**
    * Get current user
    */
-  ipcMain.handle(
-    'auth:getCurrentUser',
-    async (): Promise<CurrentUserResponse> => {
-      const isAuthenticated = sessionManager.isAuthenticated()
-      const userInfo = sessionManager.getUserInfo()
+  ipcMain.handle('auth:getCurrentUser', async (): Promise<CurrentUserResponse> => {
+    const isAuthenticated = sessionManager.isAuthenticated()
+    const userInfo = sessionManager.getUserInfo()
 
-      return {
-        isAuthenticated,
-        userInfo: userInfo ?? undefined
-      }
+    return {
+      isAuthenticated,
+      userInfo: userInfo ?? undefined
     }
-  )
+  })
 
   /**
    * Get all users (for admin user selection)
    */
-  ipcMain.handle(
-    'auth:getAllUsers',
-    async (): Promise<UserInfo[]> => {
-      return await sessionManager.getAllUsers()
-    }
-  )
+  ipcMain.handle('auth:getAllUsers', async (): Promise<UserInfo[]> => {
+    log.debug('Fetching all users for admin selection')
+    return await sessionManager.getAllUsers()
+  })
 
   /**
    * Switch user (admin only)
@@ -187,22 +195,26 @@ export function registerAuthHandlers(): void {
     'auth:switchUser',
     async (_event, userInfo: UserInfo): Promise<UserSelectionResponse> => {
       try {
+        log.info('User switch attempt', { targetUser: userInfo.username })
         const success = sessionManager.switchUser(userInfo)
 
         if (success) {
           const newUser = sessionManager.getUserInfo()
+          log.info('User switch successful', { newUsername: newUser?.username })
           return {
             success: true,
             userInfo: newUser ?? undefined
           }
         }
 
+        log.warn('User switch failed')
         return {
           success: false,
           error: '用户切换失败'
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
+        log.error('User switch error', { error: message })
         return {
           success: false,
           error: `用户切换失败：${message}`
@@ -214,10 +226,7 @@ export function registerAuthHandlers(): void {
   /**
    * Check if current user is admin
    */
-  ipcMain.handle(
-    'auth:isAdmin',
-    async (): Promise<boolean> => {
-      return sessionManager.isAdmin()
-    }
-  )
+  ipcMain.handle('auth:isAdmin', async (): Promise<boolean> => {
+    return sessionManager.isAdmin()
+  })
 }

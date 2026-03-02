@@ -1,5 +1,8 @@
 import { chromium, type BrowserContext, type Page } from 'playwright'
 import type { ErpConfig, ErpSession } from '../../types/erp.types'
+import { createLogger } from '../logger'
+
+const log = createLogger('ErpAuthService')
 
 /**
  * ERP Authentication Service
@@ -91,7 +94,7 @@ export class ErpAuthService {
     try {
       await page.waitForLoadState('domcontentloaded', { timeout: 10000 })
     } catch (e) {
-      console.log('Page load state check timed out, continuing...')
+      log.warn('Page load state check timed out, continuing')
     }
 
     // Handle force login confirmation dialog if present (Python: get_by_role("button", name="确定"))
@@ -99,15 +102,15 @@ export class ErpAuthService {
       const confirmBtn = mainFrame.getByRole('button', { name: '确定' })
       const count = await confirmBtn.count()
       if (count > 0) {
-        console.log('Force login detected, clicking confirm button')
+        log.info('Force login detected, clicking confirm button')
         await confirmBtn.first().click()
         await page.waitForTimeout(2000)
       } else {
-        console.log('Normal login, no confirmation dialog')
+        log.debug('Normal login, no confirmation dialog')
       }
-    } catch (e) {
+    } catch {
       // No force login dialog, continue
-      console.log('Normal login, no confirmation dialog')
+      log.debug('Normal login, no confirmation dialog')
     }
 
     // Create session with mainFrame (Python returns main_frame as part of login result)

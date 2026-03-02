@@ -22,7 +22,11 @@ export type MatchMode = 'substring' | 'exact'
 /**
  * Validation data source options
  */
-export type ValidationDataSource = 'database_full' | 'database_filtered' | 'excel_existing' | 'excel_full'
+export type ValidationDataSource =
+  | 'database_full'
+  | 'database_filtered'
+  | 'excel_existing'
+  | 'excel_full'
 
 /**
  * ERP configuration

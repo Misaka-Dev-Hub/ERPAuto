@@ -20,7 +20,10 @@ const SettingsPage: React.FC = () => {
 
   const [isModified, setIsModified] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
+  const [message, setMessage] = useState<{
+    type: 'success' | 'error' | 'info'
+    text: string
+  } | null>(null)
 
   useEffect(() => {
     loadSettings()
@@ -82,9 +85,10 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 mt-6">
-
       {message && (
-        <div className={`fixed top-5 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-[10000] text-sm font-medium transition-all ${message.type === 'success' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
+        <div
+          className={`fixed top-5 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-[10000] text-sm font-medium transition-all ${message.type === 'success' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}`}
+        >
           {message.text}
         </div>
       )}
@@ -102,7 +106,9 @@ const SettingsPage: React.FC = () => {
 
         <div className="p-6 space-y-6 bg-white">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">ERP 基础访问地址 (URL)</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              ERP 基础访问地址 (URL)
+            </label>
             <input
               type="url"
               placeholder="https://erp.example.com"
@@ -114,7 +120,9 @@ const SettingsPage: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">登录账号 (Username)</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                登录账号 (Username)
+              </label>
               <input
                 type="text"
                 placeholder="输入 ERP 账号"
@@ -124,7 +132,9 @@ const SettingsPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">登录密码 (Password)</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                登录密码 (Password)
+              </label>
               <input
                 type="password"
                 placeholder="••••••••"

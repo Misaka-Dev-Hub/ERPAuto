@@ -6,6 +6,15 @@
     "types": ["electron-vite/node"],
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "strict": false
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedParameters": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true
   }
 }

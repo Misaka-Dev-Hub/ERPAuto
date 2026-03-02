@@ -70,18 +70,15 @@ const api = {
     validate: (request: ValidationRequest) => ipcRenderer.invoke('validation:validate', request),
     setSharedProductionIds: (productionIds: string[]) =>
       ipcRenderer.invoke('validation:setSharedProductionIds', productionIds),
-    getSharedProductionIds: () =>
-      ipcRenderer.invoke('validation:getSharedProductionIds'),
-    getCleanerData: () =>
-      ipcRenderer.invoke('validation:getCleanerData')
+    getSharedProductionIds: () => ipcRenderer.invoke('validation:getSharedProductionIds'),
+    getCleanerData: () => ipcRenderer.invoke('validation:getCleanerData')
   },
 
   // Materials service
   materials: {
     upsertBatch: (materials: { materialCode: string; managerName: string }[]) =>
       ipcRenderer.invoke('materials:upsertBatch', { materials }),
-    delete: (materialCodes: string[]) =>
-      ipcRenderer.invoke('materials:delete', { materialCodes }),
+    delete: (materialCodes: string[]) => ipcRenderer.invoke('materials:delete', { materialCodes }),
     getManagers: () => ipcRenderer.invoke('materials:getManagers'),
     getByManager: (managerName: string) =>
       ipcRenderer.invoke('materials:getByManager', managerName),

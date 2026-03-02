@@ -9,17 +9,11 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import {
-  LayoutDashboard,
-  Download,
-  Trash2,
-  Settings,
-  Database,
-  User,
-  LogOut
-} from 'lucide-react'
+import { LayoutDashboard, Download, Trash2, Settings, Database, User, LogOut } from 'lucide-react'
 import LoginDialog from './components/LoginDialog'
-import UserSelectionDialog, { type UserInfo as SelectedUserInfo } from './components/UserSelectionDialog'
+import UserSelectionDialog, {
+  type UserInfo as SelectedUserInfo
+} from './components/UserSelectionDialog'
 import ExtractorPage from './pages/ExtractorPage'
 import CleanerPage from './pages/CleanerPage'
 import SettingsPage from './pages/SettingsPage'
@@ -225,7 +219,12 @@ function App(): React.JSX.Element {
 
   // Show login dialog if not authenticated
   if (!isAuthenticated) {
-    console.log('Render: not authenticated, showLoginDialog:', showLoginDialog, 'computerName:', computerName)
+    console.log(
+      'Render: not authenticated, showLoginDialog:',
+      showLoginDialog,
+      'computerName:',
+      computerName
+    )
     return (
       <>
         <LoginDialog
@@ -245,26 +244,28 @@ function App(): React.JSX.Element {
           onCancel={handleUserSelectionCancel}
         />
 
-        {errorMessage && (
-          <div className="error-toast">{errorMessage}</div>
-        )}
+        {errorMessage && <div className="error-toast">{errorMessage}</div>}
 
         {/* If showLoginDialog is false but not authenticated, show a message */}
         {!showLoginDialog && !showUserSelection && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '100vh',
-            backgroundColor: '#f5f7fa'
-          }}>
-            <div style={{
-              padding: '40px',
-              backgroundColor: '#fff',
-              borderRadius: '8px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              textAlign: 'center'
-            }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: '100vh',
+              backgroundColor: '#f5f7fa'
+            }}
+          >
+            <div
+              style={{
+                padding: '40px',
+                backgroundColor: '#fff',
+                borderRadius: '8px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                textAlign: 'center'
+              }}
+            >
               <p style={{ color: '#52c41a', fontSize: '18px', fontWeight: 600 }}>
                 欢迎，{currentUser?.username}！
               </p>
@@ -299,12 +300,11 @@ function App(): React.JSX.Element {
   const navItems = [
     { id: 'extractor', label: '数据提取 (Extractor)', icon: <Download size={18} /> },
     { id: 'cleaner', label: '物料验证与清理 (Cleaner)', icon: <Trash2 size={18} /> },
-    { id: 'settings', label: '系统设置 (Settings)', icon: <Settings size={18} /> },
-  ];
+    { id: 'settings', label: '系统设置 (Settings)', icon: <Settings size={18} /> }
+  ]
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
-
       {/* ================= 顶部导航与标题栏 ================= */}
       <header
         className="h-16 bg-slate-900 text-slate-300 flex items-center justify-between px-4 shadow-md z-20 flex-shrink-0"
@@ -317,13 +317,20 @@ function App(): React.JSX.Element {
             <div className="w-3 h-3 rounded-full bg-green-500"></div>
           </div>
 
-          <div className="flex items-center gap-2 text-white font-bold text-lg cursor-pointer" onClick={() => setCurrentPage('home')} style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <div
+            className="flex items-center gap-2 text-white font-bold text-lg cursor-pointer"
+            onClick={() => setCurrentPage('home')}
+            style={{ WebkitAppRegion: 'no-drag' } as any}
+          >
             <LayoutDashboard size={22} className="text-blue-500" />
             <span>ERP Auto</span>
           </div>
         </div>
 
-        <nav className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <nav
+          className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg"
+          style={{ WebkitAppRegion: 'no-drag' } as any}
+        >
           {navItems.map((item) => (
             <button
               key={item.id}
@@ -340,14 +347,20 @@ function App(): React.JSX.Element {
           ))}
         </nav>
 
-        <div className="flex items-center gap-4 text-sm" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <div
+          className="flex items-center gap-4 text-sm"
+          style={{ WebkitAppRegion: 'no-drag' } as any}
+        >
           <div className="flex items-center gap-2 text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
             <Database size={14} className="text-green-500" />
             <span className="text-slate-300">数据库已连接</span>
           </div>
           <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full">
             <User size={16} className="text-slate-400" />
-            <span className="font-medium text-slate-200" title={`User Type: ${currentUser?.userType}`}>
+            <span
+              className="font-medium text-slate-200"
+              title={`User Type: ${currentUser?.userType}`}
+            >
               {currentUser?.username}
             </span>
             {shouldShowLogout && (

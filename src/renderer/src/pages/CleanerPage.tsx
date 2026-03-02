@@ -103,13 +103,11 @@ const CleanerPage: React.FC = () => {
   const filteredResults = React.useMemo(() => {
     let results = validationResults
     if (!isAdmin && currentUsername) {
-      results = results.filter(r => r.managerName === currentUsername || !r.managerName)
+      results = results.filter((r) => r.managerName === currentUsername || !r.managerName)
     } else if (managers.length > 0 && selectedManagers.size > 0) {
-      results = results.filter(
-        r => selectedManagers.has(r.managerName) || !r.managerName
-      )
+      results = results.filter((r) => selectedManagers.has(r.managerName) || !r.managerName)
     }
-    results = results.filter(r => !hiddenItems.has(r.materialCode))
+    results = results.filter((r) => !hiddenItems.has(r.materialCode))
     return results
   }, [validationResults, isAdmin, currentUsername, managers, selectedManagers, hiddenItems])
 
@@ -129,18 +127,12 @@ const CleanerPage: React.FC = () => {
       if (response.success && response.results) {
         setValidationResults(response.results)
         const markedCodes = new Set(
-          response.results
-            .filter(r => r.isMarkedForDeletion)
-            .map(r => r.materialCode)
+          response.results.filter((r) => r.isMarkedForDeletion).map((r) => r.materialCode)
         )
         setSelectedItems(markedCodes)
 
         if (isAdmin) {
-          const uniqueManagers = new Set(
-            response.results
-              .map(r => r.managerName)
-              .filter(Boolean)
-          )
+          const uniqueManagers = new Set(response.results.map((r) => r.managerName).filter(Boolean))
           setManagers([...uniqueManagers])
           setSelectedManagers(uniqueManagers)
         }
@@ -155,7 +147,7 @@ const CleanerPage: React.FC = () => {
   }
 
   const handleCheckboxToggle = (materialCode: string) => {
-    setSelectedItems(prev => {
+    setSelectedItems((prev) => {
       const newSet = new Set(prev)
       if (newSet.has(materialCode)) newSet.delete(materialCode)
       else newSet.add(materialCode)
@@ -183,14 +175,18 @@ const CleanerPage: React.FC = () => {
     }
 
     if (missingManager.length > 0) {
-      alert(`以下已勾选的记录缺少负责人信息，无法保存：\n\n${missingManager.slice(0, 10).join('\n')}`)
+      alert(
+        `以下已勾选的记录缺少负责人信息，无法保存：\n\n${missingManager.slice(0, 10).join('\n')}`
+      )
       return
     }
 
-    if (materialsToUpsert.length === 0 && materialsToDelete.length === 0) return alert('没有需要处理的记录')
+    if (materialsToUpsert.length === 0 && materialsToDelete.length === 0)
+      return alert('没有需要处理的记录')
 
     const confirmParts: string[] = []
-    if (materialsToUpsert.length > 0) confirmParts.push(`写入/更新 ${materialsToUpsert.length} 条记录`)
+    if (materialsToUpsert.length > 0)
+      confirmParts.push(`写入/更新 ${materialsToUpsert.length} 条记录`)
     if (materialsToDelete.length > 0) confirmParts.push(`删除 ${materialsToDelete.length} 条记录`)
 
     if (!window.confirm(`确认以下操作吗？\n\n${confirmParts.join('\n')}`)) return
@@ -215,8 +211,8 @@ const CleanerPage: React.FC = () => {
 
       // Reload managers if admin
       if (isAdmin) {
-         const resp = await window.electron.materials.getManagers()
-         setManagers(resp.managers)
+        const resp = await window.electron.materials.getManagers()
+        setManagers(resp.managers)
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : '操作失败')
@@ -240,8 +236,10 @@ const CleanerPage: React.FC = () => {
       const orderNumberList = cleanerDataResult.orderNumbers || []
       const materialCodeList = cleanerDataResult.materialCodes || []
 
-      if (orderNumberList.length === 0) throw new Error('没有订单号数据。请先到数据提取页面输入 Production ID。')
-      if (materialCodeList.length === 0) throw new Error('没有物料代码数据。请确认已在物料清理界面确认要删除的物料。')
+      if (orderNumberList.length === 0)
+        throw new Error('没有订单号数据。请先到数据提取页面输入 Production ID。')
+      if (materialCodeList.length === 0)
+        throw new Error('没有物料代码数据。请确认已在物料清理界面确认要删除的物料。')
 
       const response = await window.electron.cleaner.runCleaner({
         orderNumbers: orderNumberList,
@@ -250,11 +248,11 @@ const CleanerPage: React.FC = () => {
       })
 
       if (response.success && response.data) {
-         let msg = `清理执行完毕:\n处理订单: ${response.data.ordersProcessed}\n删除物料: ${response.data.materialsDeleted}\n跳过物料: ${response.data.materialsSkipped}`
-         if (response.data.errors.length) {
-            msg += `\n错误: ${response.data.errors.join(', ')}`
-         }
-         alert(msg)
+        let msg = `清理执行完毕:\n处理订单: ${response.data.ordersProcessed}\n删除物料: ${response.data.materialsDeleted}\n跳过物料: ${response.data.materialsSkipped}`
+        if (response.data.errors.length) {
+          msg += `\n错误: ${response.data.errors.join(', ')}`
+        }
+        alert(msg)
       } else {
         throw new Error(response.error || '清理失败')
       }
@@ -267,10 +265,8 @@ const CleanerPage: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col xl:flex-row gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-
       {/* 左栏：数据源与执行控制区 */}
       <div className="xl:w-[380px] flex-shrink-0 flex flex-col gap-5">
-
         {/* 1. 数据来源选择 (仅 Admin 可见) */}
         {isAdmin && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
@@ -280,7 +276,9 @@ const CleanerPage: React.FC = () => {
             </h3>
 
             <div className="space-y-3">
-              <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${valMode === 'full' ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-50 border-slate-200'}`}>
+              <label
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${valMode === 'full' ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-50 border-slate-200'}`}
+              >
                 <input
                   type="radio"
                   name="valMode"
@@ -294,7 +292,9 @@ const CleanerPage: React.FC = () => {
                 </div>
               </label>
 
-              <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${valMode === 'filtered' ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-50 border-slate-200'}`}>
+              <label
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${valMode === 'filtered' ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-50 border-slate-200'}`}
+              >
                 <input
                   type="radio"
                   name="valMode"
@@ -303,12 +303,16 @@ const CleanerPage: React.FC = () => {
                   onChange={() => setValMode('filtered')}
                 />
                 <div className="w-full">
-                  <div className="text-sm font-medium text-slate-800">数据库 - ProductionID 过滤</div>
+                  <div className="text-sm font-medium text-slate-800">
+                    数据库 - ProductionID 过滤
+                  </div>
                   <div className="text-xs text-slate-500 mt-0.5">仅校验指定订单号相关的物料</div>
                   {valMode === 'filtered' && (
                     <div className="mt-3 text-xs text-blue-700 bg-blue-100/50 rounded p-2 flex items-start gap-1.5">
                       <Layers size={14} className="mt-0.5 flex-shrink-0" />
-                      <span>自动使用<strong>【数据提取】</strong>模块中共享的订单号列表进行过滤。</span>
+                      <span>
+                        自动使用<strong>【数据提取】</strong>模块中共享的订单号列表进行过滤。
+                      </span>
                     </div>
                   )}
                 </div>
@@ -329,23 +333,30 @@ const CleanerPage: React.FC = () => {
                 <button
                   onClick={() => setSelectedManagers(new Set(managers))}
                   className="text-xs text-blue-600 hover:underline"
-                >全选</button>
+                >
+                  全选
+                </button>
                 <button
                   onClick={() => setSelectedManagers(new Set())}
                   className="text-xs text-slate-500 hover:underline"
-                >取消全选</button>
+                >
+                  取消全选
+                </button>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2 mt-3 max-h-[120px] overflow-y-auto pr-1">
-              {managers.map(manager => (
-                <label key={manager} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer hover:bg-slate-50 p-1.5 rounded">
+              {managers.map((manager) => (
+                <label
+                  key={manager}
+                  className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer hover:bg-slate-50 p-1.5 rounded"
+                >
                   <input
                     type="checkbox"
                     className="rounded text-blue-600"
                     checked={selectedManagers.has(manager)}
                     onChange={(e) => {
-                      setSelectedManagers(prev => {
+                      setSelectedManagers((prev) => {
                         const newSet = new Set(prev)
                         if (e.target.checked) newSet.add(manager)
                         else newSet.delete(manager)
@@ -356,7 +367,9 @@ const CleanerPage: React.FC = () => {
                   {manager || '未分配'}
                 </label>
               ))}
-              {managers.length === 0 && <div className="text-sm text-slate-400">暂无负责人数据</div>}
+              {managers.length === 0 && (
+                <div className="text-sm text-slate-400">暂无负责人数据</div>
+              )}
             </div>
           </div>
         )}
@@ -367,7 +380,9 @@ const CleanerPage: React.FC = () => {
             <div className="flex items-center justify-between bg-amber-50/50 p-3 rounded-lg border border-amber-200 mb-4">
               <div>
                 <div className="font-semibold text-sm text-amber-900">预览模式 (Dry-Run)</div>
-                <div className="text-xs text-amber-700/80 mt-0.5">仅执行页面操作定位，不保存更改</div>
+                <div className="text-xs text-amber-700/80 mt-0.5">
+                  仅执行页面操作定位，不保存更改
+                </div>
               </div>
               <button
                 onClick={() => setDryRun(!dryRun)}
@@ -392,39 +407,41 @@ const CleanerPage: React.FC = () => {
 
       {/* 右栏：结果表格与工具栏 */}
       <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden min-h-[500px]">
-
         {/* 顶部操作条 */}
         <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex justify-between items-center">
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => setSelectedItems(new Set(filteredResults.map(r => r.materialCode)))}
+              onClick={() => setSelectedItems(new Set(filteredResults.map((r) => r.materialCode)))}
               className="text-xs bg-white border border-slate-300 text-slate-700 px-2.5 py-1.5 rounded shadow-sm hover:bg-slate-50 flex items-center gap-1"
             >
-              <CheckSquare size={14} className="text-blue-600"/> 全选
+              <CheckSquare size={14} className="text-blue-600" /> 全选
             </button>
             <button
               onClick={() => setSelectedItems(new Set())}
               className="text-xs bg-white border border-slate-300 text-slate-700 px-2.5 py-1.5 rounded shadow-sm hover:bg-slate-50 flex items-center gap-1"
             >
-              <Square size={14} className="text-slate-400"/> 取消
+              <Square size={14} className="text-slate-400" /> 取消
             </button>
 
             <div className="w-px h-4 bg-slate-300 mx-1"></div>
 
             <button
               onClick={() => {
-                const checkedCodes = filteredResults.filter(r => selectedItems.has(r.materialCode)).map(r => r.materialCode)
-                if (checkedCodes.length) setHiddenItems(prev => new Set([...prev, ...checkedCodes]))
+                const checkedCodes = filteredResults
+                  .filter((r) => selectedItems.has(r.materialCode))
+                  .map((r) => r.materialCode)
+                if (checkedCodes.length)
+                  setHiddenItems((prev) => new Set([...prev, ...checkedCodes]))
               }}
               className="text-xs bg-white border border-slate-300 text-slate-700 px-2.5 py-1.5 rounded shadow-sm hover:bg-slate-50 flex items-center gap-1"
             >
-              <EyeOff size={14}/> 隐藏勾选
+              <EyeOff size={14} /> 隐藏勾选
             </button>
             <button
               onClick={() => setHiddenItems(new Set())}
               className="text-xs bg-white border border-slate-300 text-slate-700 px-2.5 py-1.5 rounded shadow-sm hover:bg-slate-50 flex items-center gap-1"
             >
-              <Eye size={14}/> 显示全部
+              <Eye size={14} /> 显示全部
             </button>
 
             <div className="w-px h-4 bg-slate-300 mx-1"></div>
@@ -458,37 +475,77 @@ const CleanerPage: React.FC = () => {
                 <th className="px-4 py-3">材料代码</th>
                 <th className="px-4 py-3">规格</th>
                 <th className="px-4 py-3">型号</th>
-                <th className="px-4 py-3 w-40">负责人 <span className="text-[10px] font-normal text-slate-400">(双击编辑)</span></th>
+                <th className="px-4 py-3 w-40">
+                  负责人 <span className="text-[10px] font-normal text-slate-400">(双击编辑)</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredResults.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-sm">
-                    {validationResults.length === 0 ? '暂无数据，请点击左侧按钮获取并校验物料' : '当前筛选条件下暂无数据'}
+                    {validationResults.length === 0
+                      ? '暂无数据，请点击左侧按钮获取并校验物料'
+                      : '当前筛选条件下暂无数据'}
                   </td>
                 </tr>
               ) : (
-                filteredResults.map(result => {
+                filteredResults.map((result) => {
                   const isChecked = selectedItems.has(result.materialCode)
                   const trClass = isChecked ? 'bg-blue-50/30' : 'hover:bg-slate-50'
                   const noManager = !result.managerName?.trim()
-                  const managerCellClass = noManager ? 'text-amber-500 text-xs italic' : 'text-slate-700'
+                  const managerCellClass = noManager
+                    ? 'text-amber-500 text-xs italic'
+                    : 'text-slate-700'
 
                   return (
-                    <tr key={result.materialCode} className={`${trClass} transition-colors ${noManager && isChecked ? 'bg-amber-50/20' : ''}`}>
+                    <tr
+                      key={result.materialCode}
+                      className={`${trClass} transition-colors ${noManager && isChecked ? 'bg-amber-50/20' : ''}`}
+                    >
                       <td className="px-4 py-3 text-center truncate">
                         {isChecked ? (
-                          <CheckSquare onClick={() => handleCheckboxToggle(result.materialCode)} size={16} className="text-blue-600 inline cursor-pointer" />
+                          <CheckSquare
+                            onClick={() => handleCheckboxToggle(result.materialCode)}
+                            size={16}
+                            className="text-blue-600 inline cursor-pointer"
+                          />
                         ) : (
-                          <Square onClick={() => handleCheckboxToggle(result.materialCode)} size={16} className="text-slate-300 inline cursor-pointer" />
+                          <Square
+                            onClick={() => handleCheckboxToggle(result.materialCode)}
+                            size={16}
+                            className="text-slate-300 inline cursor-pointer"
+                          />
                         )}
                       </td>
-                      <td className="px-4 py-3 font-medium text-slate-800 truncate" title={result.materialName}>{result.materialName}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-600 truncate" title={result.materialCode}>{result.materialCode}</td>
-                      <td className="px-4 py-3 text-slate-500 text-xs truncate" title={result.specification}>{result.specification || '-'}</td>
-                      <td className="px-4 py-3 text-slate-500 text-xs truncate" title={result.model}>{result.model || '-'}</td>
-                      <td className={`px-4 py-3 truncate ${managerCellClass}`} title={result.managerName || '空(待分配)'}>
+                      <td
+                        className="px-4 py-3 font-medium text-slate-800 truncate"
+                        title={result.materialName}
+                      >
+                        {result.materialName}
+                      </td>
+                      <td
+                        className="px-4 py-3 font-mono text-xs text-slate-600 truncate"
+                        title={result.materialCode}
+                      >
+                        {result.materialCode}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-slate-500 text-xs truncate"
+                        title={result.specification}
+                      >
+                        {result.specification || '-'}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-slate-500 text-xs truncate"
+                        title={result.model}
+                      >
+                        {result.model || '-'}
+                      </td>
+                      <td
+                        className={`px-4 py-3 truncate ${managerCellClass}`}
+                        title={result.managerName || '空(待分配)'}
+                      >
                         {result.managerName || '空(待分配)'}
                       </td>
                     </tr>
@@ -503,7 +560,8 @@ const CleanerPage: React.FC = () => {
         <div className="bg-white border-t border-slate-200 p-4 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10">
           <div className="flex items-center gap-3">
             <div className="text-sm text-slate-600 font-medium">
-              共计 {filteredResults.length} 条记录 | 已选中 <span className="text-blue-600">{selectedItems.size}</span> 条
+              共计 {filteredResults.length} 条记录 | 已选中{' '}
+              <span className="text-blue-600">{selectedItems.size}</span> 条
             </div>
             {isAdmin && dryRun && (
               <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded border border-amber-200">
@@ -528,13 +586,12 @@ const CleanerPage: React.FC = () => {
               disabled={isRunning || validationResults.length === 0}
               className={`${isAdmin && dryRun ? 'bg-amber-500 hover:bg-amber-600' : 'bg-red-600 hover:bg-red-700 shadow-red-500/30'} text-white px-8 py-2.5 rounded-lg font-medium shadow-md transition-all flex items-center gap-2 disabled:opacity-50`}
             >
-              <Play size={18} fill="currentColor" /> {isAdmin && dryRun ? '开始预览执行' : '正式执行 ERP 清理'}
+              <Play size={18} fill="currentColor" />{' '}
+              {isAdmin && dryRun ? '开始预览执行' : '正式执行 ERP 清理'}
             </button>
           </div>
         </div>
-
       </div>
-
     </div>
   )
 }
