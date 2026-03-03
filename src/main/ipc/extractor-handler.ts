@@ -124,18 +124,8 @@ export function registerExtractorHandlers(): void {
               })
             }
           }
-
-          // Clean up: disconnect MySQL
-          if (mysqlService) {
-            try {
-              await mysqlService.disconnect()
-              log.debug('MySQL disconnected')
-            } catch (closeError) {
-              log.warn('Error disconnecting MySQL', {
-                error: closeError instanceof Error ? closeError.message : String(closeError)
-              })
-            }
-          }
+          // Note: DataSource manages connection pool automatically
+          // No explicit cleanup needed for repository
         }
       }, 'extractor:run')
     }
