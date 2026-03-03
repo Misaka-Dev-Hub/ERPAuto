@@ -183,6 +183,9 @@ export class ConfigManager {
    */
   private async loadEnvFile(): Promise<void> {
     try {
+      // Clear cache before loading
+      this.configCache.clear()
+
       if (fs.existsSync(this.envPath)) {
         const content = fs.readFileSync(this.envPath, 'utf-8')
         const lines = content.split('\n')
@@ -548,6 +551,68 @@ export class ConfigManager {
     this.set('execution.dryRun', settings.execution.dryRun)
 
     return this.save()
+  }
+
+  /**
+   * Save partial settings (only update provided fields)
+   * Preserves all existing fields not included in the update
+   */
+  public async savePartialSettings(
+    settings: Partial<SettingsData>
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Step 1: Validate field whitelist
+      const validation = validateEditableFields(settings)
+      if (!validation.valid) {
+        log.warn('Attempted to save non-editable fields', {
+          invalidFields: validation.invalidFields
+        })
+        return {
+          success: false,
+          error: `包含不允许修改的字段：${validation.invalidFields.join(', ')}`
+        }
+      }
+
+      // Step 2: Read current settings
+      const currentSettings = this.getAllSettings()
+
+      // Step 3: Deep merge
+      const mergedSettings = deepMerge(currentSettings, settings)
+
+      // Step 4: Backup and save
+      const backupSuccess = await this.backupEnvFile()
+      if (!backupSuccess) {
+        log.warn('Failed to backup .env file, proceeding with caution')
+      }
+
+      const saveSuccess = await this.saveAllSettings(mergedSettings)
+
+      if (!saveSuccess) {
+        // Save failed, attempt restore
+        await this.restoreBackup()
+        return {
+          success: false,
+          error: '保存配置失败，已恢复原配置'
+        }
+      }
+
+      // Step 5: Reload from disk to populate cache with correct keys (ERP_URL instead of erp.url)
+      await this.loadEnvFile()
+
+      log.info('Settings saved successfully', {
+        updatedFields: Object.keys(settings)
+      })
+
+      return { success: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      log.error('Error in savePartialSettings', { error: message })
+      await this.restoreBackup()
+      return {
+        success: false,
+        error: `保存配置时发生错误：${message}`
+      }
+    }
   }
 
   /**
