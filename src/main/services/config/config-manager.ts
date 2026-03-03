@@ -9,12 +9,15 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
+import { createLogger } from '../logger'
 import type {
   SettingsData,
   DatabaseType,
   MatchMode,
   ValidationDataSource
 } from '../../types/settings.types'
+
+const log = createLogger('ConfigManager')
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -609,12 +612,12 @@ export class ConfigManager {
     try {
       if (fs.existsSync(this.envPath)) {
         fs.copyFileSync(this.envPath, this.backupPath)
-        console.log('[ConfigManager] Backup created', this.backupPath)
+        log.debug('Backup created', { path: this.backupPath })
         return true
       }
       return false
     } catch (error) {
-      console.error('[ConfigManager] Failed to backup .env file:', error)
+      log.error('Failed to backup .env file', { error })
       return false
     }
   }
@@ -627,12 +630,12 @@ export class ConfigManager {
       if (fs.existsSync(this.backupPath)) {
         fs.copyFileSync(this.backupPath, this.envPath)
         await this.loadEnvFile()
-        console.log('[ConfigManager] Restored from backup')
+        log.debug('Restored from backup')
         return true
       }
       return false
     } catch (error) {
-      console.error('[ConfigManager] Failed to restore backup:', error)
+      log.error('Failed to restore backup', { error })
       return false
     }
   }

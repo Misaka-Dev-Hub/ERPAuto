@@ -78,10 +78,10 @@ describe('ConfigManager - backup and restore', () => {
 
     expect(backupSuccess).toBe(true)
 
-    // Check backup file exists (in same location as .env file)
+    // Check backup file exists (in same location as .env file, which is src/main/)
     const fs = await import('fs')
     const path = await import('path')
-    const backupPath = path.resolve('src/main/.env.backup')
+    const backupPath = path.resolve(process.cwd(), 'src/main/.env.backup')
 
     expect(fs.existsSync(backupPath)).toBe(true)
   })
