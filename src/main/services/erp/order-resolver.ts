@@ -11,7 +11,7 @@
  * Fields: 总排号 (productionID), 生产订单号 (production order number)
  */
 
-import { MySqlService } from '../database/mysql'
+import { ProductionContractRepository } from '../database/repositories/ProductionContractRepository'
 
 /**
  * Order mapping result
@@ -71,11 +71,7 @@ export const DB_CONFIG = {
  * Order Number Resolver Service
  */
 export class OrderNumberResolver {
-  private mysqlService: MySqlService
-
-  constructor(mysqlService: MySqlService) {
-    this.mysqlService = mysqlService
-  }
+  constructor(private repository: ProductionContractRepository) {}
 
   /**
    * Recognize the type of an input string
