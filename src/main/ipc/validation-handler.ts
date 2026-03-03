@@ -215,7 +215,28 @@ export function registerValidationHandlers(): void {
       let dbService: MySqlService | SqlServerService | null = null
 
       try {
-        log.info('Starting validation', { mode: request.mode })
+        // Get current user info
+        const sessionManager = (
+          await import('../services/user/session-manager')
+        ).SessionManager.getInstance()
+
+        const userInfo = sessionManager.getUserInfo()
+        if (!userInfo) {
+          return {
+            success: false,
+            error: '用户未登录',
+            stats: {
+              totalRecords: 0,
+              matchedCount: 0,
+              markedCount: 0
+            }
+          }
+        }
+
+        const isAdmin = userInfo.userType === 'Admin'
+        const username = userInfo.username
+
+        log.info('Starting validation', { mode: request.mode, user: username, isAdmin })
 
         // Connect to database
         dbService = await getValidationDatabaseService()
@@ -331,6 +352,19 @@ export function registerValidationHandlers(): void {
                 matchedTypeKeyword = typeKeyword.materialName
                 managerName = typeKeyword.managerName
                 break
+              }
+            }
+          }
+
+          // Priority 3: User Override Match (only for non-admin users)
+          // Override with current user's typeKeyword if available
+          if (!isAdmin && username) {
+            const userKeywords = typeKeywords.filter((tk) => tk.managerName === username)
+            for (const userKeyword of userKeywords) {
+              if (userKeyword.materialName && materialName.includes(userKeyword.materialName)) {
+                matchedTypeKeyword = userKeyword.materialName
+                managerName = userKeyword.managerName
+                break // Force override with first match
               }
             }
           }

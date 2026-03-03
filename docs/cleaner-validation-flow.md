@@ -287,7 +287,7 @@ WHERE rn = 1
 
 ### 4. 物料匹配算法
 
-**位置**: `validation-handler.ts:325-361`
+**位置**: `validation-handler.ts:343-382`
 
 ```mermaid
 flowchart TB
@@ -299,14 +299,24 @@ flowchart TB
     Priority1 -->|materialCode<br/>在markedCodesDict中| SetMarked[设置managerName<br/>isMarkedForDeletion=true]
     Priority1 -->|未匹配| Priority2{优先级2:<br/>MaterialsTypeToBeDeleted<br/>名称包含匹配?}
 
-    SetMarked --> PushResult[添加到results]
-    Priority2 -->|遍历typeKeywords| CheckContains{typeKeyword.materialName<br/>包含 materialName?}
+    SetMarked --> CheckUser{当前用户类型?}
+    Priority2 -->|遍历typeKeywords| CheckContains{typeKeyword.materialName<br/>匹配?}
 
-    CheckContains -->|是| SetMatched[设置managerName<br/>matchedTypeKeyword<br/>isMarkedForDeletion=false]
-    CheckContains -->|否| SetNull[managerName=null<br/>isMarkedForDeletion=false]
+    CheckContains -->|是| SetMatched[设置managerName<br/>matchedTypeKeyword]
+    CheckContains -->|否| SetNull[managerName=null]
 
-    SetMatched --> PushResult
-    SetNull --> PushResult
+    SetMatched --> CheckUser
+    SetNull --> CheckUser
+
+    CheckUser -->|Admin| Skip[跳过覆盖]
+    CheckUser -->|User| Priority3{优先级3:<br/>用户覆盖匹配?}
+
+    Priority3 -->|匹配成功| Override[覆盖为当前用户<br/>managerName=当前用户]
+    Priority3 -->|未匹配| Keep[保持原结果]
+
+    Skip --> PushResult[添加到results]
+    Override --> PushResult
+    Keep --> PushResult
 
     PushResult --> Next{还有物料?}
     Next -->|是| Loop
@@ -321,11 +331,14 @@ flowchart TB
    - 结果: `isMarkedForDeletion = true`, `managerName` 从表中获取
 
 2. **优先级2 (次高)**: `MaterialsTypeToBeDeleted` 表包含匹配
-   - 匹配条件: `MaterialName` 包含关系 (`typeKeyword.materialName.includes(materialName)`)
+   - 匹配条件: `MaterialName` 包含关系 (`materialName.includes(typeKeyword.materialName)`)
    - 结果: `isMarkedForDeletion = false`, `managerName` 从表中获取, `matchedTypeKeyword` 记录匹配项
 
-3. **未匹配**: 无任何匹配
-   - 结果: `isMarkedForDeletion = false`, `managerName = ''`, `matchedTypeKeyword = undefined`
+3. **优先级3 (User 覆盖)**: 当前用户 typeKeyword 覆盖匹配
+   - 适用范围: 仅对 `User` 类型用户生效，`Admin` 用户跳过此步骤
+   - 匹配条件: 筛选 `managerName === 当前用户名` 的 typeKeywords，使用相同的包含匹配逻辑
+   - 结果: 强制覆盖 `managerName` 和 `matchedTypeKeyword` 为当前用户的值
+   - 无匹配时: 保持优先级2的匹配结果不变
 
 **核心代码**:
 
@@ -344,10 +357,22 @@ for (const record of materialRecords) {
   // 优先级2: 匹配 MaterialsTypeToBeDeleted (MaterialName 包含匹配)
   if (!managerName) {
     for (const typeKeyword of typeKeywords) {
-      if (typeKeyword.materialName && typeKeyword.materialName.includes(materialName)) {
+      if (typeKeyword.materialName && materialName.includes(typeKeyword.materialName)) {
         matchedTypeKeyword = typeKeyword.materialName
         managerName = typeKeyword.managerName
         break
+      }
+    }
+  }
+
+  // 优先级3: 用户覆盖匹配 (仅限 User 用户)
+  if (!isAdmin && username) {
+    const userKeywords = typeKeywords.filter((tk) => tk.managerName === username)
+    for (const userKeyword of userKeywords) {
+      if (userKeyword.materialName && materialName.includes(userKeyword.materialName)) {
+        matchedTypeKeyword = userKeyword.materialName
+        managerName = userKeyword.managerName
+        break // 强制覆盖，只使用第一个匹配
       }
     }
   }
@@ -1220,13 +1245,15 @@ flowchart TB
 
 ## 文件索引
 
-| 文件路径                                                    | 说明          | 关键行号                                                                                       |
-| ----------------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------- |
-| `src/renderer/src/pages/CleanerPage.tsx`                    | 前端清理页面  | 117-155 (handleValidation)<br>166-226 (handleConfirmDeletion)                                  |
-| `src/main/ipc/validation-handler.ts`                        | IPC处理器     | 209-392 (validation:validate)<br>399-422 (materials:upsertBatch)<br>427-449 (materials:delete) |
-| `src/main/services/database/discrete-material-plan-dao.ts`  | 物料计划DAO   | 191-227 (queryAllDistinctByMaterialCode)                                                       |
-| `src/main/services/database/discrete-material-plan-dao.ts`  | 物料计划DAO   | 294-377 (queryBySourceNumbersDistinct)                                                         |
-| `src/main/services/database/materials-to-be-deleted-dao.ts` | 待删除物料DAO | 180-240 (upsertBatch)<br>248-268 (getAllMaterialCodes)<br>539-586 (deleteByMaterialCodes)      |
+| 文件路径                                                    | 说明          | 关键行号                                                                                         |
+| ----------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------ |
+| `src/renderer/src/pages/CleanerPage.tsx`                    | 前端清理页面  | 117-155 (handleValidation)<br>166-226 (handleConfirmDeletion)                                    |
+| `src/main/ipc/validation-handler.ts`                        | IPC处理器     | 212-400 (validation:validate)<br>407-420 (materials:upsertBatch)<br>425-447 (materials:delete)   |
+| `src/main/ipc/validation-handler.ts`                        | 用户信息获取  | 218-237 (获取当前用户 isAdmin username)                                                         |
+| `src/main/ipc/validation-handler.ts`                        | 物料匹配算法  | 343-382 (优先级1-3匹配逻辑)                                                                      |
+| `src/main/services/database/discrete-material-plan-dao.ts`  | 物料计划DAO   | 191-227 (queryAllDistinctByMaterialCode)                                                         |
+| `src/main/services/database/discrete-material-plan-dao.ts`  | 物料计划DAO   | 294-377 (queryBySourceNumbersDistinct)                                                           |
+| `src/main/services/database/materials-to-be-deleted-dao.ts` | 待删除物料DAO | 180-240 (upsertBatch)<br>248-268 (getAllMaterialCodes)<br>539-586 (deleteByMaterialCodes)        |
 
 ---
 
