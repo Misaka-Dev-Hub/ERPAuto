@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { DataSource } from 'typeorm'
 import { ErpAuthService } from '../services/erp/erp-auth'
 import { CleanerService } from '../services/erp/cleaner'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
@@ -6,6 +7,7 @@ import { ProductionContractRepository } from '../services/database/repositories/
 import { createLogger } from '../services/logger'
 import { withErrorHandling, type IpcResult } from './index'
 import { ErpConnectionError, ValidationError, DatabaseQueryError } from '../types/errors'
+import { initializeDataSource } from '../services/database/data-source'
 import type { CleanerInput, CleanerResult } from '../types/cleaner.types'
 
 const log = createLogger('CleanerHandler')
@@ -19,7 +21,7 @@ export function registerCleanerHandlers(): void {
     async (_event, input: CleanerInput): Promise<IpcResult<CleanerResult>> => {
       return withErrorHandling(async () => {
         let authService: ErpAuthService | null = null
-        let contractRepo: ProductionContractRepository | null = null
+        let dataSource: DataSource | null = null
 
         try {
           // Check environment variables
@@ -40,10 +42,11 @@ export function registerCleanerHandlers(): void {
           }
 
           // Resolve order numbers (convert productionIDs to 生产订单号)
-          log.info('Creating ProductionContractRepository for order resolution...')
-          contractRepo = new ProductionContractRepository()
+          log.info('Connecting to database for order resolution...')
+          dataSource = await initializeDataSource()
 
-          const resolver = new OrderNumberResolver(contractRepo)
+          const repository = new ProductionContractRepository()
+          const resolver = new OrderNumberResolver(repository)
           const mappings = await resolver.resolve(input.orderNumbers)
 
           // Get valid order numbers and warnings
@@ -119,8 +122,17 @@ export function registerCleanerHandlers(): void {
             }
           }
 
-          // Clean up: contract repo cleanup (no disconnect needed with TypeORM)
-          contractRepo = null
+          // Clean up: disconnect database
+          if (dataSource && dataSource.isInitialized) {
+            try {
+              await dataSource.destroy()
+              log.debug('DataSource disconnected')
+            } catch (closeError) {
+              log.warn('Error disconnecting DataSource', {
+                error: closeError instanceof Error ? closeError.message : String(closeError)
+              })
+            }
+          }
         }
       }, 'cleaner:run')
     }

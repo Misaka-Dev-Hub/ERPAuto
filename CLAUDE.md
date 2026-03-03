@@ -67,10 +67,19 @@ The main process is organized around domain-specific services in `src/main/servi
   - `OrderResolverService` - Validates and resolves order numbers
   - `locators.ts` - ERP element selectors
 
-- **Database Services** (`services/database/`): Dual database support
-  - `MySqlService` / `mysql.ts` - MySQL operations
-  - `SqlServerService` / `sql-server.ts` - SQL Server operations
-  - DAO pattern: `discrete-material-plan-dao.ts`, `materials-to-be-deleted-dao.ts`
+- **Database Services** (`services/database/`): Dual database support with TypeORM
+  - `MySqlService` / `mysql.ts` - MySQL operations (legacy, being phased out)
+  - `SqlServerService` / `sql-server.ts` - SQL Server operations (legacy, being phased out)
+  - `data-source.ts` - TypeORM DataSource configuration (supports MySQL and SQL Server)
+  - `entities/` - TypeORM entity definitions
+    - `DiscreteMaterialPlan.ts` - Discrete material plan entity
+    - `MaterialsToBeDeleted.ts` - Materials to be deleted entity
+    - `ProductionContract.ts` - Production contract entity
+  - `repositories/` - TypeORM repositories with dual SQL dialect support
+    - `DiscreteMaterialPlanRepository.ts` - Discrete material plan data access
+    - `MaterialsToBeDeletedRepository.ts` - Materials to be deleted data access
+    - `ProductionContractRepository.ts` - Production contract data access
+  - DAO pattern: `discrete-material-plan-dao.ts`, `materials-to-be-deleted-dao.ts` (legacy)
 
 - **User Services** (`services/user/`): Authentication and session management
   - `BipUsersDao` - User data access
@@ -118,7 +127,16 @@ Admin users see logout buttons and can access user switching. Non-admin users ha
 The application requires a `.env` file in the project root. Reference `.env.example` for the full structure. Key configurations:
 
 - **ERP Settings**: URL, credentials, headless mode, HTTPS error handling
-- **Database**: MySQL and SQL Server connection configs (dual support)
+- **Database Settings**:
+  - `DB_TYPE` - Database type: 'mysql' or 'mssql' (required)
+  - `DB_MYSQL_HOST` - MySQL server host (if DB_TYPE=mysql)
+  - `DB_MYSQL_PORT` - MySQL server port (default: 3306)
+  - `DB_SERVER` - SQL Server host (if DB_TYPE=mssql)
+  - `DB_SQLSERVER_PORT` - SQL Server port (default: 1433)
+  - `DB_USERNAME` - Database username
+  - `DB_PASSWORD` - Database password
+  - `DB_NAME` - Database name
+  - `DB_TRUST_SERVER_CERTIFICATE` - Trust SQL Server certificate (yes/no, default: no)
 - **App Settings**: Log level, download/temp directories
 
 ## Key Technologies

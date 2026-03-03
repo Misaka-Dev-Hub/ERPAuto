@@ -7,10 +7,12 @@
  */
 
 import { ipcMain } from 'electron'
+import { DataSource } from 'typeorm'
 import { ProductionContractRepository } from '../services/database/repositories/ProductionContractRepository'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
 import { createLogger } from '../services/logger'
 import { DatabaseQueryError } from '../types/errors'
+import { initializeDataSource } from '../services/database/data-source'
 import type { OrderMapping, ResolutionStats } from '../services/erp/order-resolver'
 
 const log = createLogger('ResolverHandler')
@@ -52,13 +54,16 @@ export function registerResolverHandlers(): void {
   ipcMain.handle(
     'resolver:resolve',
     async (_event, input: ResolverInput): Promise<ResolverResponse> => {
-      try {
-        // Create repository
-        log.info('Creating repository for resolution', { inputCount: input.inputs.length })
-        const contractRepo = new ProductionContractRepository()
+      let dataSource: DataSource | null = null
 
-        // Create resolver and resolve inputs
-        const resolver = new OrderNumberResolver(contractRepo)
+      try {
+        // Create DataSource
+        log.info('Connecting to database for resolution', { inputCount: input.inputs.length })
+        dataSource = await initializeDataSource()
+
+        // Create repository and resolver
+        const repository = new ProductionContractRepository()
+        const resolver = new OrderNumberResolver(repository)
         const mappings = await resolver.resolve(input.inputs)
 
         // Get valid order numbers and warnings
@@ -86,6 +91,18 @@ export function registerResolverHandlers(): void {
           success: false,
           error: `解析失败：${message}`
         }
+      } finally {
+        // Clean up database connection
+        if (dataSource && dataSource.isInitialized) {
+          try {
+            await dataSource.destroy()
+            log.debug('DataSource disconnected')
+          } catch (closeError) {
+            log.warn('Error disconnecting DataSource', {
+              error: closeError instanceof Error ? closeError.message : String(closeError)
+            })
+          }
+        }
       }
     }
   )
@@ -104,7 +121,12 @@ export function registerResolverHandlers(): void {
       error?: string
     }> => {
       try {
-        const resolver = new OrderNumberResolver(null as any)
+        // Create a mock repository for format validation only
+        const mockRepository = {
+          getDatabaseType: () => 'mysql' as const
+        } as unknown as ProductionContractRepository
+
+        const resolver = new OrderNumberResolver(mockRepository)
 
         const results = inputs.map((input) => ({
           input,

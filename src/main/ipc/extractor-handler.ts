@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { ErpAuthService } from '../services/erp/erp-auth'
 import { ExtractorService } from '../services/erp/extractor'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
+import { getDataSource } from '../services/database/data-source'
 import { ProductionContractRepository } from '../services/database/repositories/ProductionContractRepository'
 import { createLogger } from '../services/logger'
 import { withErrorHandling, type IpcResult } from './index'
@@ -19,7 +20,6 @@ export function registerExtractorHandlers(): void {
     async (_event, input: ExtractorInput): Promise<IpcResult<ExtractorResult>> => {
       return withErrorHandling(async () => {
         let authService: ErpAuthService | null = null
-        let contractRepo: ProductionContractRepository | null = null
 
         try {
           // Check environment variables
@@ -40,10 +40,17 @@ export function registerExtractorHandlers(): void {
           }
 
           // Resolve order numbers (convert productionIDs to 生产订单号)
-          log.info('Creating ProductionContractRepository for order resolution...')
-          contractRepo = new ProductionContractRepository()
+          log.info('Initializing database connection for order resolution...')
 
-          const resolver = new OrderNumberResolver(contractRepo)
+          const dataSource = getDataSource()
+          if (!dataSource.isInitialized) {
+            await dataSource.initialize()
+          }
+
+          const repository = new ProductionContractRepository()
+          const resolver = new OrderNumberResolver(repository)
+
+          log.info('Database connection established')
           const mappings = await resolver.resolve(input.orderNumbers)
 
           // Get valid order numbers and warnings
@@ -117,9 +124,8 @@ export function registerExtractorHandlers(): void {
               })
             }
           }
-
-          // Clean up: contract repo cleanup (no disconnect needed with TypeORM)
-          contractRepo = null
+          // Note: DataSource manages connection pool automatically
+          // No explicit cleanup needed for repository
         }
       }, 'extractor:run')
     }
