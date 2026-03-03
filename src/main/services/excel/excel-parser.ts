@@ -22,6 +22,11 @@ export class ExcelParser {
 
   // Mapping from Chinese field names to English property names
   private CHINESE_TO_ENGLISH_MAPPING: Record<string, string> = {
+    // Header fields (row 2-4)
+    工厂: 'factory',
+    备料状态: 'materialStatus',
+    备料计划单号: 'planNumber',
+    备料类型: 'materialType',
     生产部门: 'productionDepartment',
     生产订单: 'productionOrder',
     来源单号: 'productionOrder', // This is the order number we need!
@@ -30,8 +35,14 @@ export class ExcelParser {
     产品规格: 'productSpecification',
     计划数量: 'plannedQuantity',
     单位: 'unit',
+    用料部门: 'department',
+    备注: 'remark',
     需用日期: 'requiredDate',
+    // Footer fields (row 14-15)
     制单人: 'creator',
+    制单日期: 'createDate',
+    审批人: 'approver',
+    审批日期: 'approveDate',
     打印人: 'printer',
     打印日期: 'printDate',
     // Mapped fields (after FIELD_NAME_MAPPING)

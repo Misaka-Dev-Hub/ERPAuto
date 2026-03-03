@@ -81,6 +81,18 @@ export interface OrderHeader {
   /** Order title (离散备料计划) */
   title?: string
 
+  /** Factory (工厂) */
+  factory?: string
+
+  /** Material status (备料状态) */
+  materialStatus?: string
+
+  /** Plan number (备料计划单号) */
+  planNumber?: string
+
+  /** Material type (备料类型) */
+  materialType?: string
+
   /** Production department (生产部门) */
   productionDepartment?: string
 
@@ -102,11 +114,26 @@ export interface OrderHeader {
   /** Unit (单位) */
   unit?: string
 
+  /** Department (用料部门) */
+  department?: string
+
+  /** Remark (备注) */
+  remark?: string
+
   /** Required date (需用日期) */
   requiredDate?: string
 
   /** Creator (制单人) */
   creator?: string
+
+  /** Create date (制单日期) */
+  createDate?: string
+
+  /** Approver (审批人) */
+  approver?: string
+
+  /** Approve date (审批日期) */
+  approveDate?: string
 
   /** Printer (打印人) */
   printer?: string
