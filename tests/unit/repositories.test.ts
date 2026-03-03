@@ -8,7 +8,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock TypeORM
-vi.mock('typeorm', () => ({
+vi.mock('typeorm', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
   DataSource: vi.fn(() => ({
     initialize: vi.fn().mockResolvedValue({}),
     isInitialized: false,
@@ -17,7 +20,8 @@ vi.mock('typeorm', () => ({
   })),
   Repository: vi.fn(),
   In: vi.fn((arr) => arr)
-}))
+  }
+})
 
 vi.mock('../../src/main/services/logger', () => ({
   createLogger: vi.fn(() => ({

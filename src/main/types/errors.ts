@@ -147,6 +147,7 @@ export function getErrorMessage(error: unknown): string {
     // BaseError messages are developer-controlled and safe
     return error.message
   }
+  if (typeof error === 'string') { return error; }
   if (error instanceof Error) {
     // In production, return a generic message to avoid leaking sensitive info
     // (e.g., database connection strings, file paths, server names)

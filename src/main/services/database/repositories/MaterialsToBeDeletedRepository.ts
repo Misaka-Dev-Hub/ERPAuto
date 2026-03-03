@@ -79,31 +79,86 @@ export class MaterialsToBeDeletedRepository {
       failed: 0
     }
 
+    if (!materials.length) return stats
+
     try {
       const repo = await this.getRepository()
 
-      for (const material of materials) {
-        if (!material.materialCode?.trim()) {
-          stats.failed++
-          continue
-        }
+      const validMaterials = materials.filter((m) => m.materialCode?.trim())
+      stats.failed = materials.length - validMaterials.length
 
-        try {
-          let entity = await repo.findOne({ where: { materialCode: material.materialCode } })
+      if (validMaterials.length === 0) return stats
 
-          if (entity) {
-            entity.managerName = material.managerName
-          } else {
-            entity = repo.create({
-              materialCode: material.materialCode,
-              managerName: material.managerName
-            })
+      const isSqlServer = repo.manager.connection.options.type === 'mssql'
+
+      if (isSqlServer) {
+        // Use optimized MERGE statement for SQL Server
+        const tableName = repo.metadata.tableName
+
+        // Execute in smaller batches if necessary to avoid parameter limits
+        const batchSize = 1000
+        for (let i = 0; i < validMaterials.length; i += batchSize) {
+          const batch = validMaterials.slice(i, i + batchSize)
+
+          let valuesSql: string[] = []
+          let params: any[] = []
+
+          batch.forEach((material, idx) => {
+            const mCodeParam = `@${idx * 2}`
+            const mNameParam = `@${idx * 2 + 1}`
+            valuesSql.push(`(${mCodeParam}, ${mNameParam})`)
+            params.push(material.materialCode)
+            params.push(material.managerName || null)
+          })
+
+          const sqlString = `
+            MERGE ${tableName} AS target
+            USING (VALUES ${valuesSql.join(', ')}) AS source (MaterialCode, ManagerName)
+            ON target.MaterialCode = source.MaterialCode
+            WHEN MATCHED THEN UPDATE SET ManagerName = source.ManagerName
+            WHEN NOT MATCHED THEN INSERT (MaterialCode, ManagerName) VALUES (source.MaterialCode, source.ManagerName);
+          `
+
+          try {
+            await repo.query(sqlString, params)
+            stats.success += batch.length
+          } catch (e) {
+            stats.failed += batch.length
           }
+        }
+      } else {
+        // MySQL handles orUpdate cleanly
+        try {
+          await repo
+            .createQueryBuilder()
+            .insert()
+            .into(MaterialsToBeDeleted)
+            .values(validMaterials)
+            .orUpdate(['ManagerName'], ['MaterialCode'])
+            .execute()
 
-          await repo.save(entity)
-          stats.success++
-        } catch {
-          stats.failed++
+          stats.success = validMaterials.length
+        } catch (insertError) {
+          // Fallback to iterative if batch fails (e.g., driver issues)
+          for (const material of validMaterials) {
+            try {
+              let entity = await repo.findOne({ where: { materialCode: material.materialCode } })
+
+              if (entity) {
+                entity.managerName = material.managerName
+              } else {
+                entity = repo.create({
+                  materialCode: material.materialCode,
+                  managerName: material.managerName
+                })
+              }
+
+              await repo.save(entity)
+              stats.success++
+            } catch {
+              stats.failed++
+            }
+          }
         }
       }
 
@@ -261,6 +316,52 @@ export class MaterialsToBeDeletedRepository {
       return await repo.count()
     } catch {
       return 0
+    }
+  }
+
+  /**
+   * Get comprehensive statistics
+   */
+  async getStatistics(): Promise<any> {
+    try {
+      const repo = await this.getRepository()
+
+      const statsQuery = repo
+        .createQueryBuilder('m')
+        .select('COUNT(*)', 'totalMaterials')
+        .addSelect('COUNT(DISTINCT m.managerName)', 'uniqueManagers')
+        .where('m.materialCode IS NOT NULL')
+
+      const statsResult = await statsQuery.getRawOne()
+
+      const managerQuery = repo
+        .createQueryBuilder('m')
+        .select('m.managerName', 'managerName')
+        .addSelect('COUNT(*)', 'count')
+        .where('m.managerName IS NOT NULL')
+        .groupBy('m.managerName')
+        .orderBy('count', 'DESC')
+
+      const managerResult = await managerQuery.getRawMany()
+
+      const materialsPerManager = managerResult.map(row => ({
+        [row.managerName]: parseInt(row.count, 10) || 0
+      }))
+
+      return {
+        totalMaterials: parseInt(statsResult?.totalMaterials || '0', 10),
+        uniqueManagers: parseInt(statsResult?.uniqueManagers || '0', 10),
+        materialsPerManager
+      }
+    } catch (error) {
+      log.error('Get statistics error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return {
+        totalMaterials: 0,
+        uniqueManagers: 0,
+        materialsPerManager: []
+      }
     }
   }
 }

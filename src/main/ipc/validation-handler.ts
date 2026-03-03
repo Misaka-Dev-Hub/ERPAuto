@@ -8,10 +8,9 @@
  */
 
 import { ipcMain } from 'electron'
-import { MySqlService } from '../services/database/mysql'
-import { SqlServerService } from '../services/database/sql-server'
-import { MaterialsToBeDeletedDAO } from '../services/database/materials-to-be-deleted-dao'
-import { DiscreteMaterialPlanDAO } from '../services/database/discrete-material-plan-dao'
+import { getDataSource } from '../services/database/data-source'
+import { MaterialsToBeDeletedRepository } from '../services/database/repositories/MaterialsToBeDeletedRepository'
+import { DiscreteMaterialPlanRepository } from '../services/database/repositories/DiscreteMaterialPlanRepository'
 import { createLogger } from '../services/logger'
 import type {
   ValidationRequest,
@@ -53,38 +52,7 @@ export function clearSharedProductionIds(): void {
   sharedProductionIds.clear()
 }
 
-/**
- * Get database service for validation operations (MySQL or SQL Server)
- */
-async function getValidationDatabaseService(): Promise<MySqlService | SqlServerService> {
-  const dbType = process.env.DB_TYPE?.toLowerCase()
 
-  if (dbType === 'sqlserver' || dbType === 'mssql') {
-    const sqlServerService = new SqlServerService({
-      server: process.env.DB_SERVER || 'localhost',
-      port: parseInt(process.env.DB_SQLSERVER_PORT || '1433', 10),
-      user: process.env.DB_USERNAME || 'sa',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || '',
-      options: {
-        encrypt: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes',
-        trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes'
-      }
-    })
-    await sqlServerService.connect()
-    return sqlServerService
-  } else {
-    const mysqlService = new MySqlService({
-      host: process.env.DB_MYSQL_HOST || 'localhost',
-      port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
-      user: process.env.DB_USERNAME || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || ''
-    })
-    await mysqlService.connect()
-    return mysqlService
-  }
-}
 
 /**
  * Get table name based on database type
@@ -140,9 +108,9 @@ function identifyInputType(input: string): 'production_id' | 'order_number' | 'u
  * Get source numbers from inputs
  */
 async function getSourceNumbersFromInputs(
-  inputs: string[],
-  dbService: MySqlService | SqlServerService
+  inputs: string[]
 ): Promise<string[]> {
+  const dataSource = await (await import('../services/database/data-source')).initializeDataSource()
   const productionIds: string[] = []
   const orderNumbers: string[] = []
   const dbType = process.env.DB_TYPE?.toLowerCase()
@@ -157,31 +125,18 @@ async function getSourceNumbersFromInputs(
     }
   }
 
-  // Query production contract data for production IDs
-  // Table name in MySQL: productionContractData_26年压力表合同数据
-  // Column name: 生产订单号 (SourceNumber)
   if (productionIds.length > 0) {
     const contractTableName = getTableName('productionContractData_26年压力表合同数据')
 
     if (isSqlServer) {
-      const sql = require('mssql')
-      const placeholders = productionIds.map((_, idx) => `@p${idx}`).join(',')
-      const params: Record<string, { value: string; type: any }> = {}
-
-      productionIds.forEach((id, idx) => {
-        params[`p${idx}`] = { value: id, type: sql.NVarChar }
-      })
-
+      const placeholders = productionIds.map((_, idx) => `@${idx}`).join(',')
       const contractSql = `
         SELECT DISTINCT 生产订单号
         FROM ${contractTableName}
         WHERE 总排号 IN (${placeholders})
       `
-      const contractResult = await (dbService as SqlServerService).queryWithParams(
-        contractSql,
-        params
-      )
-      const dbOrderNumbers = contractResult.rows.map((row) => row.生产订单号 as string)
+      const contractResult = await dataSource.query(contractSql, productionIds)
+      const dbOrderNumbers = contractResult.map((row: any) => row.生产订单号 as string)
       orderNumbers.push(...dbOrderNumbers)
     } else {
       const placeholders = productionIds.map(() => '?').join(',')
@@ -190,13 +145,12 @@ async function getSourceNumbersFromInputs(
         FROM ${contractTableName}
         WHERE 总排号 IN (${placeholders})
       `
-      const contractResult = await (dbService as MySqlService).query(contractSql, productionIds)
-      const dbOrderNumbers = contractResult.rows.map((row) => row.生产订单号 as string)
+      const contractResult = await dataSource.query(contractSql, productionIds)
+      const dbOrderNumbers = contractResult.map((row: any) => row.生产订单号 as string)
       orderNumbers.push(...dbOrderNumbers)
     }
   }
 
-  // Deduplicate
   return [...new Set(orderNumbers)]
 }
 
@@ -212,10 +166,7 @@ export function registerValidationHandlers(): void {
   ipcMain.handle(
     'validation:validate',
     async (_event, request: ValidationRequest): Promise<ValidationResponse> => {
-      let dbService: MySqlService | SqlServerService | null = null
-
       try {
-        // Get current user info
         const sessionManager = (
           await import('../services/user/session-manager')
         ).SessionManager.getInstance()
@@ -238,8 +189,7 @@ export function registerValidationHandlers(): void {
 
         log.info('Starting validation', { mode: request.mode, user: username, isAdmin })
 
-        // Connect to database
-        dbService = await getValidationDatabaseService()
+        const dataSource = await (await import('../services/database/data-source')).initializeDataSource()
         const dbType = process.env.DB_TYPE?.toLowerCase()
         const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
 
@@ -264,19 +214,19 @@ export function registerValidationHandlers(): void {
               }
             }
 
-            sourceNumbers = await getSourceNumbersFromInputs(sharedIds, dbService)
+            sourceNumbers = await getSourceNumbersFromInputs(sharedIds)
             log.info(`Got ${sourceNumbers.length} source numbers from shared Production IDs`)
           } else if (request.productionIdFile) {
             // Read from file
             const inputs = readProductionIds(request.productionIdFile)
             log.info(`Read ${inputs.length} inputs from file`)
-            sourceNumbers = await getSourceNumbersFromInputs(inputs, dbService)
+            sourceNumbers = await getSourceNumbersFromInputs(inputs)
             log.info(`Got ${sourceNumbers.length} source numbers`)
           }
         }
 
         // Get material records from DiscreteMaterialPlanData
-        const materialDao = new DiscreteMaterialPlanDAO()
+        const materialDao = new DiscreteMaterialPlanRepository()
 
         let materialRecords: any[] = []
 
@@ -307,11 +257,9 @@ export function registerValidationHandlers(): void {
           FROM ${typeKeywordTableName}
           WHERE MaterialName IS NOT NULL
         `
-        const typeKeywordResult = isSqlServer
-          ? await (dbService as SqlServerService).query(typeKeywordSql)
-          : await (dbService as MySqlService).query(typeKeywordSql)
+        const typeKeywordResult = await dataSource.query(typeKeywordSql)
 
-        const typeKeywords = typeKeywordResult.rows.map((row) => ({
+        const typeKeywords = typeKeywordResult.map((row: any) => ({
           materialName: row.MaterialName as string,
           managerName: row.ManagerName as string
         }))
@@ -323,22 +271,20 @@ export function registerValidationHandlers(): void {
           FROM ${markedTableName}
           WHERE MaterialCode IS NOT NULL AND ManagerName IS NOT NULL
         `
-        const markedResult = isSqlServer
-          ? await (dbService as SqlServerService).query(markedSql)
-          : await (dbService as MySqlService).query(markedSql)
+        const markedResult = await dataSource.query(markedSql)
 
         const markedCodesDict = new Map<string, string>()
-        for (const row of markedResult.rows) {
+        for (const row of markedResult) {
           markedCodesDict.set(row.MaterialCode as string, row.ManagerName as string)
         }
 
         // Match materials
         const results: ValidationResult[] = []
         for (const record of materialRecords) {
-          const materialName = (record.MaterialName as string) || ''
-          const materialCode = (record.MaterialCode as string) || ''
-          const specification = (record.Specification as string) || ''
-          const model = (record.Model as string) || ''
+          const materialName = (record.materialName as string) || (record.MaterialName as string) || ''
+          const materialCode = (record.materialCode as string) || (record.MaterialCode as string) || ''
+          const specification = (record.specification as string) || (record.Specification as string) || ''
+          const model = (record.model as string) || (record.Model as string) || ''
 
           // Priority 1: Check MaterialsToBeDeleted (MaterialCode exact match)
           let managerName = markedCodesDict.get(materialCode) || null
@@ -359,7 +305,7 @@ export function registerValidationHandlers(): void {
           // Priority 3: User Override Match (only for non-admin users)
           // Override with current user's typeKeyword if available
           if (!isAdmin && username) {
-            const userKeywords = typeKeywords.filter((tk) => tk.managerName === username)
+            const userKeywords = typeKeywords.filter((tk: any) => tk.managerName === username)
             for (const userKeyword of userKeywords) {
               if (userKeyword.materialName && materialName.includes(userKeyword.materialName)) {
                 matchedTypeKeyword = userKeyword.materialName
@@ -402,15 +348,7 @@ export function registerValidationHandlers(): void {
           error: `Validation failed: ${message}`
         }
       } finally {
-        if (dbService) {
-          try {
-            await dbService.disconnect()
-          } catch (closeError) {
-            log.warn('Error disconnecting database', {
-              error: closeError instanceof Error ? closeError.message : String(closeError)
-            })
-          }
-        }
+        // Handled by TypeORM
       }
     }
   )
@@ -424,7 +362,7 @@ export function registerValidationHandlers(): void {
     'materials:upsertBatch',
     async (_event, request: MaterialUpsertBatchRequest): Promise<MaterialOperationResponse> => {
       try {
-        const dao = new MaterialsToBeDeletedDAO()
+        const dao = new MaterialsToBeDeletedRepository()
         const stats = await dao.upsertBatch(request.materials)
 
         return {
@@ -451,7 +389,7 @@ export function registerValidationHandlers(): void {
     'materials:delete',
     async (_event, request: MaterialDeleteRequest): Promise<MaterialOperationResponse> => {
       try {
-        const dao = new MaterialsToBeDeletedDAO()
+        const dao = new MaterialsToBeDeletedRepository()
         const count = await dao.deleteByMaterialCodes(request.materialCodes)
 
         return {
@@ -474,7 +412,7 @@ export function registerValidationHandlers(): void {
    */
   ipcMain.handle('materials:getManagers', async (_event): Promise<{ managers: string[] }> => {
     try {
-      const dao = new MaterialsToBeDeletedDAO()
+      const dao = new MaterialsToBeDeletedRepository()
       const managers = await dao.getManagers()
       return { managers }
     } catch (error) {
@@ -491,15 +429,13 @@ export function registerValidationHandlers(): void {
   ipcMain.handle(
     'materials:getByManager',
     async (_event, managerName: string): Promise<{ materials: MaterialRecordSummary[] }> => {
-      let dbService: MySqlService | SqlServerService | null = null
-
       try {
-        dbService = await getValidationDatabaseService()
+        const dataSource = await (await import('../services/database/data-source')).initializeDataSource()
         const dbType = process.env.DB_TYPE?.toLowerCase()
         const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
 
-        const dao = new MaterialsToBeDeletedDAO()
-        const materials = await dao.getMaterialsByManager(managerName)
+        const dao = new MaterialsToBeDeletedRepository()
+        const materials = await dao.getByManager(managerName)
 
         // Get material codes set for quick lookup
         const markedCodes = await dao.getAllMaterialCodes()
@@ -512,15 +448,12 @@ export function registerValidationHandlers(): void {
           let detailResult: any
 
           if (isSqlServer) {
-            const sql = require('mssql')
             const detailSql = `
               SELECT TOP 1 MaterialName, Specification, Model
               FROM ${detailTableName}
-              WHERE MaterialCode = @materialCode
+              WHERE MaterialCode = @0
             `
-            detailResult = await (dbService as SqlServerService).queryWithParams(detailSql, {
-              materialCode: { value: mat.materialCode, type: sql.NVarChar }
-            })
+            detailResult = await dataSource.query(detailSql, [mat.materialCode])
           } else {
             const detailSql = `
               SELECT MaterialName, Specification, Model
@@ -528,17 +461,17 @@ export function registerValidationHandlers(): void {
               WHERE MaterialCode = ?
               LIMIT 1
             `
-            detailResult = await (dbService as MySqlService).query(detailSql, [mat.materialCode])
+            detailResult = await dataSource.query(detailSql, [mat.materialCode])
           }
 
           enrichedMaterials.push({
             materialCode: mat.materialCode,
             materialName:
-              detailResult.rows.length > 0 ? (detailResult.rows[0].MaterialName as string) : '',
+              detailResult.length > 0 ? (detailResult[0].MaterialName as string) : '',
             specification:
-              detailResult.rows.length > 0 ? (detailResult.rows[0].Specification as string) : '',
-            model: detailResult.rows.length > 0 ? (detailResult.rows[0].Model as string) : '',
-            managerName: mat.managerName,
+              detailResult.length > 0 ? (detailResult[0].Specification as string) : '',
+            model: detailResult.length > 0 ? (detailResult[0].Model as string) : '',
+            managerName: mat.managerName || '',
             isMarked: markedCodes.has(mat.materialCode)
           })
         }
@@ -549,16 +482,6 @@ export function registerValidationHandlers(): void {
           error: error instanceof Error ? error.message : String(error)
         })
         return { materials: [] }
-      } finally {
-        if (dbService) {
-          try {
-            await dbService.disconnect()
-          } catch (closeError) {
-            log.warn('Error disconnecting database', {
-              error: closeError instanceof Error ? closeError.message : String(closeError)
-            })
-          }
-        }
       }
     }
   )
@@ -569,14 +492,12 @@ export function registerValidationHandlers(): void {
   ipcMain.handle(
     'materials:getAll',
     async (_event): Promise<{ materials: MaterialRecordSummary[] }> => {
-      let dbService: MySqlService | SqlServerService | null = null
-
       try {
-        dbService = await getValidationDatabaseService()
+        const dataSource = await (await import('../services/database/data-source')).initializeDataSource()
         const dbType = process.env.DB_TYPE?.toLowerCase()
         const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
 
-        const dao = new MaterialsToBeDeletedDAO()
+        const dao = new MaterialsToBeDeletedRepository()
         const materials = await dao.getAllRecords()
         const markedCodes = await dao.getAllMaterialCodes()
 
@@ -587,15 +508,12 @@ export function registerValidationHandlers(): void {
           let detailResult: any
 
           if (isSqlServer) {
-            const sql = require('mssql')
             const detailSql = `
               SELECT TOP 1 MaterialName, Specification, Model
               FROM ${detailTableName}
-              WHERE MaterialCode = @materialCode
+              WHERE MaterialCode = @0
             `
-            detailResult = await (dbService as SqlServerService).queryWithParams(detailSql, {
-              materialCode: { value: mat.materialCode, type: sql.NVarChar }
-            })
+            detailResult = await dataSource.query(detailSql, [mat.materialCode])
           } else {
             const detailSql = `
               SELECT MaterialName, Specification, Model
@@ -603,17 +521,17 @@ export function registerValidationHandlers(): void {
               WHERE MaterialCode = ?
               LIMIT 1
             `
-            detailResult = await (dbService as MySqlService).query(detailSql, [mat.materialCode])
+            detailResult = await dataSource.query(detailSql, [mat.materialCode])
           }
 
           enrichedMaterials.push({
             materialCode: mat.materialCode,
             materialName:
-              detailResult.rows.length > 0 ? (detailResult.rows[0].MaterialName as string) : '',
+              detailResult.length > 0 ? (detailResult[0].MaterialName as string) : '',
             specification:
-              detailResult.rows.length > 0 ? (detailResult.rows[0].Specification as string) : '',
-            model: detailResult.rows.length > 0 ? (detailResult.rows[0].Model as string) : '',
-            managerName: mat.managerName,
+              detailResult.length > 0 ? (detailResult[0].Specification as string) : '',
+            model: detailResult.length > 0 ? (detailResult[0].Model as string) : '',
+            managerName: mat.managerName || '',
             isMarked: markedCodes.has(mat.materialCode)
           })
         }
@@ -624,16 +542,6 @@ export function registerValidationHandlers(): void {
           error: error instanceof Error ? error.message : String(error)
         })
         return { materials: [] }
-      } finally {
-        if (dbService) {
-          try {
-            await dbService.disconnect()
-          } catch (closeError) {
-            log.warn('Error disconnecting database', {
-              error: closeError instanceof Error ? closeError.message : String(closeError)
-            })
-          }
-        }
       }
     }
   )
@@ -643,7 +551,7 @@ export function registerValidationHandlers(): void {
    */
   ipcMain.handle('materials:getStatistics', async (_event): Promise<{ stats: any }> => {
     try {
-      const dao = new MaterialsToBeDeletedDAO()
+      const dao = new MaterialsToBeDeletedRepository()
       const stats = await dao.getStatistics()
       return { stats }
     } catch (error) {
@@ -689,13 +597,11 @@ export function registerValidationHandlers(): void {
       materialCodes?: string[]
       error?: string
     }> => {
-      let dbService: MySqlService | SqlServerService | null = null
       const sessionManager = (
         await import('../services/user/session-manager')
       ).SessionManager.getInstance()
 
       try {
-        // Get current user
         const userInfo = sessionManager.getUserInfo()
         if (!userInfo) {
           return {
@@ -711,8 +617,7 @@ export function registerValidationHandlers(): void {
 
         log.info(`User: ${username}, isAdmin: ${isAdmin}`)
 
-        // Connect to database
-        dbService = await getValidationDatabaseService()
+        const dataSource = await (await import('../services/database/data-source')).initializeDataSource()
 
         // 1. Get order numbers from shared Production IDs
         const sharedIds = getSharedProductionIds()
@@ -720,7 +625,7 @@ export function registerValidationHandlers(): void {
 
         if (sharedIds.length > 0) {
           log.info(`Using ${sharedIds.length} shared Production IDs`)
-          orderNumbers = await getSourceNumbersFromInputs(sharedIds, dbService)
+          orderNumbers = await getSourceNumbersFromInputs(sharedIds)
           log.info(`Got ${orderNumbers.length} order numbers`)
         }
 
@@ -735,33 +640,28 @@ export function registerValidationHandlers(): void {
             FROM ${markedTableName}
             WHERE MaterialCode IS NOT NULL
           `
-          const result = isSqlServer
-            ? await (dbService as SqlServerService).query(allCodesSql)
-            : await (dbService as MySqlService).query(allCodesSql)
+          const result = await dataSource.query(allCodesSql)
 
-          materialCodes = result.rows.map((row) => row.MaterialCode as string).filter(Boolean)
+          materialCodes = result.map((row: any) => row.MaterialCode as string).filter(Boolean)
           log.info(`Admin user: got ${materialCodes.length} materials`)
         } else {
           // Regular users only see their own materials
           if (isSqlServer) {
-            const sql = require('mssql')
             const userMaterialsSql = `
               SELECT MaterialCode
               FROM ${markedTableName}
-              WHERE ManagerName = @username AND MaterialCode IS NOT NULL
+              WHERE ManagerName = @0 AND MaterialCode IS NOT NULL
             `
-            const result = await (dbService as SqlServerService).queryWithParams(userMaterialsSql, {
-              username: { value: username, type: sql.NVarChar }
-            })
-            materialCodes = result.rows.map((row) => row.MaterialCode as string).filter(Boolean)
+            const result = await dataSource.query(userMaterialsSql, [username])
+            materialCodes = result.map((row: any) => row.MaterialCode as string).filter(Boolean)
           } else {
             const userMaterialsSql = `
               SELECT MaterialCode
               FROM ${markedTableName}
               WHERE ManagerName = ? AND MaterialCode IS NOT NULL
             `
-            const result = await (dbService as MySqlService).query(userMaterialsSql, [username])
-            materialCodes = result.rows.map((row) => row.MaterialCode as string).filter(Boolean)
+            const result = await dataSource.query(userMaterialsSql, [username])
+            materialCodes = result.map((row: any) => row.MaterialCode as string).filter(Boolean)
           }
           log.info(`Regular user: got ${materialCodes.length} materials`)
         }
@@ -779,16 +679,6 @@ export function registerValidationHandlers(): void {
         return {
           success: false,
           error: `获取清理数据失败：${message}`
-        }
-      } finally {
-        if (dbService) {
-          try {
-            await dbService.disconnect()
-          } catch (closeError) {
-            log.warn('Error disconnecting database', {
-              error: closeError instanceof Error ? closeError.message : String(closeError)
-            })
-          }
         }
       }
     }

@@ -54,6 +54,10 @@ export class DiscreteMaterialPlanRepository {
     try {
       const repo = await this.getRepository()
 
+      // We will use raw query because of window functions not fully supported in TypeORM query builder yet.
+      // Make sure table name matches entity name mapping correctly for both databases.
+      const tableName = repo.metadata.tableName
+
       const query = `
         WITH RankedRecords AS (
           SELECT *,
@@ -61,7 +65,7 @@ export class DiscreteMaterialPlanRepository {
               PARTITION BY MaterialCode
               ORDER BY CreateDate ASC, SequenceNumber ASC
             ) AS rn
-          FROM DiscreteMaterialPlanData
+          FROM ${tableName}
           WHERE MaterialCode IS NOT NULL
         )
         SELECT * FROM RankedRecords WHERE rn = 1
@@ -116,23 +120,48 @@ export class DiscreteMaterialPlanRepository {
       const batchSize = 2000
       const allResults: DiscreteMaterialPlan[] = []
 
+      const tableName = repo.metadata.tableName
+      const isSqlServer = repo.manager.connection.options.type === 'mssql'
+
       for (let i = 0; i < sourceNumbers.length; i += batchSize) {
         const batch = sourceNumbers.slice(i, i + batchSize)
 
-        const query = `
-          WITH RankedRecords AS (
-            SELECT *,
-              ROW_NUMBER() OVER (
-                PARTITION BY MaterialCode
-                ORDER BY CreateDate ASC, SequenceNumber ASC
-              ) AS rn
-            FROM DiscreteMaterialPlanData
-            WHERE SourceNumber IN (?) AND MaterialCode IS NOT NULL
-          )
-          SELECT * FROM RankedRecords WHERE rn = 1
-        `
+        let query = ''
+        let params: any[] = []
 
-        const results = await repo.query(query, [batch])
+        if (isSqlServer) {
+          const placeholders = batch.map((_, idx) => `@${idx}`).join(',')
+          query = `
+            WITH RankedRecords AS (
+              SELECT *,
+                ROW_NUMBER() OVER (
+                  PARTITION BY MaterialCode
+                  ORDER BY CreateDate ASC, SequenceNumber ASC
+                ) AS rn
+              FROM ${tableName}
+              WHERE SourceNumber IN (${placeholders}) AND MaterialCode IS NOT NULL
+            )
+            SELECT * FROM RankedRecords WHERE rn = 1
+          `
+          params = batch
+        } else {
+          const placeholders = batch.map(() => '?').join(',')
+          query = `
+            WITH RankedRecords AS (
+              SELECT *,
+                ROW_NUMBER() OVER (
+                  PARTITION BY MaterialCode
+                  ORDER BY CreateDate ASC, SequenceNumber ASC
+                ) AS rn
+              FROM ${tableName}
+              WHERE SourceNumber IN (${placeholders}) AND MaterialCode IS NOT NULL
+            )
+            SELECT * FROM RankedRecords WHERE rn = 1
+          `
+          params = batch
+        }
+
+        const results = await repo.query(query, params)
         allResults.push(...results)
       }
 
