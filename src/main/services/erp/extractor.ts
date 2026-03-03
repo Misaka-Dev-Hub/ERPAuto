@@ -74,6 +74,14 @@ export class ExtractorService {
         const mergeResult = await this.mergeFiles(result.downloadedFiles)
         result.mergedFile = mergeResult.mergedFile
         result.recordCount = mergeResult.recordCount
+
+        // Add merge error to result if any
+        if (mergeResult.error) {
+          result.errors.push(mergeResult.error)
+        }
+
+        // Always clean up temporary files regardless of merge success
+        await this.cleanupTempFiles(result.downloadedFiles)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
@@ -235,16 +243,17 @@ export class ExtractorService {
    * Uses ExcelParser to parse and combine all material plans
    *
    * @param filePaths - Array of downloaded Excel file paths
-   * @returns Merged file path and total record count
+   * @returns Merged file path, total record count, and optional error message
    */
   private async mergeFiles(
     filePaths: string[]
-  ): Promise<{ mergedFile: string | null; recordCount: number }> {
+  ): Promise<{ mergedFile: string | null; recordCount: number; error?: string }> {
     if (filePaths.length === 0) {
       return { mergedFile: null, recordCount: 0 }
     }
 
-    const parser = new ExcelParser({ verbose: false })
+    console.log(`[Extractor] Starting merge of ${filePaths.length} files`)
+    const parser = new ExcelParser({ verbose: true })
 
     // Collect all orders with full order info and materials
     // Each order has: { orderInfo: OrderHeader, materials: MaterialRow[] }
@@ -253,14 +262,17 @@ export class ExtractorService {
     // Parse each downloaded file and collect orders
     for (const filePath of filePaths) {
       try {
+        console.log(`[Extractor] Parsing file: ${filePath}`)
         await parser.parse(filePath)
         // After parse(), the parser stores orders internally as lastOrders
         const orders = (parser as any).lastOrders
+        console.log(`[Extractor] Parsed ${orders?.length || 0} orders from ${filePath}`)
         if (orders && Array.isArray(orders)) {
           allOrders.push(...orders)
         }
       } catch (error) {
-        console.error(`Failed to parse file ${filePath}:`, error)
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        console.error(`[Extractor] Failed to parse file ${filePath}:`, errorMsg)
       }
     }
 
@@ -270,7 +282,10 @@ export class ExtractorService {
       recordCount += order.materials.length
     }
 
+    console.log(`[Extractor] Total orders: ${allOrders.length}, total records: ${recordCount}`)
+
     if (recordCount === 0) {
+      console.warn('[Extractor] No records found in any of the downloaded files')
       return { mergedFile: null, recordCount: 0 }
     }
 
@@ -282,10 +297,20 @@ export class ExtractorService {
       .slice(0, 14)
     const outputPath = path.join(this.downloadDir, `merged_${timestamp}.xlsx`)
 
-    // Save with full 31 columns matching ExcelParser.saveAsExcel format
-    await this.saveMergedOrders(allOrders, outputPath)
-
-    return { mergedFile: outputPath, recordCount }
+    // Save with error handling
+    try {
+      console.log(`[Extractor] Saving merged file to: ${outputPath}`)
+      await this.saveMergedOrders(allOrders, outputPath)
+      console.log(`[Extractor] Successfully saved merged file with ${recordCount} records`)
+      return { mergedFile: outputPath, recordCount }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      const errorStack = error instanceof Error ? error.stack : ''
+      console.error(`[Extractor] Failed to save merged file: ${errorMsg}`)
+      console.error(`[Extractor] Error stack: ${errorStack}`)
+      // Return parsed record count and error info even if save fails
+      return { mergedFile: null, recordCount, error: `保存合并文件失败: ${errorMsg}` }
+    }
   }
 
   /**
@@ -296,7 +321,12 @@ export class ExtractorService {
     orders: Array<{ orderInfo: any; materials: any[] }>,
     outputPath: string
   ): Promise<void> {
-    const ExcelJS = await import('exceljs')
+    console.log(`[Extractor] Loading ExcelJS...`)
+    const ExcelJSModule = await import('exceljs')
+    // Handle both ESM and CommonJS module formats
+    const ExcelJS = ExcelJSModule.default || ExcelJSModule
+    console.log(`[Extractor] ExcelJS loaded, creating workbook...`)
+
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Data')
 
@@ -334,6 +364,7 @@ export class ExtractorService {
       { header: '打印日期', key: 'printDate', width: 20 }
     ]
 
+    console.log(`[Extractor] Adding ${orders.length} orders to worksheet...`)
     // Add data rows - merge orderInfo with each material
     for (const order of orders) {
       const { orderInfo, materials } = order
@@ -377,7 +408,24 @@ export class ExtractorService {
       }
     }
 
+    console.log(`[Extractor] Writing file to ${outputPath}...`)
     await workbook.xlsx.writeFile(outputPath)
-    console.log(`Merged ${orders.length} orders to ${outputPath}`)
+    console.log(`[Extractor] File saved successfully: ${outputPath}`)
+  }
+
+  /**
+   * Clean up temporary batch files after merging
+   * @param filePaths - Array of temporary file paths to delete
+   */
+  private async cleanupTempFiles(filePaths: string[]): Promise<void> {
+    for (const filePath of filePaths) {
+      try {
+        await fs.unlink(filePath)
+        console.log(`Deleted temporary file: ${filePath}`)
+      } catch (error) {
+        // Log error but don't fail the main process
+        console.error(`Failed to delete temporary file ${filePath}:`, error)
+      }
+    }
   }
 }
