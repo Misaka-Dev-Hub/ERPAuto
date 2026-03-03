@@ -145,6 +145,7 @@ function validateEditableFields(settings: Partial<SettingsData>): {
 export class ConfigManager {
   private static instance: ConfigManager | null = null
   private envPath: string
+  private backupPath: string
   private configCache: Map<string, string> = new Map()
   private initialized: boolean = false
 
@@ -153,6 +154,7 @@ export class ConfigManager {
       return
     }
     this.envPath = path.resolve(__dirname, '../../.env')
+    this.backupPath = path.resolve(__dirname, '../../.env.backup')
     this.initialized = true
   }
 
@@ -598,5 +600,40 @@ export class ConfigManager {
    */
   public getDefaultSettings(): SettingsData {
     return DEFAULT_SETTINGS
+  }
+
+  /**
+   * Backup current .env file
+   */
+  private async backupEnvFile(): Promise<boolean> {
+    try {
+      if (fs.existsSync(this.envPath)) {
+        fs.copyFileSync(this.envPath, this.backupPath)
+        console.log('[ConfigManager] Backup created', this.backupPath)
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('[ConfigManager] Failed to backup .env file:', error)
+      return false
+    }
+  }
+
+  /**
+   * Restore .env file from backup
+   */
+  private async restoreBackup(): Promise<boolean> {
+    try {
+      if (fs.existsSync(this.backupPath)) {
+        fs.copyFileSync(this.backupPath, this.envPath)
+        await this.loadEnvFile()
+        console.log('[ConfigManager] Restored from backup')
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('[ConfigManager] Failed to restore backup:', error)
+      return false
+    }
   }
 }
