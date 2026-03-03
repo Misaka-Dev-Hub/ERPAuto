@@ -35,6 +35,7 @@ const sharedProductionIds = new Set<string>()
  * Set shared Production IDs
  */
 export function setSharedProductionIds(ids: string[]): void {
+  sharedProductionIds.clear()
   ids.forEach((id) => sharedProductionIds.add(id))
 }
 
