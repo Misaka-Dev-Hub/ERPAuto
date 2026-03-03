@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { MySqlConfig, SqlServerConfig } from '../main/types/ipc-api.types'
 import type { ExtractorInput } from '../main/types/extractor.types'
-import type { CleanerInput } from '../main/types/cleaner.types'
+import type { CleanerInput, ExportResultItem } from '../main/types/cleaner.types'
 import type { ResolverInput } from '../main/ipc/resolver-handler'
 import type { LoginRequest } from '../main/ipc/auth-handler'
 import type { UserInfo } from '../main/types/user.types'
@@ -31,7 +31,8 @@ const api = {
 
   // Cleaner service
   cleaner: {
-    runCleaner: (input: CleanerInput) => ipcRenderer.invoke('cleaner:run', input)
+    runCleaner: (input: CleanerInput) => ipcRenderer.invoke('cleaner:run', input),
+    exportResults: (items: ExportResultItem[]) => ipcRenderer.invoke('cleaner:exportResults', items)
   },
 
   // Order number resolver

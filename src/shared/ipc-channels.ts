@@ -15,6 +15,7 @@ export const IPC_CHANNELS = {
 
   // Cleaner service
   CLEANER_RUN: 'cleaner:run',
+  CLEANER_EXPORT_RESULTS: 'cleaner:exportResults',
 
   // Database service - MySQL
   DATABASE_MYSQL_CONNECT: 'database:mysql:connect',

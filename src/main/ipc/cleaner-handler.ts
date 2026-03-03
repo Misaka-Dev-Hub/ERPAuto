@@ -3,10 +3,16 @@ import { ErpAuthService } from '../services/erp/erp-auth'
 import { CleanerService } from '../services/erp/cleaner'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
 import { MySqlService } from '../services/database/mysql'
+import { ResultExporter } from '../services/excel/result-exporter'
 import { createLogger } from '../services/logger'
 import { withErrorHandling, type IpcResult } from './index'
 import { ErpConnectionError, ValidationError, DatabaseQueryError } from '../types/errors'
-import type { CleanerInput, CleanerResult } from '../types/cleaner.types'
+import type {
+  CleanerInput,
+  CleanerResult,
+  ExportResultItem,
+  ExportResultResponse
+} from '../types/cleaner.types'
 
 const log = createLogger('CleanerHandler')
 
@@ -150,6 +156,37 @@ export function registerCleanerHandlers(): void {
           }
         }
       }, 'cleaner:run')
+    }
+  )
+
+  /**
+   * Export validation results to Excel
+   */
+  ipcMain.handle(
+    'cleaner:exportResults',
+    async (_event, items: ExportResultItem[]): Promise<ExportResultResponse> => {
+      try {
+        log.info('Exporting validation results', { count: items.length })
+
+        if (!items || items.length === 0) {
+          return {
+            success: false,
+            error: '没有数据可导出'
+          }
+        }
+
+        const exporter = new ResultExporter()
+        const result = await exporter.exportValidationResults(items)
+
+        return result
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        log.error('Export handler failed', { error: errorMessage })
+        return {
+          success: false,
+          error: errorMessage
+        }
+      }
     }
   )
 }
