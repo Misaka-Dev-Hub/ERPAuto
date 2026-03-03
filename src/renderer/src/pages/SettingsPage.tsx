@@ -60,7 +60,17 @@ const SettingsPage: React.FC = () => {
 
   const handleSaveSettings = async () => {
     try {
-      const result = await window.electron.settings.saveSettings(settings as any)
+      // Only send UI-supported fields (double safety)
+      const partialSettings = {
+        erp: {
+          url: settings.erp?.url,
+          username: settings.erp?.username,
+          password: settings.erp?.password
+        }
+      }
+
+      const result = await window.electron.settings.saveSettings(partialSettings as any)
+
       if (result.success) {
         setIsModified(false)
         showMessage('success', '设置保存成功')

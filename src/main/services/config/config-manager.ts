@@ -9,19 +9,15 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
+import { createLogger } from '../logger'
 import type {
   SettingsData,
-  ErpConfig,
-  DatabaseConfig,
-  PathsConfig,
-  ExtractionConfig,
-  ValidationConfig,
-  UiConfig,
-  ExecutionConfig,
   DatabaseType,
   MatchMode,
   ValidationDataSource
 } from '../../types/settings.types'
+
+const log = createLogger('ConfigManager')
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -77,11 +73,82 @@ const DEFAULT_SETTINGS: SettingsData = {
 }
 
 /**
+ * Check if value is a plain object
+ */
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Deep merge two objects, only updating fields present in target
+ * Preserves all fields from source that are not in target
+ */
+function deepMerge<T>(source: T, target: Partial<T>): T {
+  const result = { ...source }
+
+  for (const key in target) {
+    if (key in target) {
+      const targetValue = target[key]
+      const sourceValue = result[key]
+
+      if (isObject(targetValue) && isObject(sourceValue)) {
+        result[key] = deepMerge(
+          sourceValue as T[Extract<keyof T, string>],
+          targetValue as Partial<T[Extract<keyof T, string>]>
+        )
+      } else if (targetValue !== undefined) {
+        result[key] = targetValue as T[Extract<keyof T, string>]
+      }
+    }
+  }
+
+  return result
+}
+
+/**
+ * UI editable field whitelist
+ * Fields that can be modified through the settings UI
+ */
+const UI_EDITABLE_FIELDS: string[] = [
+  'erp.url',
+  'erp.username',
+  'erp.password'
+  // Add more fields as UI expands
+]
+
+/**
+ * Validate that settings only contain editable fields
+ */
+function validateEditableFields(settings: Partial<SettingsData>): {
+  valid: boolean
+  invalidFields: string[]
+} {
+  const invalidFields: string[] = []
+
+  for (const [section, values] of Object.entries(settings)) {
+    if (values && typeof values === 'object') {
+      for (const field of Object.keys(values)) {
+        const fieldPath = `${section}.${field}`
+        if (!UI_EDITABLE_FIELDS.includes(fieldPath)) {
+          invalidFields.push(fieldPath)
+        }
+      }
+    }
+  }
+
+  return {
+    valid: invalidFields.length === 0,
+    invalidFields
+  }
+}
+
+/**
  * Configuration Manager Class
  */
 export class ConfigManager {
   private static instance: ConfigManager | null = null
   private envPath: string
+  private backupPath: string
   private configCache: Map<string, string> = new Map()
   private initialized: boolean = false
 
@@ -90,6 +157,7 @@ export class ConfigManager {
       return
     }
     this.envPath = path.resolve(__dirname, '../../.env')
+    this.backupPath = path.resolve(__dirname, '../../.env.backup')
     this.initialized = true
   }
 
@@ -115,6 +183,9 @@ export class ConfigManager {
    */
   private async loadEnvFile(): Promise<void> {
     try {
+      // Clear cache before loading
+      this.configCache.clear()
+
       if (fs.existsSync(this.envPath)) {
         const content = fs.readFileSync(this.envPath, 'utf-8')
         const lines = content.split('\n')
@@ -185,21 +256,21 @@ export class ConfigManager {
       lines.push('# ===========================')
       lines.push('# ERP 系统配置')
       lines.push('# ===========================')
-      lines.push(`ERP_URL=${this.configCache.get('erp.url') || DEFAULT_SETTINGS.erp.url}`)
+      lines.push(`ERP_URL=${this.configCache.get('ERP_URL') || DEFAULT_SETTINGS.erp.url}`)
       lines.push(
-        `ERP_USERNAME=${this.configCache.get('erp.username') || DEFAULT_SETTINGS.erp.username}`
+        `ERP_USERNAME=${this.configCache.get('ERP_USERNAME') || DEFAULT_SETTINGS.erp.username}`
       )
       lines.push(
-        `ERP_PASSWORD=${this.configCache.get('erp.password') || DEFAULT_SETTINGS.erp.password}`
+        `ERP_PASSWORD=${this.configCache.get('ERP_PASSWORD') || DEFAULT_SETTINGS.erp.password}`
       )
       lines.push(
-        `ERP_HEADLESS=${this.configCache.get('erp.headless') || DEFAULT_SETTINGS.erp.headless}`
+        `ERP_HEADLESS=${this.configCache.get('ERP_HEADLESS') || DEFAULT_SETTINGS.erp.headless}`
       )
       lines.push(
-        `ERP_IGNORE_HTTPS_ERRORS=${this.configCache.get('erp.ignoreHttpsErrors') || DEFAULT_SETTINGS.erp.ignoreHttpsErrors}`
+        `ERP_IGNORE_HTTPS_ERRORS=${this.configCache.get('ERP_IGNORE_HTTPS_ERRORS') || DEFAULT_SETTINGS.erp.ignoreHttpsErrors}`
       )
       lines.push(
-        `ERP_AUTO_CLOSE_BROWSER=${this.configCache.get('erp.autoCloseBrowser') || DEFAULT_SETTINGS.erp.autoCloseBrowser}`
+        `ERP_AUTO_CLOSE_BROWSER=${this.configCache.get('ERP_AUTO_CLOSE_BROWSER') || DEFAULT_SETTINGS.erp.autoCloseBrowser}`
       )
       lines.push('')
 
@@ -208,10 +279,10 @@ export class ConfigManager {
       lines.push('# 数据库配置 - SQL Server')
       lines.push('# ===========================')
       lines.push(`# DB_TYPE=sqlserver`)
-      lines.push(`# DB_SERVER=${this.configCache.get('database.server') || ''}`)
-      lines.push(`# DB_NAME=${this.configCache.get('database.database') || ''}`)
-      lines.push(`# DB_USERNAME=${this.configCache.get('database.username') || ''}`)
-      lines.push(`# DB_PASSWORD=${this.configCache.get('database.password') || ''}`)
+      lines.push(`# DB_SERVER=${this.configCache.get('DB_SERVER') || ''}`)
+      lines.push(`# DB_NAME=${this.configCache.get('DB_NAME') || ''}`)
+      lines.push(`# DB_USERNAME=${this.configCache.get('DB_USERNAME') || ''}`)
+      lines.push(`# DB_PASSWORD=${this.configCache.get('DB_PASSWORD') || ''}`)
       lines.push(`DB_SQLSERVER_DRIVER=ODBC Driver 18 for SQL Server`)
       lines.push(`DB_TRUST_SERVER_CERTIFICATE=yes`)
       lines.push('')
@@ -221,22 +292,22 @@ export class ConfigManager {
       lines.push('# 数据库配置 - MySQL (切换时使用)')
       lines.push('# ===========================')
       lines.push(
-        `DB_TYPE=${this.configCache.get('database.dbType') || DEFAULT_SETTINGS.database.dbType}`
+        `DB_TYPE=${this.configCache.get('DB_TYPE') || DEFAULT_SETTINGS.database.dbType}`
       )
       lines.push(
-        `DB_NAME=${this.configCache.get('database.database') || DEFAULT_SETTINGS.database.database}`
+        `DB_NAME=${this.configCache.get('DB_NAME') || DEFAULT_SETTINGS.database.database}`
       )
       lines.push(
-        `DB_USERNAME=${this.configCache.get('database.username') || DEFAULT_SETTINGS.database.username}`
+        `DB_USERNAME=${this.configCache.get('DB_USERNAME') || DEFAULT_SETTINGS.database.username}`
       )
       lines.push(
-        `DB_PASSWORD=${this.configCache.get('database.password') || DEFAULT_SETTINGS.database.password}`
+        `DB_PASSWORD=${this.configCache.get('DB_PASSWORD') || DEFAULT_SETTINGS.database.password}`
       )
       lines.push(
-        `DB_MYSQL_HOST=${this.configCache.get('database.mysqlHost') || DEFAULT_SETTINGS.database.mysqlHost}`
+        `DB_MYSQL_HOST=${this.configCache.get('DB_MYSQL_HOST') || DEFAULT_SETTINGS.database.mysqlHost}`
       )
       lines.push(
-        `DB_MYSQL_PORT=${this.configCache.get('database.mysqlPort') || DEFAULT_SETTINGS.database.mysqlPort}`
+        `DB_MYSQL_PORT=${this.configCache.get('DB_MYSQL_PORT') || DEFAULT_SETTINGS.database.mysqlPort}`
       )
       lines.push(`DB_MYSQL_CHARSET=utf8mb4`)
       lines.push('')
@@ -256,14 +327,14 @@ export class ConfigManager {
       lines.push('# 路径配置')
       lines.push('# ===========================')
       lines.push(
-        `PATH_DATA_DIR=${this.configCache.get('paths.dataDir') || DEFAULT_SETTINGS.paths.dataDir}`
+        `PATH_DATA_DIR=${this.configCache.get('PATH_DATA_DIR') || DEFAULT_SETTINGS.paths.dataDir}`
       )
       lines.push(`PATH_PRODUCTION_ID_FILE=ProductionID.txt`)
       lines.push(
-        `PATH_DEFAULT_OUTPUT=${this.configCache.get('paths.defaultOutput') || DEFAULT_SETTINGS.paths.defaultOutput}`
+        `PATH_DEFAULT_OUTPUT=${this.configCache.get('PATH_DEFAULT_OUTPUT') || DEFAULT_SETTINGS.paths.defaultOutput}`
       )
       lines.push(
-        `PATH_VALIDATION_OUTPUT=${this.configCache.get('paths.validationOutput') || DEFAULT_SETTINGS.paths.validationOutput}`
+        `PATH_VALIDATION_OUTPUT=${this.configCache.get('PATH_VALIDATION_OUTPUT') || DEFAULT_SETTINGS.paths.validationOutput}`
       )
       lines.push('')
 
@@ -272,19 +343,19 @@ export class ConfigManager {
       lines.push('# 数据提取配置')
       lines.push('# ===========================')
       lines.push(
-        `EXTRACTION_BATCH_SIZE=${this.configCache.get('extraction.batchSize') || DEFAULT_SETTINGS.extraction.batchSize}`
+        `EXTRACTION_BATCH_SIZE=${this.configCache.get('EXTRACTION_BATCH_SIZE') || DEFAULT_SETTINGS.extraction.batchSize}`
       )
       lines.push(
-        `EXTRACTION_VERBOSE=${this.configCache.get('extraction.verbose') || DEFAULT_SETTINGS.extraction.verbose}`
+        `EXTRACTION_VERBOSE=${this.configCache.get('EXTRACTION_VERBOSE') || DEFAULT_SETTINGS.extraction.verbose}`
       )
       lines.push(
-        `EXTRACTION_AUTO_CONVERT=${this.configCache.get('extraction.autoConvert') || DEFAULT_SETTINGS.extraction.autoConvert}`
+        `EXTRACTION_AUTO_CONVERT=${this.configCache.get('EXTRACTION_AUTO_CONVERT') || DEFAULT_SETTINGS.extraction.autoConvert}`
       )
       lines.push(
-        `EXTRACTION_MERGE_BATCHES=${this.configCache.get('extraction.mergeBatches') || DEFAULT_SETTINGS.extraction.mergeBatches}`
+        `EXTRACTION_MERGE_BATCHES=${this.configCache.get('EXTRACTION_MERGE_BATCHES') || DEFAULT_SETTINGS.extraction.mergeBatches}`
       )
       lines.push(
-        `EXTRACTION_ENABLE_DB_PERSISTENCE=${this.configCache.get('extraction.enableDbPersistence') || DEFAULT_SETTINGS.extraction.enableDbPersistence}`
+        `EXTRACTION_ENABLE_DB_PERSISTENCE=${this.configCache.get('EXTRACTION_ENABLE_DB_PERSISTENCE') || DEFAULT_SETTINGS.extraction.enableDbPersistence}`
       )
       lines.push('')
 
@@ -293,22 +364,22 @@ export class ConfigManager {
       lines.push('# 校验配置')
       lines.push('# ===========================')
       lines.push(
-        `VALIDATION_DATA_SOURCE=${this.configCache.get('validation.dataSource') || DEFAULT_SETTINGS.validation.dataSource}`
+        `VALIDATION_DATA_SOURCE=${this.configCache.get('VALIDATION_DATA_SOURCE') || DEFAULT_SETTINGS.validation.dataSource}`
       )
       lines.push(
-        `VALIDATION_USE_DATABASE=${this.configCache.get('validation.useDatabase') || true}`
+        `VALIDATION_USE_DATABASE=${this.configCache.get('VALIDATION_USE_DATABASE') || true}`
       )
       lines.push(
-        `VALIDATION_BATCH_SIZE=${this.configCache.get('validation.batchSize') || DEFAULT_SETTINGS.validation.batchSize}`
+        `VALIDATION_BATCH_SIZE=${this.configCache.get('VALIDATION_BATCH_SIZE') || DEFAULT_SETTINGS.validation.batchSize}`
       )
       lines.push(
-        `VALIDATION_ENABLE_CRUD=${this.configCache.get('validation.enableCrud') || DEFAULT_SETTINGS.validation.enableCrud}`
+        `VALIDATION_ENABLE_CRUD=${this.configCache.get('VALIDATION_ENABLE_CRUD') || DEFAULT_SETTINGS.validation.enableCrud}`
       )
       lines.push(
-        `VALIDATION_DEFAULT_MANAGER=${this.configCache.get('validation.defaultManager') || DEFAULT_SETTINGS.validation.defaultManager}`
+        `VALIDATION_DEFAULT_MANAGER=${this.configCache.get('VALIDATION_DEFAULT_MANAGER') || DEFAULT_SETTINGS.validation.defaultManager}`
       )
       lines.push(
-        `VALIDATION_MATCH_MODE=${this.configCache.get('validation.matchMode') || DEFAULT_SETTINGS.validation.matchMode}`
+        `VALIDATION_MATCH_MODE=${this.configCache.get('VALIDATION_MATCH_MODE') || DEFAULT_SETTINGS.validation.matchMode}`
       )
       lines.push('')
 
@@ -317,13 +388,13 @@ export class ConfigManager {
       lines.push('# UI 配置')
       lines.push('# ===========================')
       lines.push(
-        `UI_FONT_FAMILY=${this.configCache.get('ui.fontFamily') || DEFAULT_SETTINGS.ui.fontFamily}`
+        `UI_FONT_FAMILY=${this.configCache.get('UI_FONT_FAMILY') || DEFAULT_SETTINGS.ui.fontFamily}`
       )
       lines.push(
-        `UI_FONT_SIZE=${this.configCache.get('ui.fontSize') || DEFAULT_SETTINGS.ui.fontSize}`
+        `UI_FONT_SIZE=${this.configCache.get('UI_FONT_SIZE') || DEFAULT_SETTINGS.ui.fontSize}`
       )
       lines.push(
-        `UI_PRODUCTION_ID_INPUT_WIDTH=${this.configCache.get('ui.productionIdInputWidth') || DEFAULT_SETTINGS.ui.productionIdInputWidth}`
+        `UI_PRODUCTION_ID_INPUT_WIDTH=${this.configCache.get('UI_PRODUCTION_ID_INPUT_WIDTH') || DEFAULT_SETTINGS.ui.productionIdInputWidth}`
       )
       lines.push('')
 
@@ -332,7 +403,7 @@ export class ConfigManager {
       lines.push('# 执行配置')
       lines.push('# ===========================')
       lines.push(
-        `EXECUTION_DRYRUN=${this.configCache.get('execution.dryRun') || DEFAULT_SETTINGS.execution.dryRun}`
+        `EXECUTION_DRYRUN=${this.configCache.get('EXECUTION_DRYRUN') || DEFAULT_SETTINGS.execution.dryRun}`
       )
 
       const content = lines.join('\n')
@@ -435,51 +506,127 @@ export class ConfigManager {
    * Save settings from SettingsData object
    */
   public async saveAllSettings(settings: SettingsData): Promise<boolean> {
-    // ERP settings
-    this.set('erp.url', settings.erp.url)
-    this.set('erp.username', settings.erp.username)
-    this.set('erp.password', settings.erp.password)
-    this.set('erp.headless', settings.erp.headless)
-    this.set('erp.ignoreHttpsErrors', settings.erp.ignoreHttpsErrors)
-    this.set('erp.autoCloseBrowser', settings.erp.autoCloseBrowser)
+    // ERP settings - use underscore uppercase keys to match .env file
+    this.set('ERP_URL', settings.erp.url)
+    this.set('ERP_USERNAME', settings.erp.username)
+    this.set('ERP_PASSWORD', settings.erp.password)
+    this.set('ERP_HEADLESS', settings.erp.headless)
+    this.set('ERP_IGNORE_HTTPS_ERRORS', settings.erp.ignoreHttpsErrors)
+    this.set('ERP_AUTO_CLOSE_BROWSER', settings.erp.autoCloseBrowser)
 
     // Database settings
-    this.set('database.dbType', settings.database.dbType)
-    this.set('database.server', settings.database.server)
-    this.set('database.mysqlHost', settings.database.mysqlHost)
-    this.set('database.mysqlPort', settings.database.mysqlPort)
-    this.set('database.database', settings.database.database)
-    this.set('database.username', settings.database.username)
-    this.set('database.password', settings.database.password)
+    this.set('DB_TYPE', settings.database.dbType)
+    this.set('DB_SERVER', settings.database.server)
+    this.set('DB_MYSQL_HOST', settings.database.mysqlHost)
+    this.set('DB_MYSQL_PORT', settings.database.mysqlPort)
+    this.set('DB_NAME', settings.database.database)
+    this.set('DB_USERNAME', settings.database.username)
+    this.set('DB_PASSWORD', settings.database.password)
 
     // Path settings
-    this.set('paths.dataDir', settings.paths.dataDir)
-    this.set('paths.defaultOutput', settings.paths.defaultOutput)
-    this.set('paths.validationOutput', settings.paths.validationOutput)
+    this.set('PATH_DATA_DIR', settings.paths.dataDir)
+    this.set('PATH_DEFAULT_OUTPUT', settings.paths.defaultOutput)
+    this.set('PATH_VALIDATION_OUTPUT', settings.paths.validationOutput)
 
     // Extraction settings
-    this.set('extraction.batchSize', settings.extraction.batchSize)
-    this.set('extraction.verbose', settings.extraction.verbose)
-    this.set('extraction.autoConvert', settings.extraction.autoConvert)
-    this.set('extraction.mergeBatches', settings.extraction.mergeBatches)
-    this.set('extraction.enableDbPersistence', settings.extraction.enableDbPersistence)
+    this.set('EXTRACTION_BATCH_SIZE', settings.extraction.batchSize)
+    this.set('EXTRACTION_VERBOSE', settings.extraction.verbose)
+    this.set('EXTRACTION_AUTO_CONVERT', settings.extraction.autoConvert)
+    this.set('EXTRACTION_MERGE_BATCHES', settings.extraction.mergeBatches)
+    this.set('EXTRACTION_ENABLE_DB_PERSISTENCE', settings.extraction.enableDbPersistence)
 
     // Validation settings
-    this.set('validation.dataSource', settings.validation.dataSource)
-    this.set('validation.batchSize', settings.validation.batchSize)
-    this.set('validation.matchMode', settings.validation.matchMode)
-    this.set('validation.enableCrud', settings.validation.enableCrud)
-    this.set('validation.defaultManager', settings.validation.defaultManager)
+    this.set('VALIDATION_DATA_SOURCE', settings.validation.dataSource)
+    this.set('VALIDATION_BATCH_SIZE', settings.validation.batchSize)
+    this.set('VALIDATION_MATCH_MODE', settings.validation.matchMode)
+    this.set('VALIDATION_ENABLE_CRUD', settings.validation.enableCrud)
+    this.set('VALIDATION_DEFAULT_MANAGER', settings.validation.defaultManager)
 
     // UI settings
-    this.set('ui.fontFamily', settings.ui.fontFamily)
-    this.set('ui.fontSize', settings.ui.fontSize)
-    this.set('ui.productionIdInputWidth', settings.ui.productionIdInputWidth)
+    this.set('UI_FONT_FAMILY', settings.ui.fontFamily)
+    this.set('UI_FONT_SIZE', settings.ui.fontSize)
+    this.set('UI_PRODUCTION_ID_INPUT_WIDTH', settings.ui.productionIdInputWidth)
 
     // Execution settings
-    this.set('execution.dryRun', settings.execution.dryRun)
+    this.set('EXECUTION_DRYRUN', settings.execution.dryRun)
 
     return this.save()
+  }
+
+  /**
+   * Save partial settings (only update provided fields)
+   * Preserves all existing fields not included in the update
+   */
+  public async savePartialSettings(
+    settings: Partial<SettingsData>
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Step 1: Validate field whitelist
+      const validation = validateEditableFields(settings)
+      if (!validation.valid) {
+        log.warn('Attempted to save non-editable fields', {
+          invalidFields: validation.invalidFields
+        })
+        return {
+          success: false,
+          error: `包含不允许修改的字段：${validation.invalidFields.join(', ')}`
+        }
+      }
+
+      // Step 2: Read current settings from .env file directly
+      // This avoids the cache key mismatch issue (ERP_URL vs erp.url)
+      await this.loadEnvFile()
+      const currentSettings = this.getAllSettings()
+
+      log.info('Current settings before merge', {
+        erpUrl: currentSettings.erp.url,
+        dbType: currentSettings.database.dbType,
+        dbName: currentSettings.database.database
+      })
+
+      // Step 3: Deep merge - only update provided fields
+      const mergedSettings = deepMerge(currentSettings, settings)
+
+      log.info('Settings after merge', {
+        erpUrl: mergedSettings.erp.url,
+        dbType: mergedSettings.database.dbType,
+        dbName: mergedSettings.database.database
+      })
+
+      // Step 4: Backup and save
+      const backupSuccess = await this.backupEnvFile()
+      if (!backupSuccess) {
+        log.warn('Failed to backup .env file, proceeding with caution')
+      }
+
+      const saveSuccess = await this.saveAllSettings(mergedSettings)
+
+      if (!saveSuccess) {
+        // Save failed, attempt restore
+        await this.restoreBackup()
+        return {
+          success: false,
+          error: '保存配置失败，已恢复原配置'
+        }
+      }
+
+      // Step 5: Reload from disk to populate cache with correct keys (ERP_URL instead of erp.url)
+      await this.loadEnvFile()
+
+      log.info('Settings saved successfully', {
+        updatedFields: Object.keys(settings)
+      })
+
+      return { success: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      log.error('Error in savePartialSettings', { error: message })
+      await this.restoreBackup()
+      return {
+        success: false,
+        error: `保存配置时发生错误：${message}`
+      }
+    }
   }
 
   /**
@@ -489,43 +636,43 @@ export class ConfigManager {
     // Clear cache and reload from defaults
     this.configCache.clear()
 
-    // Set all defaults
-    this.set('erp.url', DEFAULT_SETTINGS.erp.url)
-    this.set('erp.username', DEFAULT_SETTINGS.erp.username)
-    this.set('erp.password', DEFAULT_SETTINGS.erp.password)
-    this.set('erp.headless', DEFAULT_SETTINGS.erp.headless)
-    this.set('erp.ignoreHttpsErrors', DEFAULT_SETTINGS.erp.ignoreHttpsErrors)
-    this.set('erp.autoCloseBrowser', DEFAULT_SETTINGS.erp.autoCloseBrowser)
+    // Set all defaults using underscore uppercase keys
+    this.set('ERP_URL', DEFAULT_SETTINGS.erp.url)
+    this.set('ERP_USERNAME', DEFAULT_SETTINGS.erp.username)
+    this.set('ERP_PASSWORD', DEFAULT_SETTINGS.erp.password)
+    this.set('ERP_HEADLESS', DEFAULT_SETTINGS.erp.headless)
+    this.set('ERP_IGNORE_HTTPS_ERRORS', DEFAULT_SETTINGS.erp.ignoreHttpsErrors)
+    this.set('ERP_AUTO_CLOSE_BROWSER', DEFAULT_SETTINGS.erp.autoCloseBrowser)
 
-    this.set('database.dbType', DEFAULT_SETTINGS.database.dbType)
-    this.set('database.server', DEFAULT_SETTINGS.database.server)
-    this.set('database.mysqlHost', DEFAULT_SETTINGS.database.mysqlHost)
-    this.set('database.mysqlPort', DEFAULT_SETTINGS.database.mysqlPort)
-    this.set('database.database', DEFAULT_SETTINGS.database.database)
-    this.set('database.username', DEFAULT_SETTINGS.database.username)
-    this.set('database.password', DEFAULT_SETTINGS.database.password)
+    this.set('DB_TYPE', DEFAULT_SETTINGS.database.dbType)
+    this.set('DB_SERVER', DEFAULT_SETTINGS.database.server)
+    this.set('DB_MYSQL_HOST', DEFAULT_SETTINGS.database.mysqlHost)
+    this.set('DB_MYSQL_PORT', DEFAULT_SETTINGS.database.mysqlPort)
+    this.set('DB_NAME', DEFAULT_SETTINGS.database.database)
+    this.set('DB_USERNAME', DEFAULT_SETTINGS.database.username)
+    this.set('DB_PASSWORD', DEFAULT_SETTINGS.database.password)
 
-    this.set('paths.dataDir', DEFAULT_SETTINGS.paths.dataDir)
-    this.set('paths.defaultOutput', DEFAULT_SETTINGS.paths.defaultOutput)
-    this.set('paths.validationOutput', DEFAULT_SETTINGS.paths.validationOutput)
+    this.set('PATH_DATA_DIR', DEFAULT_SETTINGS.paths.dataDir)
+    this.set('PATH_DEFAULT_OUTPUT', DEFAULT_SETTINGS.paths.defaultOutput)
+    this.set('PATH_VALIDATION_OUTPUT', DEFAULT_SETTINGS.paths.validationOutput)
 
-    this.set('extraction.batchSize', DEFAULT_SETTINGS.extraction.batchSize)
-    this.set('extraction.verbose', DEFAULT_SETTINGS.extraction.verbose)
-    this.set('extraction.autoConvert', DEFAULT_SETTINGS.extraction.autoConvert)
-    this.set('extraction.mergeBatches', DEFAULT_SETTINGS.extraction.mergeBatches)
-    this.set('extraction.enableDbPersistence', DEFAULT_SETTINGS.extraction.enableDbPersistence)
+    this.set('EXTRACTION_BATCH_SIZE', DEFAULT_SETTINGS.extraction.batchSize)
+    this.set('EXTRACTION_VERBOSE', DEFAULT_SETTINGS.extraction.verbose)
+    this.set('EXTRACTION_AUTO_CONVERT', DEFAULT_SETTINGS.extraction.autoConvert)
+    this.set('EXTRACTION_MERGE_BATCHES', DEFAULT_SETTINGS.extraction.mergeBatches)
+    this.set('EXTRACTION_ENABLE_DB_PERSISTENCE', DEFAULT_SETTINGS.extraction.enableDbPersistence)
 
-    this.set('validation.dataSource', DEFAULT_SETTINGS.validation.dataSource)
-    this.set('validation.batchSize', DEFAULT_SETTINGS.validation.batchSize)
-    this.set('validation.matchMode', DEFAULT_SETTINGS.validation.matchMode)
-    this.set('validation.enableCrud', DEFAULT_SETTINGS.validation.enableCrud)
-    this.set('validation.defaultManager', DEFAULT_SETTINGS.validation.defaultManager)
+    this.set('VALIDATION_DATA_SOURCE', DEFAULT_SETTINGS.validation.dataSource)
+    this.set('VALIDATION_BATCH_SIZE', DEFAULT_SETTINGS.validation.batchSize)
+    this.set('VALIDATION_MATCH_MODE', DEFAULT_SETTINGS.validation.matchMode)
+    this.set('VALIDATION_ENABLE_CRUD', DEFAULT_SETTINGS.validation.enableCrud)
+    this.set('VALIDATION_DEFAULT_MANAGER', DEFAULT_SETTINGS.validation.defaultManager)
 
-    this.set('ui.fontFamily', DEFAULT_SETTINGS.ui.fontFamily)
-    this.set('ui.fontSize', DEFAULT_SETTINGS.ui.fontSize)
-    this.set('ui.productionIdInputWidth', DEFAULT_SETTINGS.ui.productionIdInputWidth)
+    this.set('UI_FONT_FAMILY', DEFAULT_SETTINGS.ui.fontFamily)
+    this.set('UI_FONT_SIZE', DEFAULT_SETTINGS.ui.fontSize)
+    this.set('UI_PRODUCTION_ID_INPUT_WIDTH', DEFAULT_SETTINGS.ui.productionIdInputWidth)
 
-    this.set('execution.dryRun', DEFAULT_SETTINGS.execution.dryRun)
+    this.set('EXECUTION_DRYRUN', DEFAULT_SETTINGS.execution.dryRun)
 
     return DEFAULT_SETTINGS
   }
@@ -535,5 +682,40 @@ export class ConfigManager {
    */
   public getDefaultSettings(): SettingsData {
     return DEFAULT_SETTINGS
+  }
+
+  /**
+   * Backup current .env file
+   */
+  private async backupEnvFile(): Promise<boolean> {
+    try {
+      if (fs.existsSync(this.envPath)) {
+        fs.copyFileSync(this.envPath, this.backupPath)
+        log.debug('Backup created', { path: this.backupPath })
+        return true
+      }
+      return false
+    } catch (error) {
+      log.error('Failed to backup .env file', { error })
+      return false
+    }
+  }
+
+  /**
+   * Restore .env file from backup
+   */
+  private async restoreBackup(): Promise<boolean> {
+    try {
+      if (fs.existsSync(this.backupPath)) {
+        fs.copyFileSync(this.backupPath, this.envPath)
+        await this.loadEnvFile()
+        log.debug('Restored from backup')
+        return true
+      }
+      return false
+    } catch (error) {
+      log.error('Failed to restore backup', { error })
+      return false
+    }
   }
 }
