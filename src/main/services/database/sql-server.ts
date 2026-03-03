@@ -1,24 +1,17 @@
 import sql from 'mssql'
+import type {
+  IDatabaseService,
+  DatabaseType,
+  QueryResult,
+  SqlServerConfig
+} from '../../types/database.types'
 
-export interface SqlServerConfig {
-  server: string
-  port: number
-  user: string
-  password: string
-  database: string
-  options?: {
-    encrypt?: boolean
-    trustServerCertificate?: boolean
-  }
-}
+export type { SqlServerConfig } from '../../types/database.types'
 
-export interface SqlServerQueryResult {
-  rows: Record<string, unknown>[]
-  columns: string[]
-  rowCount: number
-}
+export class SqlServerService implements IDatabaseService {
+  /** Database type identifier */
+  readonly type: DatabaseType = 'sqlserver'
 
-export class SqlServerService {
   private pool: sql.ConnectionPool | null = null
   private config: SqlServerConfig
 
@@ -79,8 +72,10 @@ export class SqlServerService {
 
   /**
    * Execute a query and return results
+   * @param sqlString - SQL query string with @p0, @p1, ... placeholders
+   * @param params - Query parameters as an array (converted to @p0, @p1, ...)
    */
-  async query(sqlString: string, params?: Record<string, unknown>): Promise<SqlServerQueryResult> {
+  async query(sqlString: string, params?: any[]): Promise<QueryResult> {
     if (!this.pool) {
       throw new Error('Not connected to SQL Server. Call connect() first.')
     }
@@ -88,11 +83,11 @@ export class SqlServerService {
     try {
       const request = this.pool.request()
 
-      // Add parameters if provided
-      if (params) {
-        for (const [key, value] of Object.entries(params)) {
-          request.input(key, value)
-        }
+      // Add parameters if provided - convert array to @p0, @p1, ... format
+      if (params && params.length > 0) {
+        params.forEach((value, index) => {
+          request.input(`p${index}`, value)
+        })
       }
 
       const result = await request.query(sqlString)
@@ -113,12 +108,14 @@ export class SqlServerService {
   }
 
   /**
-   * Execute a prepared statement with parameters
+   * Execute a prepared statement with named parameters
+   * @param sqlString - SQL query string with @paramName placeholders
+   * @param params - Parameters as an object with { value, type? } structure
    */
   async queryWithParams(
     sqlString: string,
     params: Record<string, { value: unknown; type?: sql.ISqlType }>
-  ): Promise<SqlServerQueryResult> {
+  ): Promise<QueryResult> {
     if (!this.pool) {
       throw new Error('Not connected to SQL Server. Call connect() first.')
     }
@@ -154,8 +151,9 @@ export class SqlServerService {
 
   /**
    * Execute multiple queries in a transaction
+   * @param queries - Array of queries with array-based parameters
    */
-  async transaction(queries: { sql: string; params?: Record<string, unknown> }[]): Promise<void> {
+  async transaction(queries: { sql: string; params?: any[] }[]): Promise<void> {
     if (!this.pool) {
       throw new Error('Not connected to SQL Server. Call connect() first.')
     }
@@ -168,10 +166,11 @@ export class SqlServerService {
       for (const { sql: sqlString, params } of queries) {
         const request = new sql.Request(transaction)
 
-        if (params) {
-          for (const [key, value] of Object.entries(params)) {
-            request.input(key, value)
-          }
+        // Add parameters if provided - convert array to @p0, @p1, ... format
+        if (params && params.length > 0) {
+          params.forEach((value, index) => {
+            request.input(`p${index}`, value)
+          })
         }
 
         await request.query(sqlString)

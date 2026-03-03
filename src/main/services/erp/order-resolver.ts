@@ -2,7 +2,7 @@
  * Order Number Resolver Service
  *
  * Automatically recognizes productionID and 生产订单号 (production order number),
- * and converts them via MySQL database lookup.
+ * and converts them via database lookup.
  *
  * - productionID format: 2 digits + 1 letter + serial number (e.g., "22A1", "22A1234")
  * - 生产订单号 format: SC + 14 digits (e.g., "SC70202602120085")
@@ -11,7 +11,7 @@
  * Fields: 总排号 (productionID), 生产订单号 (production order number)
  */
 
-import { MySqlService } from '../database/mysql'
+import type { IDatabaseService } from '../database'
 
 /**
  * Order mapping result
@@ -71,10 +71,10 @@ export const DB_CONFIG = {
  * Order Number Resolver Service
  */
 export class OrderNumberResolver {
-  private mysqlService: MySqlService
+  private dbService: IDatabaseService
 
-  constructor(mysqlService: MySqlService) {
-    this.mysqlService = mysqlService
+  constructor(dbService: IDatabaseService) {
+    this.dbService = dbService
   }
 
   /**
@@ -202,7 +202,7 @@ export class OrderNumberResolver {
   private async resolveProductionIds(productionIds: string[]): Promise<OrderMapping[]> {
     const mappings: OrderMapping[] = []
 
-    if (!this.mysqlService.isConnected()) {
+    if (!this.dbService.isConnected()) {
       // Database not connected, return all as failed
       for (const pid of productionIds) {
         mappings.push({
@@ -217,15 +217,21 @@ export class OrderNumberResolver {
     }
 
     try {
-      // Build query with placeholders
-      const placeholders = productionIds.map(() => '?').join(', ')
+      // Build query - use different placeholder style based on database type
+      const isSqlServer = this.dbService.type === 'sqlserver'
+      const placeholders = isSqlServer
+        ? productionIds.map((_, idx) => `@p${idx}`).join(', ')
+        : productionIds.map(() => '?').join(', ')
+
+      // Use appropriate quoting for table/field names
+      const quote = isSqlServer ? '' : '`'
       const query = `
-        SELECT \`${DB_CONFIG.FIELD_PRODUCTION_ID}\`, \`${DB_CONFIG.FIELD_ORDER_NUMBER}\`
-        FROM \`${DB_CONFIG.TABLE_NAME}\`
-        WHERE \`${DB_CONFIG.FIELD_PRODUCTION_ID}\` IN (${placeholders})
+        SELECT ${quote}${DB_CONFIG.FIELD_PRODUCTION_ID}${quote}, ${quote}${DB_CONFIG.FIELD_ORDER_NUMBER}${quote}
+        FROM ${quote}${DB_CONFIG.TABLE_NAME}${quote}
+        WHERE ${quote}${DB_CONFIG.FIELD_PRODUCTION_ID}${quote} IN (${placeholders})
       `
 
-      const result = await this.mysqlService.query(query, productionIds)
+      const result = await this.dbService.query(query, productionIds)
 
       // Create a map for quick lookup
       const resultMap = new Map<string, string>()
@@ -281,19 +287,26 @@ export class OrderNumberResolver {
    * @returns List of valid order numbers
    */
   private async verifyOrderNumbers(orderNumbers: string[]): Promise<string[]> {
-    if (!this.mysqlService.isConnected()) {
+    if (!this.dbService.isConnected()) {
       return orderNumbers // Skip verification if not connected
     }
 
     try {
-      const placeholders = orderNumbers.map(() => '?').join(', ')
+      // Build query - use different placeholder style based on database type
+      const isSqlServer = this.dbService.type === 'sqlserver'
+      const placeholders = isSqlServer
+        ? orderNumbers.map((_, idx) => `@p${idx}`).join(', ')
+        : orderNumbers.map(() => '?').join(', ')
+
+      // Use appropriate quoting for table/field names
+      const quote = isSqlServer ? '' : '`'
       const query = `
-        SELECT \`${DB_CONFIG.FIELD_ORDER_NUMBER}\`
-        FROM \`${DB_CONFIG.TABLE_NAME}\`
-        WHERE \`${DB_CONFIG.FIELD_ORDER_NUMBER}\` IN (${placeholders})
+        SELECT ${quote}${DB_CONFIG.FIELD_ORDER_NUMBER}${quote}
+        FROM ${quote}${DB_CONFIG.TABLE_NAME}${quote}
+        WHERE ${quote}${DB_CONFIG.FIELD_ORDER_NUMBER}${quote} IN (${placeholders})
       `
 
-      const result = await this.mysqlService.query(query, orderNumbers)
+      const result = await this.dbService.query(query, orderNumbers)
       return result.rows.map((row) => row[DB_CONFIG.FIELD_ORDER_NUMBER] as string)
     } catch (error) {
       console.warn('[OrderResolver] Failed to verify order numbers:', error)

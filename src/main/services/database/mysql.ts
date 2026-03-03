@@ -1,20 +1,17 @@
 import mysql from 'mysql2/promise'
+import type {
+  IDatabaseService,
+  DatabaseType,
+  QueryResult,
+  MySqlConfig
+} from '../../types/database.types'
 
-export interface MySqlConfig {
-  host: string
-  port: number
-  user: string
-  password: string
-  database: string
-}
+export type { MySqlConfig } from '../../types/database.types'
 
-export interface MySqlQueryResult {
-  rows: Record<string, unknown>[]
-  columns: string[]
-  rowCount: number
-}
+export class MySqlService implements IDatabaseService {
+  /** Database type identifier */
+  readonly type: DatabaseType = 'mysql'
 
-export class MySqlService {
   private connection: mysql.Connection | null = null
   private config: MySqlConfig
 
@@ -72,7 +69,7 @@ export class MySqlService {
   /**
    * Execute a query and return results
    */
-  async query(sql: string, params?: any[]): Promise<MySqlQueryResult> {
+  async query(sql: string, params?: any[]): Promise<QueryResult> {
     if (!this.connection) {
       throw new Error('Not connected to MySQL. Call connect() first.')
     }

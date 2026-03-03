@@ -214,7 +214,18 @@ export function registerDatabaseHandlers(): void {
         }
 
         log.debug('Executing SQL Server query', { windowId, sql: sqlString.substring(0, 100) })
-        return await service.query(sqlString, params)
+
+        // Use queryWithParams for named parameters, or query for no params
+        if (params && Object.keys(params).length > 0) {
+          // Convert to the format expected by queryWithParams
+          const typedParams: Record<string, { value: unknown }> = {}
+          for (const [key, value] of Object.entries(params)) {
+            typedParams[key] = { value }
+          }
+          return await service.queryWithParams(sqlString, typedParams)
+        } else {
+          return await service.query(sqlString)
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'SQL Server query failed'
         log.error('SQL Server query failed', { error: message })
