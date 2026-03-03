@@ -578,8 +578,20 @@ export class ConfigManager {
       await this.loadEnvFile()
       const currentSettings = this.getAllSettings()
 
+      log.info('Current settings before merge', {
+        erpUrl: currentSettings.erp.url,
+        dbType: currentSettings.database.dbType,
+        dbName: currentSettings.database.database
+      })
+
       // Step 3: Deep merge - only update provided fields
       const mergedSettings = deepMerge(currentSettings, settings)
+
+      log.info('Settings after merge', {
+        erpUrl: mergedSettings.erp.url,
+        dbType: mergedSettings.database.dbType,
+        dbName: mergedSettings.database.database
+      })
 
       // Step 4: Backup and save
       const backupSuccess = await this.backupEnvFile()
