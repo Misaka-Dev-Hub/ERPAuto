@@ -196,44 +196,16 @@ export class OrderNumberResolver {
    * @returns List of order mappings
    */
   private async resolveProductionIds(productionIds: string[]): Promise<OrderMapping[]> {
-    const mappings: OrderMapping[] = []
-
-    if (!this.mysqlService.isConnected()) {
-      // Database not connected, return all as failed
-      for (const pid of productionIds) {
-        mappings.push({
-          input: pid,
-          productionId: pid,
-          isValid: false,
-          error: '数据库未连接，无法查询生产订单号',
-          inputType: 'productionId'
-        })
-      }
-      return mappings
+    if (!productionIds.length) {
+      return []
     }
 
     try {
-      // Build query with placeholders
-      const placeholders = productionIds.map(() => '?').join(', ')
-      const query = `
-        SELECT \`${DB_CONFIG.FIELD_PRODUCTION_ID}\`, \`${DB_CONFIG.FIELD_ORDER_NUMBER}\`
-        FROM \`${DB_CONFIG.TABLE_NAME}\`
-        WHERE \`${DB_CONFIG.FIELD_PRODUCTION_ID}\` IN (${placeholders})
-      `
+      // Query database via repository
+      const resultMap = await this.repository.findByProductionIds(productionIds)
 
-      const result = await this.mysqlService.query(query, productionIds)
-
-      // Create a map for quick lookup
-      const resultMap = new Map<string, string>()
-      for (const row of result.rows) {
-        const prodId = row[DB_CONFIG.FIELD_PRODUCTION_ID] as string
-        const orderNum = row[DB_CONFIG.FIELD_ORDER_NUMBER] as string
-        if (prodId && orderNum) {
-          resultMap.set(prodId, orderNum)
-        }
-      }
-
-      // Build mappings
+      // Build OrderMapping[] from resultMap
+      const mappings: OrderMapping[] = []
       for (const pid of productionIds) {
         const orderNumber = resultMap.get(pid)
 
