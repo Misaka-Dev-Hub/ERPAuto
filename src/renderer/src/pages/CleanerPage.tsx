@@ -156,13 +156,17 @@ const CleanerPage: React.FC = () => {
   }
 
   const handleConfirmDeletion = async () => {
-    if (validationResults.length === 0) return alert('没有可处理的数据')
+    // For non-admin users, only process visible filtered results
+    // For admin users, process all validation results
+    const resultsToProcess = isAdmin ? validationResults : filteredResults
+
+    if (resultsToProcess.length === 0) return alert('没有可处理的数据')
 
     const materialsToUpsert: { materialCode: string; managerName: string }[] = []
     const materialsToDelete: string[] = []
     const missingManager: string[] = []
 
-    for (const result of validationResults) {
+    for (const result of resultsToProcess) {
       if (!result.materialCode?.trim()) continue
 
       const code = result.materialCode.trim()
@@ -417,7 +421,17 @@ const CleanerPage: React.FC = () => {
               <CheckSquare size={14} className="text-blue-600" /> 全选
             </button>
             <button
-              onClick={() => setSelectedItems(new Set())}
+              onClick={() => {
+                // Only uncheck items that are visible in filteredResults
+                const visibleCodes = new Set(filteredResults.map((r) => r.materialCode))
+                setSelectedItems((prev) => {
+                  const newSet = new Set(prev)
+                  for (const code of visibleCodes) {
+                    newSet.delete(code)
+                  }
+                  return newSet
+                })
+              }}
               className="text-xs bg-white border border-slate-300 text-slate-700 px-2.5 py-1.5 rounded shadow-sm hover:bg-slate-50 flex items-center gap-1"
             >
               <Square size={14} className="text-slate-400" /> 取消
