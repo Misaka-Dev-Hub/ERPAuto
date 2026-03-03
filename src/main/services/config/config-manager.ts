@@ -77,6 +77,73 @@ const DEFAULT_SETTINGS: SettingsData = {
 }
 
 /**
+ * Check if value is a plain object
+ */
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Deep merge two objects, only updating fields present in target
+ * Preserves all fields from source that are not in target
+ */
+function deepMerge<T>(source: T, target: Partial<T>): T {
+  const result = { ...source }
+
+  for (const key in target) {
+    if (key in target) {
+      const targetValue = target[key]
+      const sourceValue = result[key]
+
+      if (isObject(targetValue) && isObject(sourceValue)) {
+        result[key] = deepMerge(sourceValue, targetValue)
+      } else if (targetValue !== undefined) {
+        result[key] = targetValue as T[Extract<keyof T, string>]
+      }
+    }
+  }
+
+  return result
+}
+
+/**
+ * UI editable field whitelist
+ * Fields that can be modified through the settings UI
+ */
+const UI_EDITABLE_FIELDS: string[] = [
+  'erp.url',
+  'erp.username',
+  'erp.password',
+  // Add more fields as UI expands
+]
+
+/**
+ * Validate that settings only contain editable fields
+ */
+function validateEditableFields(settings: Partial<SettingsData>): {
+  valid: boolean
+  invalidFields: string[]
+} {
+  const invalidFields: string[] = []
+
+  for (const [section, values] of Object.entries(settings)) {
+    if (values && typeof values === 'object') {
+      for (const field of Object.keys(values)) {
+        const fieldPath = `${section}.${field}`
+        if (!UI_EDITABLE_FIELDS.includes(fieldPath)) {
+          invalidFields.push(fieldPath)
+        }
+      }
+    }
+  }
+
+  return {
+    valid: invalidFields.length === 0,
+    invalidFields
+  }
+}
+
+/**
  * Configuration Manager Class
  */
 export class ConfigManager {
