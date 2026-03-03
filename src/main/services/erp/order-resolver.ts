@@ -249,20 +249,12 @@ export class OrderNumberResolver {
    * @returns List of valid order numbers
    */
   private async verifyOrderNumbers(orderNumbers: string[]): Promise<string[]> {
-    if (!this.mysqlService.isConnected()) {
-      return orderNumbers // Skip verification if not connected
+    if (!orderNumbers.length) {
+      return []
     }
 
     try {
-      const placeholders = orderNumbers.map(() => '?').join(', ')
-      const query = `
-        SELECT \`${DB_CONFIG.FIELD_ORDER_NUMBER}\`
-        FROM \`${DB_CONFIG.TABLE_NAME}\`
-        WHERE \`${DB_CONFIG.FIELD_ORDER_NUMBER}\` IN (${placeholders})
-      `
-
-      const result = await this.mysqlService.query(query, orderNumbers)
-      return result.rows.map((row) => row[DB_CONFIG.FIELD_ORDER_NUMBER] as string)
+      return await this.repository.verifyOrderNumbers(orderNumbers)
     } catch (error) {
       console.warn('[OrderResolver] Failed to verify order numbers:', error)
       return orderNumbers // Skip verification on error
