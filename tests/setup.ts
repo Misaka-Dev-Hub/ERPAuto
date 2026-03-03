@@ -1,3 +1,4 @@
+import 'reflect-metadata'
 import { beforeAll, afterAll } from 'vitest'
 import dotenv from 'dotenv'
 import path from 'path'

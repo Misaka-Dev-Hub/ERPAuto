@@ -11,12 +11,12 @@ import { Entity, PrimaryColumn, Column, Index } from 'typeorm'
  * - 生产订单号 (orderNumber): Production order number
  */
 @Entity('productionContractData_26年压力表合同数据')
+@Index('idx_production_id', ['productionId'])
+@Index('idx_order_number', ['orderNumber'])
 export class ProductionContract {
-  @Index()
   @PrimaryColumn({ name: '总排号', type: 'varchar', length: 50 })
   productionId!: string
 
-  @Index()
   @Column({ name: '生产订单号', type: 'varchar', length: 50 })
   orderNumber!: string
 }
