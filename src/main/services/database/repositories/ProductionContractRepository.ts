@@ -83,8 +83,25 @@ export class ProductionContractRepository {
               resultMap.set(prodId, orderNum)
             }
           }
+        } else {
+          // SQL Server syntax: brackets and @pN placeholders
+          const placeholders = batch.map((_, idx) => `@p${idx}`).join(', ')
+          const query = `
+            SELECT [总排号], [生产订单号]
+            FROM [productionContractData_26年压力表合同数据]
+            WHERE [总排号] IN (${placeholders})
+          `
+
+          const results = await repo.query(query, batch)
+
+          for (const row of results) {
+            const prodId = row['总排号'] as string
+            const orderNum = row['生产订单号'] as string
+            if (prodId && orderNum) {
+              resultMap.set(prodId, orderNum)
+            }
+          }
         }
-        // SQL Server will be handled in next task
       }
 
       return resultMap
