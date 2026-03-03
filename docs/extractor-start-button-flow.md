@@ -4,6 +4,7 @@
 > **创建日期**: 2026-03-03
 > **适用范围**: ERPAuto v1.0+
 > **相关文件**:
+>
 > - `src/renderer/src/pages/ExtractorPage.tsx` (UI层)
 > - `src/main/ipc/extractor-handler.ts` (IPC处理层)
 > - `src/main/services/erp/extractor.ts` (业务逻辑层)
@@ -267,15 +268,15 @@ stateDiagram-v2
 
 ### 状态变量说明
 
-| 状态变量 | 类型 | 说明 | 持久化 |
-|---------|------|------|--------|
-| `orderNumbers` | string | 用户输入的订单号列表 | ✅ sessionStorage |
-| `batchSize` | number | 每批处理的订单数量 (默认100) | ✅ sessionStorage |
-| `isRunning` | boolean | 是否正在执行提取 | ❌ 内存状态 |
-| `progress` | ExtractorProgress \| null | 当前进度信息 | ❌ 内存状态 |
-| `result` | ExtractorResult \| null | 提取结果 | ❌ 内存状态 |
-| `error` | string \| null | 错误信息 | ❌ 内存状态 |
-| `logs` | string[] | 执行日志列表 | ❌ 内存状态 |
+| 状态变量       | 类型                      | 说明                         | 持久化            |
+| -------------- | ------------------------- | ---------------------------- | ----------------- |
+| `orderNumbers` | string                    | 用户输入的订单号列表         | ✅ sessionStorage |
+| `batchSize`    | number                    | 每批处理的订单数量 (默认100) | ✅ sessionStorage |
+| `isRunning`    | boolean                   | 是否正在执行提取             | ❌ 内存状态       |
+| `progress`     | ExtractorProgress \| null | 当前进度信息                 | ❌ 内存状态       |
+| `result`       | ExtractorResult \| null   | 提取结果                     | ❌ 内存状态       |
+| `error`        | string \| null            | 错误信息                     | ❌ 内存状态       |
+| `logs`         | string[]                  | 执行日志列表                 | ❌ 内存状态       |
 
 ---
 
@@ -342,13 +343,13 @@ flowchart TD
 
 ### 错误类型与处理策略
 
-| 错误类型 | 触发条件 | 用户反馈 | 恢复策略 |
-|---------|---------|---------|---------|
-| `ValidationError` | 订单号为空、配置不完整、无有效订单号 | 显示红色错误消息 | 修正输入后重试 |
-| `DatabaseQueryError` | MySQL连接失败 | 显示数据库连接错误 | 检查数据库配置 |
-| `ErpConnectionError` | ERP登录失败 | 显示ERP登录错误 | 检查ERP凭据 |
-| `BatchError` | 单个批次处理失败 | 记录到错误列表，继续处理 | 查看错误详情 |
-| `SystemError` | 未知系统错误 | 显示通用错误消息 | 查看日志 |
+| 错误类型             | 触发条件                             | 用户反馈                 | 恢复策略       |
+| -------------------- | ------------------------------------ | ------------------------ | -------------- |
+| `ValidationError`    | 订单号为空、配置不完整、无有效订单号 | 显示红色错误消息         | 修正输入后重试 |
+| `DatabaseQueryError` | MySQL连接失败                        | 显示数据库连接错误       | 检查数据库配置 |
+| `ErpConnectionError` | ERP登录失败                          | 显示ERP登录错误          | 检查ERP凭据    |
+| `BatchError`         | 单个批次处理失败                     | 记录到错误列表，继续处理 | 查看错误详情   |
+| `SystemError`        | 未知系统错误                         | 显示通用错误消息         | 查看日志       |
 
 ---
 
@@ -412,6 +413,7 @@ flowchart LR
 ### 数据转换详情
 
 **阶段1: 用户输入 → Production IDs**
+
 ```
 输入: "PO-20231024-001\nPO-20231024-002\nPO-20231024-003"
   ↓ 分割 + trim + 过滤
@@ -421,6 +423,7 @@ flowchart LR
 ```
 
 **阶段2: Production IDs → 生产订单号**
+
 ```
 输入: ["PO-20231024-001", "PO-20231024-002", "INVALID"]
   ↓ MySQL查询 (production_order表)
@@ -435,6 +438,7 @@ flowchart LR
 ```
 
 **阶段3: 生产订单号 → 批次**
+
 ```
 输入: ["MO-001", "MO-002", ..., "MO-250"] (250个)
 批次大小: 100
@@ -445,6 +449,7 @@ flowchart LR
 ```
 
 **阶段4: 批次 → ERP查询字符串**
+
 ```
 批次: ["MO-001", "MO-002", "MO-003"]
   ↓ 逗号连接
@@ -566,7 +571,12 @@ for (let i = 0; i < batches.length; i++) {
 
   try {
     const filePath = await this.downloadBatch(
-      session, popupPage, workFrame, batch, i, batches.length
+      session,
+      popupPage,
+      workFrame,
+      batch,
+      i,
+      batches.length
     )
     result.downloadedFiles.push(filePath)
   } catch (error) {

@@ -1,11 +1,13 @@
 import { ipcMain } from 'electron'
+import { DataSource } from 'typeorm'
 import { ErpAuthService } from '../services/erp/erp-auth'
 import { CleanerService } from '../services/erp/cleaner'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
-import { MySqlService } from '../services/database/mysql'
+import { ProductionContractRepository } from '../services/database/repositories/ProductionContractRepository'
 import { createLogger } from '../services/logger'
 import { withErrorHandling, type IpcResult } from './index'
 import { ErpConnectionError, ValidationError, DatabaseQueryError } from '../types/errors'
+import { initializeDataSource } from '../services/database/data-source'
 import type { CleanerInput, CleanerResult } from '../types/cleaner.types'
 
 const log = createLogger('CleanerHandler')
@@ -19,7 +21,7 @@ export function registerCleanerHandlers(): void {
     async (_event, input: CleanerInput): Promise<IpcResult<CleanerResult>> => {
       return withErrorHandling(async () => {
         let authService: ErpAuthService | null = null
-        let mysqlService: MySqlService | null = null
+        let dataSource: DataSource | null = null
 
         try {
           // Check environment variables
@@ -40,28 +42,11 @@ export function registerCleanerHandlers(): void {
           }
 
           // Resolve order numbers (convert productionIDs to 生产订单号)
-          const mysqlConfig = {
-            host: process.env.DB_MYSQL_HOST || 'localhost',
-            port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
-            user: process.env.DB_USERNAME || 'root',
-            password: process.env.DB_PASSWORD || '',
-            database: process.env.DB_NAME || ''
-          }
+          log.info('Connecting to database for order resolution...')
+          dataSource = await initializeDataSource()
 
-          log.info('Connecting to MySQL for order resolution...')
-          mysqlService = new MySqlService(mysqlConfig)
-
-          try {
-            await mysqlService.connect()
-          } catch (error) {
-            throw new DatabaseQueryError(
-              'MySQL 连接失败',
-              'DB_CONNECTION_FAILED',
-              error instanceof Error ? error : undefined
-            )
-          }
-
-          const resolver = new OrderNumberResolver(mysqlService)
+          const repository = new ProductionContractRepository()
+          const resolver = new OrderNumberResolver(repository)
           const mappings = await resolver.resolve(input.orderNumbers)
 
           // Get valid order numbers and warnings
@@ -137,13 +122,13 @@ export function registerCleanerHandlers(): void {
             }
           }
 
-          // Clean up: disconnect MySQL
-          if (mysqlService) {
+          // Clean up: disconnect database
+          if (dataSource && dataSource.isInitialized) {
             try {
-              await mysqlService.disconnect()
-              log.debug('MySQL disconnected')
+              await dataSource.destroy()
+              log.debug('DataSource disconnected')
             } catch (closeError) {
-              log.warn('Error disconnecting MySQL', {
+              log.warn('Error disconnecting DataSource', {
                 error: closeError instanceof Error ? closeError.message : String(closeError)
               })
             }

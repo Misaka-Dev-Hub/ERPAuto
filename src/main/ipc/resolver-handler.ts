@@ -7,10 +7,12 @@
  */
 
 import { ipcMain } from 'electron'
-import { MySqlService } from '../services/database/mysql'
+import { DataSource } from 'typeorm'
+import { ProductionContractRepository } from '../services/database/repositories/ProductionContractRepository'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
 import { createLogger } from '../services/logger'
 import { DatabaseQueryError } from '../types/errors'
+import { initializeDataSource } from '../services/database/data-source'
 import type { OrderMapping, ResolutionStats } from '../services/erp/order-resolver'
 
 const log = createLogger('ResolverHandler')
@@ -21,14 +23,6 @@ const log = createLogger('ResolverHandler')
 export interface ResolverInput {
   /** List of order numbers/productionIDs to resolve */
   inputs: string[]
-  /** MySQL configuration (optional, uses default if not provided) */
-  mysqlConfig?: {
-    host: string
-    port: number
-    user: string
-    password: string
-    database: string
-  }
 }
 
 /**
@@ -60,25 +54,16 @@ export function registerResolverHandlers(): void {
   ipcMain.handle(
     'resolver:resolve',
     async (_event, input: ResolverInput): Promise<ResolverResponse> => {
-      let mysqlService: MySqlService | null = null
+      let dataSource: DataSource | null = null
 
       try {
-        // Use provided config or environment variables
-        const mysqlConfig = input.mysqlConfig || {
-          host: process.env.DB_MYSQL_HOST || 'localhost',
-          port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
-          user: process.env.DB_USERNAME || 'root',
-          password: process.env.DB_PASSWORD || '',
-          database: process.env.DB_NAME || ''
-        }
+        // Create DataSource
+        log.info('Connecting to database for resolution', { inputCount: input.inputs.length })
+        dataSource = await initializeDataSource()
 
-        // Create MySQL service
-        log.info('Connecting to MySQL for resolution', { inputCount: input.inputs.length })
-        mysqlService = new MySqlService(mysqlConfig)
-        await mysqlService.connect()
-
-        // Create resolver and resolve inputs
-        const resolver = new OrderNumberResolver(mysqlService)
+        // Create repository and resolver
+        const repository = new ProductionContractRepository()
+        const resolver = new OrderNumberResolver(repository)
         const mappings = await resolver.resolve(input.inputs)
 
         // Get valid order numbers and warnings
@@ -107,13 +92,13 @@ export function registerResolverHandlers(): void {
           error: `解析失败：${message}`
         }
       } finally {
-        // Clean up MySQL connection
-        if (mysqlService) {
+        // Clean up database connection
+        if (dataSource && dataSource.isInitialized) {
           try {
-            await mysqlService.disconnect()
-            log.debug('MySQL disconnected')
+            await dataSource.destroy()
+            log.debug('DataSource disconnected')
           } catch (closeError) {
-            log.warn('Error disconnecting MySQL', {
+            log.warn('Error disconnecting DataSource', {
               error: closeError instanceof Error ? closeError.message : String(closeError)
             })
           }
@@ -136,9 +121,12 @@ export function registerResolverHandlers(): void {
       error?: string
     }> => {
       try {
-        const resolver = new OrderNumberResolver({
-          isConnected: () => false
-        } as MySqlService)
+        // Create a mock repository for format validation only
+        const mockRepository = {
+          getDatabaseType: () => 'mysql' as const
+        } as unknown as ProductionContractRepository
+
+        const resolver = new OrderNumberResolver(mockRepository)
 
         const results = inputs.map((input) => ({
           input,

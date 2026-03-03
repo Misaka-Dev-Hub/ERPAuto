@@ -1,4 +1,5 @@
 # 系统设置保存按钮工作流程分析
+
 # System Settings Save Button Workflow Analysis
 
 ## 文档概述 / Document Overview
@@ -171,6 +172,7 @@ graph LR
 #### SettingsPage.tsx (`src/renderer/src/pages/SettingsPage.tsx`)
 
 **主要职责 / Main Responsibilities:**
+
 - 用户界面渲染和交互
 - 本地状态管理（settings, isModified, message）
 - 调用 IPC 通信
@@ -183,7 +185,7 @@ const handleSaveSettings = async () => {
   try {
     const result = await window.electron.settings.saveSettings(settings as any)
     if (result.success) {
-      setIsModified(false)  // 清除修改标记
+      setIsModified(false) // 清除修改标记
       showMessage('success', '设置保存成功')
     } else {
       showMessage('error', result.error || '保存失败')
@@ -196,12 +198,12 @@ const handleSaveSettings = async () => {
 
 **状态管理 / State Management:**
 
-| 状态变量 | 类型 | 用途 |
-|---------|------|------|
-| `settings` | `Settings` | 当前配置数据，结构为 `{ erp: { url, username, password } }` |
-| `isModified` | `boolean` | 标记配置是否已修改，控制保存按钮启用状态 |
-| `isLoading` | `boolean` | 加载状态，显示加载动画 |
-| `message` | `object \| null` | 临时消息，3秒后自动消失 |
+| 状态变量     | 类型             | 用途                                                        |
+| ------------ | ---------------- | ----------------------------------------------------------- |
+| `settings`   | `Settings`       | 当前配置数据，结构为 `{ erp: { url, username, password } }` |
+| `isModified` | `boolean`        | 标记配置是否已修改，控制保存按钮启用状态                    |
+| `isLoading`  | `boolean`        | 加载状态，显示加载动画                                      |
+| `message`    | `object \| null` | 临时消息，3秒后自动消失                                     |
 
 **UI 交互逻辑 / UI Interaction Logic:**
 
@@ -232,6 +234,7 @@ stateDiagram-v2
 #### preload/index.ts (`src/preload/index.ts`)
 
 **主要职责 / Main Responsibilities:**
+
 - 安全桥梁，暴露受限 API 到渲染进程
 - 类型安全的 IPC 通道定义
 
@@ -273,6 +276,7 @@ graph TB
 #### settings-handler.ts (`src/main/ipc/settings-handler.ts`)
 
 **主要职责 / Main Responsibilities:**
+
 - IPC 通道注册和处理
 - 权限验证（基于用户类型）
 - 业务逻辑协调
@@ -334,19 +338,20 @@ function filterSettingsByUserType(settings: SettingsData, userType: UserType): S
 
 **权限控制矩阵 / Permission Control Matrix:**
 
-| 功能 / Feature | Admin | User | Guest |
-|---------------|-------|------|-------|
-| 查看所有设置 | ✅ | ⚠️ 部分 | ❌ |
-| 保存设置 | ✅ | ✅ | ❌ |
-| 恢复默认值 | ✅ | ❌ | ❌ |
-| 测试 ERP 连接 | ✅ | ✅ | ❌ |
-| 测试数据库连接 | ✅ | ✅ | ❌ |
+| 功能 / Feature | Admin | User    | Guest |
+| -------------- | ----- | ------- | ----- |
+| 查看所有设置   | ✅    | ⚠️ 部分 | ❌    |
+| 保存设置       | ✅    | ✅      | ❌    |
+| 恢复默认值     | ✅    | ❌      | ❌    |
+| 测试 ERP 连接  | ✅    | ✅      | ❌    |
+| 测试数据库连接 | ✅    | ✅      | ❌    |
 
 ### 4. 配置管理服务 / Configuration Manager Service
 
 #### config-manager.ts (`src/main/services/config/config-manager.ts`)
 
 **主要职责 / Main Responsibilities:**
+
 - .env 文件读写
 - 配置缓存管理
 - 默认值管理
@@ -356,10 +361,10 @@ function filterSettingsByUserType(settings: SettingsData, userType: UserType): S
 
 ```typescript
 export class ConfigManager {
-  private static instance: ConfigManager | null = null  // 单例模式
-  private envPath: string                                // .env 文件路径
-  private configCache: Map<string, string>              // 内存缓存
-  private initialized: boolean = false                   // 初始化标记
+  private static instance: ConfigManager | null = null // 单例模式
+  private envPath: string // .env 文件路径
+  private configCache: Map<string, string> // 内存缓存
+  private initialized: boolean = false // 初始化标记
 
   // 单例获取方法
   public static getInstance(): ConfigManager
@@ -519,6 +524,7 @@ graph TB
 ### IPC 通信数据格式 / IPC Communication Data Format
 
 **请求格式 / Request Format:**
+
 ```json
 {
   "erp": {
@@ -539,6 +545,7 @@ graph TB
 ```
 
 **响应格式 / Response Format:**
+
 ```json
 // 成功 / Success
 {
@@ -594,13 +601,13 @@ graph TB
 
 ### 错误场景分析 / Error Scenario Analysis
 
-| 错误场景 / Error Scenario | 触发位置 / Location | 处理方式 / Handling | 用户反馈 / User Feedback |
-|--------------------------|-------------------|-------------------|----------------------|
-| IPC 通信失败 | Renderer | try-catch | 显示"保存设置时发生错误" |
-| 权限不足 | Main Process | 检查 UserType | 返回权限错误信息 |
-| 文件写入失败 | ConfigManager | fs.writeFileSync 捕获 | 返回"保存设置失败" |
-| 无效数据类型 | IPC Handler | TypeScript 类型检查 | 返回验证错误 |
-| 磁盘空间不足 | File System | OS 异常捕获 | 返回系统错误信息 |
+| 错误场景 / Error Scenario | 触发位置 / Location | 处理方式 / Handling   | 用户反馈 / User Feedback |
+| ------------------------- | ------------------- | --------------------- | ------------------------ |
+| IPC 通信失败              | Renderer            | try-catch             | 显示"保存设置时发生错误" |
+| 权限不足                  | Main Process        | 检查 UserType         | 返回权限错误信息         |
+| 文件写入失败              | ConfigManager       | fs.writeFileSync 捕获 | 返回"保存设置失败"       |
+| 无效数据类型              | IPC Handler         | TypeScript 类型检查   | 返回验证错误             |
+| 磁盘空间不足              | File System         | OS 异常捕获           | 返回系统错误信息         |
 
 ### 日志记录策略 / Logging Strategy
 
@@ -613,6 +620,7 @@ log.error('Error saving settings', { error: message })
 ```
 
 **日志级别使用 / Log Level Usage:**
+
 - `info`: 正常操作流程
 - `warn`: 潜在问题（如保存失败但未崩溃）
 - `error`: 严重错误（如异常抛出）
@@ -680,14 +688,14 @@ sequenceDiagram
 
 ### 文件位置索引 / File Location Index
 
-| 组件 / Component | 文件路径 / File Path | 关键行数 / Key Lines |
-|-----------------|---------------------|-------------------|
-| UI 组件 | `src/renderer/src/pages/SettingsPage.tsx` | 61-73 (保存处理) |
-| 预加载脚本 | `src/preload/index.ts` | 89-97 (API 定义) |
-| IPC 处理器 | `src/main/ipc/settings-handler.ts` | 83-102 (保存处理) |
-| 配置管理器 | `src/main/services/config/config-manager.ts` | 437-483 (保存方法) |
-| 类型定义 | `src/main/types/settings.types.ts` | 136-171 (接口定义) |
-| IPC 注册 | `src/main/ipc/index.ts` | 导入 settings-handler |
+| 组件 / Component | 文件路径 / File Path                         | 关键行数 / Key Lines  |
+| ---------------- | -------------------------------------------- | --------------------- |
+| UI 组件          | `src/renderer/src/pages/SettingsPage.tsx`    | 61-73 (保存处理)      |
+| 预加载脚本       | `src/preload/index.ts`                       | 89-97 (API 定义)      |
+| IPC 处理器       | `src/main/ipc/settings-handler.ts`           | 83-102 (保存处理)     |
+| 配置管理器       | `src/main/services/config/config-manager.ts` | 437-483 (保存方法)    |
+| 类型定义         | `src/main/types/settings.types.ts`           | 136-171 (接口定义)    |
+| IPC 注册         | `src/main/ipc/index.ts`                      | 导入 settings-handler |
 
 ### 性能特性 / Performance Characteristics
 
@@ -743,11 +751,12 @@ const updateSettings = (category: string, key: string, value: any) => {
       [key]: value
     }
   }))
-  setIsModified(true)  // 标记为已修改
+  setIsModified(true) // 标记为已修改
 }
 ```
 
 **设计要点 / Design Points:**
+
 - 不可变更新模式（Immutable Update Pattern）
 - 使用展开运算符保持对象引用
 - 自动启用保存按钮
@@ -768,6 +777,7 @@ public async saveAllSettings(settings: SettingsData): Promise<boolean> {
 ```
 
 **设计要点 / Design Points:**
+
 - 先更新内存，后写入磁盘
 - 失败时缓存保持不变
 - 返回布尔值表示成功/失败
@@ -792,6 +802,7 @@ public async save(): Promise<boolean> {
 ```
 
 **设计要点 / Design Points:**
+
 - 添加注释分隔符提高可读性
 - 使用默认值作为后备
 - 同步写入确保一致性
@@ -820,6 +831,7 @@ public async save(): Promise<boolean> {
 ### 长期改进 / Long-term Improvements
 
 1. **安全性增强 / Security Enhancement**
+
    ```typescript
    // 建议实现密码加密
    interface SecureSettingsData extends SettingsData {
@@ -851,7 +863,9 @@ public async save(): Promise<boolean> {
 describe('ConfigManager', () => {
   it('should save settings successfully', async () => {
     const manager = ConfigManager.getInstance()
-    const settings: SettingsData = { /* mock data */ }
+    const settings: SettingsData = {
+      /* mock data */
+    }
     const result = await manager.saveAllSettings(settings)
     expect(result).toBe(true)
   })
@@ -883,16 +897,16 @@ describe('Settings Save Flow', () => {
 
 ### 完整配置字段列表 / Complete Configuration Field List
 
-| 类别 / Category | 字段数 / Field Count | 字段列表 / Field List |
-|---------------|---------------------|-------------------|
-| ERP | 6 | url, username, password, headless, ignoreHttpsErrors, autoCloseBrowser |
-| Database | 7 | dbType, server, mysqlHost, mysqlPort, database, username, password |
-| Paths | 3 | dataDir, defaultOutput, validationOutput |
-| Extraction | 5 | batchSize, verbose, autoConvert, mergeBatches, enableDbPersistence |
-| Validation | 5 | dataSource, batchSize, matchMode, enableCrud, defaultManager |
-| UI | 3 | fontFamily, fontSize, productionIdInputWidth |
-| Execution | 1 | dryRun |
-| **总计 / Total** | **30** | |
+| 类别 / Category  | 字段数 / Field Count | 字段列表 / Field List                                                  |
+| ---------------- | -------------------- | ---------------------------------------------------------------------- |
+| ERP              | 6                    | url, username, password, headless, ignoreHttpsErrors, autoCloseBrowser |
+| Database         | 7                    | dbType, server, mysqlHost, mysqlPort, database, username, password     |
+| Paths            | 3                    | dataDir, defaultOutput, validationOutput                               |
+| Extraction       | 5                    | batchSize, verbose, autoConvert, mergeBatches, enableDbPersistence     |
+| Validation       | 5                    | dataSource, batchSize, matchMode, enableCrud, defaultManager           |
+| UI               | 3                    | fontFamily, fontSize, productionIdInputWidth                           |
+| Execution        | 1                    | dryRun                                                                 |
+| **总计 / Total** | **30**               |                                                                        |
 
 ### 相关文档 / Related Documentation
 
@@ -902,9 +916,9 @@ describe('Settings Save Flow', () => {
 
 ### 版本历史 / Version History
 
-| 版本 / Version | 日期 / Date | 变更 / Changes |
-|---------------|------------|--------------|
-| 1.0 | 2025-03-03 | 初始版本 / Initial version |
+| 版本 / Version | 日期 / Date | 变更 / Changes             |
+| -------------- | ----------- | -------------------------- |
+| 1.0            | 2025-03-03  | 初始版本 / Initial version |
 
 ---
 

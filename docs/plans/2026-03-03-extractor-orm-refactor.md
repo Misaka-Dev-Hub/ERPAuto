@@ -9,6 +9,7 @@
 **Tech Stack:** TypeORM 0.3.28, TypeScript 5.9, Vitest, MySQL, SQL Server
 
 **Prerequisites:**
+
 - Git worktree created: `feature/extractor-orm-refactor`
 - Database configured in `.env` (DB_TYPE=mysql|mssql)
 - Read design doc: `docs/plans/2026-03-03-extractor-orm-refactor-design.md`
@@ -18,6 +19,7 @@
 ## Task 1: Create ProductionContract TypeORM Entity
 
 **Files:**
+
 - Create: `src/main/services/database/entities/ProductionContract.ts`
 - Modify: `src/main/services/database/data-source.ts`
 
@@ -55,6 +57,7 @@ export class ProductionContract {
 Modify: `src/main/services/database/data-source.ts`
 
 Find this line (around line 29):
+
 ```typescript
 entities: [__dirname + '/entities/*.{ts,js}'],
 ```
@@ -85,6 +88,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 2: Create ProductionContractRepository - Setup
 
 **Files:**
+
 - Create: `src/main/services/database/repositories/ProductionContractRepository.ts`
 
 **Step 1: Write repository skeleton**
@@ -166,6 +170,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 3: Implement findByProductionIds - MySQL Dialect
 
 **Files:**
+
 - Modify: `src/main/services/database/repositories/ProductionContractRepository.ts`
 
 **Step 1: Add findByProductionIds method for MySQL**
@@ -251,6 +256,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 4: Implement findByProductionIds - SQL Server Dialect
 
 **Files:**
+
 - Modify: `src/main/services/database/repositories/ProductionContractRepository.ts`
 
 **Step 1: Add SQL Server support to findByProductionIds**
@@ -260,43 +266,43 @@ Find the `if (dbType === 'mysql')` block in `findByProductionIds` and add the SQ
 Replace the SQL Server comment with:
 
 ```typescript
-        if (dbType === 'mysql') {
-          // MySQL syntax: backticks and ? placeholders
-          const placeholders = batch.map(() => '?').join(', ')
-          const query = `
+if (dbType === 'mysql') {
+  // MySQL syntax: backticks and ? placeholders
+  const placeholders = batch.map(() => '?').join(', ')
+  const query = `
             SELECT \`总排号\`, \`生产订单号\`
             FROM \`productionContractData_26年压力表合同数据\`
             WHERE \`总排号\` IN (${placeholders})
           `
 
-          const results = await repo.query(query, batch)
+  const results = await repo.query(query, batch)
 
-          for (const row of results) {
-            const prodId = row['总排号'] as string
-            const orderNum = row['生产订单号'] as string
-            if (prodId && orderNum) {
-              resultMap.set(prodId, orderNum)
-            }
-          }
-        } else {
-          // SQL Server syntax: brackets and @pN placeholders
-          const placeholders = batch.map((_, idx) => `@p${idx}`).join(', ')
-          const query = `
+  for (const row of results) {
+    const prodId = row['总排号'] as string
+    const orderNum = row['生产订单号'] as string
+    if (prodId && orderNum) {
+      resultMap.set(prodId, orderNum)
+    }
+  }
+} else {
+  // SQL Server syntax: brackets and @pN placeholders
+  const placeholders = batch.map((_, idx) => `@p${idx}`).join(', ')
+  const query = `
             SELECT [总排号], [生产订单号]
             FROM [productionContractData_26年压力表合同数据]
             WHERE [总排号] IN (${placeholders})
           `
 
-          const results = await repo.query(query, batch)
+  const results = await repo.query(query, batch)
 
-          for (const row of results) {
-            const prodId = row['总排号'] as string
-            const orderNum = row['生产订单号'] as string
-            if (prodId && orderNum) {
-              resultMap.set(prodId, orderNum)
-            }
-          }
-        }
+  for (const row of results) {
+    const prodId = row['总排号'] as string
+    const orderNum = row['生产订单号'] as string
+    if (prodId && orderNum) {
+      resultMap.set(prodId, orderNum)
+    }
+  }
+}
 ```
 
 **Step 2: Verify with TypeScript**
@@ -323,6 +329,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 5: Implement verifyOrderNumbers Method
 
 **Files:**
+
 - Modify: `src/main/services/database/repositories/ProductionContractRepository.ts`
 
 **Step 1: Add verifyOrderNumbers method**
@@ -411,6 +418,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 6: Implement findByProductionId Method
 
 **Files:**
+
 - Modify: `src/main/services/database/repositories/ProductionContractRepository.ts`
 
 **Step 1: Add findByProductionId method**
@@ -464,6 +472,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 7: Write Unit Tests for ProductionContractRepository
 
 **Files:**
+
 - Create: `src/main/services/database/repositories/__tests__/ProductionContractRepository.test.ts`
 
 **Step 1: Create test file with basic structure**
@@ -601,16 +610,19 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 8: Refactor OrderNumberResolver Constructor
 
 **Files:**
+
 - Modify: `src/main/services/erp/order-resolver.ts`
 
 **Step 1: Update import statement**
 
 Find this import (around line 14):
+
 ```typescript
 import { MySqlService } from '../database/mysql'
 ```
 
 Replace with:
+
 ```typescript
 import { ProductionContractRepository } from '../database/repositories/ProductionContractRepository'
 ```
@@ -618,6 +630,7 @@ import { ProductionContractRepository } from '../database/repositories/Productio
 **Step 2: Update constructor**
 
 Find the constructor (around lines 73-78):
+
 ```typescript
 export class OrderNumberResolver {
   private mysqlService: MySqlService
@@ -628,6 +641,7 @@ export class OrderNumberResolver {
 ```
 
 Replace with:
+
 ```typescript
 export class OrderNumberResolver {
   constructor(private repository: ProductionContractRepository) {}
@@ -656,6 +670,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 9: Update OrderNumberResolver.resolveProductionIds
 
 **Files:**
+
 - Modify: `src/main/services/erp/order-resolver.ts`
 
 **Step 1: Replace resolveProductionIds method**
@@ -739,6 +754,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 10: Update OrderNumberResolver.verifyOrderNumbers
 
 **Files:**
+
 - Modify: `src/main/services/erp/order-resolver.ts`
 
 **Step 1: Replace verifyOrderNumbers method**
@@ -785,6 +801,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 11: Update OrderNumberResolver Tests
 
 **Files:**
+
 - Modify: `src/main/services/erp/__tests__/order-resolver.test.ts`
 
 **Step 1: Update test imports and mocks**
@@ -820,9 +837,7 @@ Update tests to mock the repository methods instead of MySqlService. For example
 
 ```typescript
 it('should resolve production IDs', async () => {
-  mockRepository.findByProductionIds.mockResolvedValue(
-    new Map([['22A1', 'SC70202602120001']])
-  )
+  mockRepository.findByProductionIds.mockResolvedValue(new Map([['22A1', 'SC70202602120001']]))
 
   const result = await resolver.resolve(['22A1'])
 
@@ -856,6 +871,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 12: Update extractor-handler Imports
 
 **Files:**
+
 - Modify: `src/main/ipc/extractor-handler.ts`
 
 **Step 1: Add new imports**
@@ -870,6 +886,7 @@ import { ProductionContractRepository } from '../services/database/repositories/
 **Step 2: Remove MySqlService import**
 
 Find and remove this import:
+
 ```typescript
 import { MySqlService } from '../services/database/mysql'
 ```
@@ -897,11 +914,13 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 13: Replace MySqlService with DataSource in extractor-handler
 
 **Files:**
+
 - Modify: `src/main/ipc/extractor-handler.ts`
 
 **Step 1: Find MySqlService instantiation**
 
 Locate this code (around lines 42-62):
+
 ```typescript
 // Resolve order numbers (convert productionIDs to 生产订单号)
 const mysqlConfig = {
@@ -950,6 +969,7 @@ log.info('Database connection established')
 **Step 3: Remove mysqlService variable declaration**
 
 Find this line (around line 22):
+
 ```typescript
 let mysqlService: MySqlService | null = null
 ```
@@ -981,6 +1001,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 14: Update Cleanup Logic in extractor-handler
 
 **Files:**
+
 - Modify: `src/main/ipc/extractor-handler.ts`
 
 **Step 1: Remove mysqlService cleanup**
@@ -1047,6 +1068,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 15: Run Full Test Suite
 
 **Files:**
+
 - No file changes
 
 **Step 1: Run all tests**
@@ -1085,11 +1107,13 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 16: Manual Testing - MySQL
 
 **Files:**
+
 - No file changes
 
 **Step 1: Configure .env for MySQL**
 
 Edit `.env` file:
+
 ```bash
 DB_TYPE=mysql
 DB_MYSQL_HOST=localhost
@@ -1133,11 +1157,13 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 17: Manual Testing - SQL Server
 
 **Files:**
+
 - No file changes
 
 **Step 1: Configure .env for SQL Server**
 
 Edit `.env` file:
+
 ```bash
 DB_TYPE=mssql
 DB_SERVER=localhost
@@ -1185,6 +1211,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 18: Update Documentation
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 **Step 1: Update Service Architecture section**
@@ -1212,6 +1239,7 @@ Add to Environment Configuration section:
 
 ```markdown
 **Database Settings**:
+
 - `DB_TYPE` - Database type: 'mysql' or 'mssql' (required)
 - `DB_MYSQL_HOST` - MySQL server host (if DB_TYPE=mysql)
 - `DB_MYSQL_PORT` - MySQL server port (default: 3306)
@@ -1245,6 +1273,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 19: Final Verification and Cleanup
 
 **Files:**
+
 - Multiple files
 
 **Step 1: Run full verification**
@@ -1287,6 +1316,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 20: Push Feature Branch
 
 **Files:**
+
 - None (git operations)
 
 **Step 1: Push to remote**
@@ -1296,6 +1326,7 @@ Run: `git push -u origin feature/extractor-orm-refactor`
 **Step 2: Create pull request**
 
 Run:
+
 ```bash
 gh pr create \
   --title "refactor: Implement TypeORM repository for ExtractorPage database access" \
