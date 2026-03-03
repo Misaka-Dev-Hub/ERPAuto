@@ -43,7 +43,7 @@ export function useExtractor(): UseExtractorReturn {
     setState({ loading: true, data: null, error: null })
 
     try {
-      const result = await window.electron.ipcRenderer.invoke('extractor:run', input) as any
+      const result = (await window.electron.ipcRenderer.invoke('extractor:run', input)) as any
 
       if (result.success) {
         setState({ loading: false, data: result.data, error: null })

@@ -53,7 +53,7 @@ export function useAuth(): UseAuthReturn {
     setState((prev) => ({ ...prev, loading: true, error: null }))
 
     try {
-      const result = await window.electron.ipcRenderer.invoke('auth:login', credentials) as any
+      const result = (await window.electron.ipcRenderer.invoke('auth:login', credentials)) as any
 
       if (result.success && result.userInfo) {
         setState({
@@ -85,7 +85,7 @@ export function useAuth(): UseAuthReturn {
     setState((prev) => ({ ...prev, loading: true, error: null }))
 
     try {
-      const result = await window.electron.ipcRenderer.invoke('auth:silentLogin') as any
+      const result = (await window.electron.ipcRenderer.invoke('auth:silentLogin')) as any
 
       if (result.success && result.userInfo) {
         setState({
@@ -126,7 +126,7 @@ export function useAuth(): UseAuthReturn {
 
   const getCurrentUser = useCallback(async (): Promise<UserInfo | null> => {
     try {
-      const result = await window.electron.ipcRenderer.invoke('auth:getCurrentUser') as any
+      const result = (await window.electron.ipcRenderer.invoke('auth:getCurrentUser')) as any
       if (result.isAuthenticated && result.userInfo) {
         setState((prev) => ({
           ...prev,
@@ -143,7 +143,7 @@ export function useAuth(): UseAuthReturn {
 
   const getAllUsers = useCallback(async (): Promise<UserInfo[]> => {
     try {
-      return await window.electron.ipcRenderer.invoke('auth:getAllUsers') as UserInfo[]
+      return (await window.electron.ipcRenderer.invoke('auth:getAllUsers')) as UserInfo[]
     } catch {
       return []
     }
@@ -153,7 +153,7 @@ export function useAuth(): UseAuthReturn {
     setState((prev) => ({ ...prev, loading: true, error: null }))
 
     try {
-      const result = await window.electron.ipcRenderer.invoke('auth:switchUser', userInfo) as any
+      const result = (await window.electron.ipcRenderer.invoke('auth:switchUser', userInfo)) as any
 
       if (result.success && result.userInfo) {
         setState({
@@ -180,7 +180,7 @@ export function useAuth(): UseAuthReturn {
 
   const isAdmin = useCallback(async (): Promise<boolean> => {
     try {
-      return await window.electron.ipcRenderer.invoke('auth:isAdmin') as boolean
+      return (await window.electron.ipcRenderer.invoke('auth:isAdmin')) as boolean
     } catch {
       return false
     }
