@@ -20,7 +20,6 @@ export function registerExtractorHandlers(): void {
     async (_event, input: ExtractorInput): Promise<IpcResult<ExtractorResult>> => {
       return withErrorHandling(async () => {
         let authService: ErpAuthService | null = null
-        let mysqlService: MySqlService | null = null
 
         try {
           // Check environment variables
@@ -41,28 +40,17 @@ export function registerExtractorHandlers(): void {
           }
 
           // Resolve order numbers (convert productionIDs to 生产订单号)
-          const mysqlConfig = {
-            host: process.env.DB_MYSQL_HOST || 'localhost',
-            port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
-            user: process.env.DB_USERNAME || 'root',
-            password: process.env.DB_PASSWORD || '',
-            database: process.env.DB_NAME || ''
+          log.info('Initializing database connection for order resolution...')
+
+          const dataSource = getDataSource()
+          if (!dataSource.isInitialized) {
+            await dataSource.initialize()
           }
 
-          log.info('Connecting to MySQL for order resolution...')
-          mysqlService = new MySqlService(mysqlConfig)
+          const repository = new ProductionContractRepository()
+          const resolver = new OrderNumberResolver(repository)
 
-          try {
-            await mysqlService.connect()
-          } catch (error) {
-            throw new DatabaseQueryError(
-              'MySQL 连接失败',
-              'DB_CONNECTION_FAILED',
-              error instanceof Error ? error : undefined
-            )
-          }
-
-          const resolver = new OrderNumberResolver(mysqlService)
+          log.info('Database connection established')
           const mappings = await resolver.resolve(input.orderNumbers)
 
           // Get valid order numbers and warnings
