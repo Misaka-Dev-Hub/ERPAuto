@@ -471,7 +471,7 @@ graph TB
     Erp --> Erp6[autoCloseBrowser: boolean]
 
     Settings --> DB[DatabaseConfig]
-    DB --> DB1[dbType: 'mysql'|'sqlserver']
+    DB --> DB1[dbType: mysql or sqlserver]
     DB --> DB2[server: string]
     DB --> DB3[mysqlHost: string]
     DB --> DB4[mysqlPort: number]
