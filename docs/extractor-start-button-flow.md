@@ -1,14 +1,16 @@
 # 数据提取界面 - 开始按钮工作流程详解
 
-> **文档版本**: 1.0
-> **创建日期**: 2026-03-03
+> **文档版本**: 1.1
+> **更新日期**: 2026-03-03
 > **适用范围**: ERPAuto v1.0+
 > **相关文件**:
 > - `src/renderer/src/pages/ExtractorPage.tsx` (UI层)
+> - `src/preload/index.ts` (IPC API 暴露)
 > - `src/main/ipc/extractor-handler.ts` (IPC处理层)
 > - `src/main/services/erp/extractor.ts` (业务逻辑层)
 > - `src/main/services/erp/order-resolver.ts` (订单号解析服务)
 > - `src/main/services/erp/erp-auth.ts` (ERP认证服务)
+> - `src/main/types/extractor.types.ts` (类型定义)
 
 ## 目录
 
@@ -18,6 +20,7 @@
 4. [错误处理机制](#错误处理机制)
 5. [数据流转过程](#数据流转过程)
 6. [关键代码引用](#关键代码引用)
+7. [已知限制与待实现功能](#已知限制与待实现功能)
 
 ---
 
@@ -160,40 +163,39 @@ sequenceDiagram
 
     loop 批处理循环 (每批最多100个订单)
         Extractor->>Extractor: 31. 创建批次<br/>(按batchSize分组)
-        Extractor->>UI: 32. 发送进度更新<br/>onProgress(message, progress%)
-        UI->>UI: 33. 更新进度条和日志
+        Note over Extractor: onProgress回调存在但<br/>无法通过IPC传递(函数不可序列化)
 
-        Extractor->>ERP: 34. 填充订单号到搜索框
-        Extractor->>ERP: 35. 点击搜索按钮
-        Extractor->>ERP: 36. 等待加载完成
-        Extractor->>ERP: 37. 点击第一行复选框
-        Extractor->>ERP: 38. 悬停并点击"更多"
-        Extractor->>ERP: 39. 点击"输出"
-        Extractor->>ERP: 40. 设置行数阈值为300000
-        Extractor->>ERP: 41. 点击"确定(Y)"
+        Extractor->>ERP: 32. 填充订单号到搜索框
+        Extractor->>ERP: 33. 点击搜索按钮
+        Extractor->>ERP: 34. 等待加载完成
+        Extractor->>ERP: 35. 点击第一行复选框
+        Extractor->>ERP: 36. 悬停并点击"更多"
+        Extractor->>ERP: 37. 点击"输出"
+        Extractor->>ERP: 38. 设置行数阈值为300000
+        Extractor->>ERP: 39. 点击"确定(Y)"
 
-        Browser->>Browser: 42. 监听下载事件
-        ERP->>Browser: 43. 触发文件下载
-        Browser->>Browser: 44. 保存文件到downloads目录
-        Browser-->>Extractor: 45. 返回文件路径
-        Extractor->>Extractor: 46. 记录下载文件路径
+        Browser->>Browser: 40. 监听下载事件
+        ERP->>Browser: 41. 触发文件下载
+        Browser->>Browser: 42. 保存文件到downloads目录
+        Browser-->>Extractor: 43. 返回文件路径
+        Extractor->>Extractor: 44. 记录下载文件路径
     end
 
-    Extractor->>Extractor: 47. 汇总结果<br/>(文件列表, 记录数, 错误)
-    Extractor-->>Handler: 48. 返回ExtractorResult
-    Handler->>Handler: 49. 添加解析警告到错误列表
+    Extractor->>Extractor: 45. 汇总结果<br/>(文件列表, 记录数, 错误)
+    Extractor-->>Handler: 46. 返回ExtractorResult
+    Handler->>Handler: 47. 添加解析警告到错误列表
 
     Note over Handler,IPC: 清理阶段
-    Handler->>Browser: 50. 关闭浏览器
-    Handler->>MySQL: 51. 断开数据库连接
+    Handler->>Browser: 48. 关闭浏览器
+    Handler->>MySQL: 49. 断开数据库连接
 
     Note over Handler,UI: 响应阶段
-    Handler-->>IPC: 52. 返回IPC响应<br/>(success: true, data: result)
-    IPC-->>UI: 53. 返回response
-    UI->>UI: 54. 设置result状态
-    UI->>UI: 55. 设置isRunning=false
-    UI->>UI: 56. 清空进度状态
-    UI->>User: 57. 显示提取结果<br/>(文件数, 记录数, 错误数)
+    Handler-->>IPC: 50. 返回IPC响应<br/>(success: true, data: result)
+    IPC-->>UI: 51. 返回response
+    UI->>UI: 52. 设置result状态
+    UI->>UI: 53. 设置isRunning=false
+    UI->>UI: 54. 清空进度状态
+    UI->>User: 55. 显示提取结果<br/>(文件数, 记录数, 错误数)
 
     alt 发生任何错误
         Handler-->>UI: 返回error响应
@@ -272,10 +274,12 @@ stateDiagram-v2
 | `orderNumbers` | string | 用户输入的订单号列表 | ✅ sessionStorage |
 | `batchSize` | number | 每批处理的订单数量 (默认100) | ✅ sessionStorage |
 | `isRunning` | boolean | 是否正在执行提取 | ❌ 内存状态 |
-| `progress` | ExtractorProgress \| null | 当前进度信息 | ❌ 内存状态 |
+| `progress` | ExtractorProgress \| null | 当前进度信息 (当前实现中未从后端接收) | ❌ 内存状态 |
 | `result` | ExtractorResult \| null | 提取结果 | ❌ 内存状态 |
 | `error` | string \| null | 错误信息 | ❌ 内存状态 |
 | `logs` | string[] | 执行日志列表 | ❌ 内存状态 |
+
+> **注意**: `progress` 状态目前未从后端接收实时更新。虽然 `ExtractorService` 内部调用 `onProgress` 回调，但函数无法通过 IPC 序列化传递。后续可通过 IPC 事件通道实现实时进度更新。
 
 ---
 
@@ -480,7 +484,7 @@ const handleExtract = async () => {
       .map((line) => line.trim())
       .filter((line) => line.length > 0)
 
-    // 4. 存储到共享状态
+    // 4. 存储到共享状态 (与Cleaner模块共享)
     await window.electron.validation.setSharedProductionIds(orderNumberList)
 
     // 5. 调用后端API
@@ -505,111 +509,210 @@ const handleExtract = async () => {
 }
 ```
 
+### 1.1 订单号实时同步到共享状态 (ExtractorPage.tsx:34-45)
+
+```typescript
+// 当用户输入订单号时，实时同步到共享状态
+useEffect(() => {
+  sessionStorage.setItem('extractor_orderNumbers', orderNumbers)
+  // 实时更新共享的 Production IDs
+  if (orderNumbers.trim()) {
+    const orderNumberList = orderNumbers
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+    window.electron.validation.setSharedProductionIds(orderNumberList)
+  }
+}, [orderNumbers])
+```
+
+> **设计说明**: 订单号通过两种方式存储到共享状态：
+> 1. `useEffect` 在用户输入时实时更新
+> 2. `handleExtract` 在提取开始前再次确认存储
+>
+> 这确保了即使用户在Cleaner页面刷新，数据也已同步。
+
 ### 2. IPC处理器核心逻辑 (extractor-handler.ts:17-154)
 
 ```typescript
-ipcMain.handle('extractor:run', async (_event, input: ExtractorInput) => {
-  return withErrorHandling(async () => {
-    // 1. 环境配置检查
-    const erpUrl = process.env.ERP_URL || ''
-    const erpUsername = process.env.ERP_USERNAME || ''
-    const erpPassword = process.env.ERP_PASSWORD || ''
+ipcMain.handle(
+  'extractor:run',
+  async (_event, input: ExtractorInput): Promise<IpcResult<ExtractorResult>> => {
+    return withErrorHandling(async () => {
+      let authService: ErpAuthService | null = null
+      let mysqlService: MySqlService | null = null
 
-    if (!erpUrl || !erpUsername || !erpPassword) {
-      throw new ValidationError('ERP 配置不完整')
-    }
+      try {
+        // 1. 环境配置检查
+        const erpUrl = process.env.ERP_URL || ''
+        const erpUsername = process.env.ERP_USERNAME || ''
+        const erpPassword = process.env.ERP_PASSWORD || ''
 
-    // 2. 订单号解析
-    const mysqlService = new MySqlService(mysqlConfig)
-    await mysqlService.connect()
+        if (!erpUrl || !erpUsername || !erpPassword) {
+          throw new ValidationError('ERP 配置不完整')
+        }
 
-    const resolver = new OrderNumberResolver(mysqlService)
-    const mappings = await resolver.resolve(input.orderNumbers)
-    const validOrderNumbers = resolver.getValidOrderNumbers(mappings)
+        // 2. 连接MySQL并解析订单号
+        const mysqlConfig = { /* ... */ }
+        mysqlService = new MySqlService(mysqlConfig)
+        await mysqlService.connect()
 
-    if (validOrderNumbers.length === 0) {
-      throw new ValidationError('没有有效的生产订单号可处理')
-    }
+        const resolver = new OrderNumberResolver(mysqlService)
+        const mappings = await resolver.resolve(input.orderNumbers)
+        const validOrderNumbers = resolver.getValidOrderNumbers(mappings)
+        const warnings = resolver.getWarnings(mappings)
 
-    // 3. ERP登录
-    const authService = new ErpAuthService({...})
-    await authService.login()
+        if (validOrderNumbers.length === 0) {
+          throw new ValidationError('没有有效的生产订单号可处理')
+        }
 
-    // 4. 执行提取
-    const extractor = new ExtractorService(authService)
-    const result = await extractor.extract({
-      ...input,
-      orderNumbers: validOrderNumbers
-    })
+        // 3. ERP登录
+        authService = new ErpAuthService({ url, username, password, headless: true })
+        await authService.login()
 
-    // 5. 资源清理
-    await authService.close()
-    await mysqlService.disconnect()
+        // 4. 执行提取
+        const extractor = new ExtractorService(authService)
+        const result = await extractor.extract({
+          ...input,
+          orderNumbers: validOrderNumbers
+        })
 
-    return result
-  }, 'extractor:run')
-})
+        // 5. 添加警告到结果
+        if (warnings.length > 0) {
+          result.errors = [...warnings, ...result.errors]
+        }
+
+        return result
+      } finally {
+        // 6. 资源清理
+        if (authService) await authService.close()
+        if (mysqlService) await mysqlService.disconnect()
+      }
+    }, 'extractor:run')
+  }
+)
 ```
 
-### 3. 提取服务批处理逻辑 (extractor.ts:43-67)
+### 3. 提取服务批处理逻辑 (extractor.ts:29-77)
 
 ```typescript
-// 批处理循环
-const batches = this.createBatches(input.orderNumbers, batchSize)
-
-for (let i = 0; i < batches.length; i++) {
-  const batch = batches[i]
-  const progress = ((i + 1) / batches.length) * 100
-
-  // 发送进度更新
-  input.onProgress?.(`Processing batch ${i + 1}/${batches.length}`, progress)
+async extract(input: ExtractorInput): Promise<ExtractorResult> {
+  const result: ExtractorResult = {
+    downloadedFiles: [],
+    mergedFile: null,
+    recordCount: 0,
+    errors: []
+  }
 
   try {
-    const filePath = await this.downloadBatch(
-      session, popupPage, workFrame, batch, i, batches.length
-    )
-    result.downloadedFiles.push(filePath)
+    const session = this.authService.getSession()
+
+    // 导航到提取页面并获取工作框架
+    const { popupPage, workFrame } = await this.navigateToExtractorPage(session)
+
+    // 批处理设置
+    const batchSize = input.batchSize || 100
+    const batches = this.createBatches(input.orderNumbers, batchSize)
+
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i]
+      const progress = ((i + 1) / batches.length) * 100
+
+      // 注意: onProgress 回调存在但无法通过 IPC 传递
+      // 后续可通过 IPC 事件通道实现实时进度
+      input.onProgress?.(`Processing batch ${i + 1}/${batches.length}`, progress)
+
+      try {
+        const filePath = await this.downloadBatch(
+          session, popupPage, workFrame, batch, i, batches.length
+        )
+        result.downloadedFiles.push(filePath)
+      } catch (error) {
+        // 单批次失败不影响其他批次
+        result.errors.push(`Batch ${i + 1}: ${error.message}`)
+      }
+    }
+
+    // TODO: 合并文件功能待实现
   } catch (error) {
-    // 记录错误但继续处理
-    result.errors.push(`Batch ${i + 1}: ${error.message}`)
+    result.errors.push(`Extraction failed: ${error.message}`)
   }
+
+  return result
 }
 ```
 
 ### 4. 浏览器自动化单批次处理 (extractor.ts:151-194)
 
 ```typescript
-private async downloadBatch(...): Promise<string> {
-  // 1. 填充订单号
+private async downloadBatch(
+  session: ErpSession,
+  popupPage: any,
+  workFrame: any,
+  orderNumbers: string[],
+  batchIndex: number,
+  totalBatches: number
+): Promise<string> {
+  // 1. 清空并填充订单号
   const textbox = workFrame.getByRole('textbox', { name: '来源生产订单号' })
+  await textbox.fill('')
   await textbox.fill(orderNumbers.join(','))
 
-  // 2. 点击搜索
+  // 2. 点击搜索按钮
   await workFrame.locator('.search-component-searchBtn').click()
 
-  // 3. 等待加载
+  // 3. 等待加载完成
   await this.waitForLoading(workFrame)
 
-  // 4. 选择第一行
+  // 4. 选择第一行（全选）
   await workFrame.getByRole('row', { name: '序号' }).getByLabel('').click()
 
-  // 5. 点击更多 -> 输出
+  // 5. 悬停"更多"按钮并点击"输出"
   await workFrame.getByRole('button', { name: '更多' }).hover()
   await workFrame.getByText('输出', { exact: true }).click()
 
-  // 6. 设置阈值
+  // 6. 设置行数阈值
+  const thresholdBox = workFrame
+    .locator('div')
+    .filter({ hasText: /^行数阈值$/ })
+    .locator('input[type="text"]')
   await thresholdBox.fill('300000')
 
-  // 7. 等待下载
+  // 7. 等待下载并保存
+  const downloadPath = path.join(this.downloadDir, `temp_batch_${batchIndex + 1}.xlsx`)
   const downloadPromise = popupPage.waitForEvent('download')
   await workFrame.getByRole('button', { name: '确定(Y)' }).click()
-  const download = await downloadPromise
 
-  // 8. 保存文件
-  const downloadPath = path.join(this.downloadDir, `temp_batch_${batchIndex + 1}.xlsx`)
+  const download = await downloadPromise
   await download.saveAs(downloadPath)
 
   return downloadPath
+}
+```
+
+### 5. Preload API 暴露 (preload/index.ts:24-26)
+
+```typescript
+// Extractor service
+extractor: {
+  runExtractor: (input: ExtractorInput) => ipcRenderer.invoke('extractor:run', input)
+}
+```
+
+### 6. 类型定义 (types/extractor.types.ts)
+
+```typescript
+export interface ExtractorInput {
+  orderNumbers: string[]
+  batchSize?: number
+  onProgress?: (message: string, progress: number) => void  // 注意: 函数无法通过IPC传递
+}
+
+export interface ExtractorResult {
+  downloadedFiles: string[]
+  mergedFile: string | null
+  recordCount: number
+  errors: string[]
 }
 ```
 
@@ -622,35 +725,101 @@ private async downloadBatch(...): Promise<string> {
 1. **三层验证机制**:
    - 前端验证: 非空检查
    - 配置验证: 环境变量完整性
-   - 数据验证: 订单号有效性
+   - 数据验证: 订单号有效性（通过MySQL查询）
 
 2. **资源管理策略**:
-   - 使用try-finally确保资源清理
+   - 使用 try-finally 确保资源清理
    - 浏览器在使用后立即关闭
    - 数据库连接在使用后断开
+   - 清理操作在 finally 块中独立 try-catch，避免清理失败影响结果返回
 
 3. **错误容错设计**:
    - 单个批次失败不影响其他批次
    - 警告信息独立收集，不影响主流程
    - 详细错误信息返回给前端展示
+   - 使用自定义错误类型 (`ValidationError`, `DatabaseQueryError`, `ErpConnectionError`)
 
 4. **用户体验优化**:
-   - sessionStorage持久化用户输入
-   - 实时进度反馈
-   - 共享状态支持跨页面数据传递
+   - sessionStorage 持久化用户输入（`orderNumbers`, `batchSize`）
+   - 订单号实时同步到共享状态（供 Cleaner 模块使用）
    - 详细的日志记录
+   - 结果面板显示文件数、记录数、错误数
+
+### 已知限制
+
+1. **进度更新未实现**:
+   - `ExtractorInput.onProgress` 回调存在但无法通过 IPC 传递
+   - 前端 `progress` 状态当前未从后端接收实时更新
+   - 后续可通过 IPC 事件通道（`ipcRenderer.on` / `webContents.send`）实现
+
+2. **文件合并未实现**:
+   - `ExtractorResult.mergedFile` 当前始终为 `null`
+   - 各批次文件独立保存在 `downloads` 目录
 
 ### 性能考虑
 
 - **批处理**: 默认每批100个订单，平衡性能与稳定性
-- **异步并发**: 使用async/await处理异步操作
-- **进度反馈**: 避免长时间无响应的用户体验
+- **异步并发**: 使用 async/await 处理异步操作
+- **下载监听**: 使用 Playwright 事件监听处理文件下载
 
 ### 扩展性
 
-- **配置化**: batchSize可配置
+- **配置化**: batchSize 可配置
 - **模块化**: 服务独立，易于测试和维护
 - **错误类型化**: 使用自定义错误类型便于精确处理
+- **共享状态**: 通过 `validation.setSharedProductionIds` 实现跨页面数据共享
+
+---
+
+## 已知限制与待实现功能
+
+### 进度更新机制
+
+**当前状态**: 未实现
+
+**原因**: IPC 通信无法序列化函数，`onProgress` 回调无法传递到主进程。
+
+**当前实现**:
+```typescript
+// extractor.ts 中调用但无效
+input.onProgress?.(`Processing batch ${i + 1}/${batches.length}`, progress)
+```
+
+**建议实现方案**:
+```typescript
+// 方案: 使用 IPC 事件通道
+
+// 1. 主进程发送进度
+event.sender.send('extractor:progress', { message, progress })
+
+// 2. Preload 暴露事件监听
+extractor: {
+  onProgress: (callback) => {
+    ipcRenderer.on('extractor:progress', (_event, data) => callback(data))
+  }
+}
+
+// 3. 渲染进程监听
+useEffect(() => {
+  window.electron.extractor.onProgress((data) => {
+    setProgress(data)
+    setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${data.message}`])
+  })
+}, [])
+```
+
+### 文件合并功能
+
+**当前状态**: 未实现
+
+**待实现**: 将多个批次下载的文件合并为单一 Excel 文件。
+
+**相关代码位置**: `extractor.ts:69-70`
+
+```typescript
+// TODO: Merge files (implement in separate task)
+// result.mergedFile = await this.mergeFiles(result.downloadedFiles);
+```
 
 ---
 
