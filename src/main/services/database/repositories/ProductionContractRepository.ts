@@ -169,4 +169,26 @@ export class ProductionContractRepository {
       return []
     }
   }
+
+  /**
+   * Find single contract by production ID
+   * @param productionId - Production ID (总排号)
+   * @returns ProductionContract entity or null
+   */
+  async findByProductionId(productionId: string): Promise<ProductionContract | null> {
+    if (!productionId) {
+      return null
+    }
+
+    try {
+      const repo = await this.getRepository()
+      return await repo.findOne({ where: { productionId } })
+    } catch (error) {
+      log.error('findByProductionId failed', {
+        productionId,
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return null
+    }
+  }
 }
