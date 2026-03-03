@@ -4,7 +4,12 @@
  */
 
 import type { ExtractorInput, ExtractorResult } from './extractor.types'
-import type { CleanerInput, CleanerResult } from './cleaner.types'
+import type {
+  CleanerInput,
+  CleanerResult,
+  ExportResultItem,
+  ExportResultResponse
+} from './cleaner.types'
 
 /**
  * MySQL connection configuration
@@ -104,6 +109,12 @@ export interface CleanerAPI {
   runCleaner: (
     input: CleanerInput
   ) => Promise<{ success: boolean; data?: CleanerResult; error?: string }>
+
+  /**
+   * Export validation results to Excel
+   * @param items - Validation result items to export
+   */
+  exportResults: (items: ExportResultItem[]) => Promise<ExportResultResponse>
 }
 
 /**

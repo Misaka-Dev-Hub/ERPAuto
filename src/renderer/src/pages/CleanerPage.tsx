@@ -55,6 +55,7 @@ const CleanerPage: React.FC = () => {
   // Execution state
   const [isRunning, setIsRunning] = useState(false)
   const [isValidationRunning, setIsValidationRunning] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
   // Shared Production IDs state
   const [sharedProductionIdsCount, setSharedProductionIdsCount] = useState(0)
@@ -267,6 +268,39 @@ const CleanerPage: React.FC = () => {
     }
   }
 
+  const handleExportResults = async () => {
+    if (filteredResults.length === 0) {
+      alert('没有数据可导出')
+      return
+    }
+
+    setIsExporting(true)
+    try {
+      // Prepare export data from filtered results
+      const exportItems = filteredResults.map((result) => ({
+        materialName: result.materialName,
+        materialCode: result.materialCode,
+        specification: result.specification || '',
+        model: result.model || '',
+        managerName: result.managerName || '',
+        isMarkedForDeletion: result.isMarkedForDeletion,
+        isSelected: selectedItems.has(result.materialCode)
+      }))
+
+      const response = await window.electron.cleaner.exportResults(exportItems)
+
+      if (response.success) {
+        alert(`导出成功！\n文件已保存到：${response.filePath}`)
+      } else {
+        throw new Error(response.error || '导出失败')
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '导出过程中发生错误')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <div className="h-full flex flex-col xl:flex-row gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* 左栏：数据源与执行控制区 */}
@@ -473,8 +507,12 @@ const CleanerPage: React.FC = () => {
             <button className="text-xs bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50 flex items-center gap-1.5">
               <Settings2 size={14} /> 类型管理
             </button>
-            <button className="text-xs bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded shadow-sm hover:bg-blue-100 flex items-center gap-1.5 font-medium">
-              <FileSpreadsheet size={14} /> 导出结果
+            <button
+              onClick={handleExportResults}
+              disabled={isExporting || filteredResults.length === 0}
+              className="text-xs bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded shadow-sm hover:bg-blue-100 flex items-center gap-1.5 font-medium disabled:opacity-50"
+            >
+              <FileSpreadsheet size={14} /> {isExporting ? '导出中...' : '导出结果'}
             </button>
           </div>
         </div>
