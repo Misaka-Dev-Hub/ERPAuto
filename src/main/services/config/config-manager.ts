@@ -11,13 +11,6 @@ import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import type {
   SettingsData,
-  ErpConfig,
-  DatabaseConfig,
-  PathsConfig,
-  ExtractionConfig,
-  ValidationConfig,
-  UiConfig,
-  ExecutionConfig,
   DatabaseType,
   MatchMode,
   ValidationDataSource
@@ -96,7 +89,10 @@ function deepMerge<T>(source: T, target: Partial<T>): T {
       const sourceValue = result[key]
 
       if (isObject(targetValue) && isObject(sourceValue)) {
-        result[key] = deepMerge(sourceValue, targetValue)
+        result[key] = deepMerge(
+          sourceValue as T[Extract<keyof T, string>],
+          targetValue as Partial<T[Extract<keyof T, string>]>
+        )
       } else if (targetValue !== undefined) {
         result[key] = targetValue as T[Extract<keyof T, string>]
       }
@@ -113,7 +109,7 @@ function deepMerge<T>(source: T, target: Partial<T>): T {
 const UI_EDITABLE_FIELDS: string[] = [
   'erp.url',
   'erp.username',
-  'erp.password',
+  'erp.password'
   // Add more fields as UI expands
 ]
 
