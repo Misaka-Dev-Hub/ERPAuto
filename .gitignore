@@ -23,3 +23,6 @@ tests/manual/
 test-*.mjs
 test-*.js
 compare_*.js
+
+# logs
+logs
