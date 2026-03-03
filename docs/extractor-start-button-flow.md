@@ -4,6 +4,7 @@
 > **更新日期**: 2026-03-03
 > **适用范围**: ERPAuto v1.0+
 > **相关文件**:
+>
 > - `src/renderer/src/pages/ExtractorPage.tsx` (UI层)
 > - `src/preload/index.ts` (IPC API 暴露)
 > - `src/main/ipc/extractor-handler.ts` (IPC处理层)
@@ -298,15 +299,15 @@ stateDiagram-v2
 
 ### 状态变量说明
 
-| 状态变量 | 类型 | 说明 | 持久化 |
-|---------|------|------|--------|
-| `orderNumbers` | string | 用户输入的订单号列表 | ✅ sessionStorage |
-| `batchSize` | number | 每批处理的订单数量 (默认100) | ✅ sessionStorage |
-| `isRunning` | boolean | 是否正在执行提取 | ❌ 内存状态 |
-| `progress` | ExtractorProgress \| null | 当前进度信息 (当前实现中未从后端接收) | ❌ 内存状态 |
-| `result` | ExtractorResult \| null | 提取结果 | ❌ 内存状态 |
-| `error` | string \| null | 错误信息 | ❌ 内存状态 |
-| `logs` | string[] | 执行日志列表 | ❌ 内存状态 |
+| 状态变量       | 类型                      | 说明                                  | 持久化            |
+| -------------- | ------------------------- | ------------------------------------- | ----------------- |
+| `orderNumbers` | string                    | 用户输入的订单号列表                  | ✅ sessionStorage |
+| `batchSize`    | number                    | 每批处理的订单数量 (默认100)          | ✅ sessionStorage |
+| `isRunning`    | boolean                   | 是否正在执行提取                      | ❌ 内存状态       |
+| `progress`     | ExtractorProgress \| null | 当前进度信息 (当前实现中未从后端接收) | ❌ 内存状态       |
+| `result`       | ExtractorResult \| null   | 提取结果                              | ❌ 内存状态       |
+| `error`        | string \| null            | 错误信息                              | ❌ 内存状态       |
+| `logs`         | string[]                  | 执行日志列表                          | ❌ 内存状态       |
 
 > **注意**: `progress` 状态目前未从后端接收实时更新。虽然 `ExtractorService` 内部调用 `onProgress` 回调，但函数无法通过 IPC 序列化传递。后续可通过 IPC 事件通道实现实时进度更新。
 
@@ -381,13 +382,13 @@ flowchart TD
 
 ### 错误类型与处理策略
 
-| 错误类型 | 触发条件 | 用户反馈 | 恢复策略 |
-|---------|---------|---------|---------|
-| `ValidationError` | 订单号为空、配置不完整、无有效订单号 | 显示红色错误消息 | 修正输入后重试 |
-| `DatabaseQueryError` | 数据库连接失败 (MySQL/SQL Server) | 显示数据库连接错误 | 检查数据库配置 |
-| `ErpConnectionError` | ERP登录失败 | 显示ERP登录错误 | 检查ERP凭据 |
-| `BatchError` | 单个批次处理失败 | 记录到错误列表，继续处理 | 查看错误详情 |
-| `SystemError` | 未知系统错误 | 显示通用错误消息 | 查看日志 |
+| 错误类型             | 触发条件                             | 用户反馈                 | 恢复策略       |
+| -------------------- | ------------------------------------ | ------------------------ | -------------- |
+| `ValidationError`    | 订单号为空、配置不完整、无有效订单号 | 显示红色错误消息         | 修正输入后重试 |
+| `DatabaseQueryError` | 数据库连接失败 (MySQL/SQL Server)    | 显示数据库连接错误       | 检查数据库配置 |
+| `ErpConnectionError` | ERP登录失败                          | 显示ERP登录错误          | 检查ERP凭据    |
+| `BatchError`         | 单个批次处理失败                     | 记录到错误列表，继续处理 | 查看错误详情   |
+| `SystemError`        | 未知系统错误                         | 显示通用错误消息         | 查看日志       |
 
 ---
 
@@ -471,6 +472,7 @@ flowchart LR
 ### 数据转换详情
 
 **阶段1: 用户输入 → Production IDs**
+
 ```
 输入: "PO-20231024-001\nPO-20231024-002\nPO-20231024-003"
   ↓ 分割 + trim + 过滤
@@ -480,6 +482,7 @@ flowchart LR
 ```
 
 **阶段2: Production IDs → 生产订单号**
+
 ```
 输入: ["PO-20231024-001", "PO-20231024-002", "INVALID"]
   ↓ MySQL查询 (production_order表)
@@ -494,6 +497,7 @@ flowchart LR
 ```
 
 **阶段3: 生产订单号 → 批次**
+
 ```
 输入: ["MO-001", "MO-002", ..., "MO-250"] (250个)
 批次大小: 100
@@ -504,6 +508,7 @@ flowchart LR
 ```
 
 **阶段4: 批次 → ERP查询字符串**
+
 ```
 批次: ["MO-001", "MO-002", "MO-003"]
   ↓ 逗号连接
@@ -582,6 +587,7 @@ useEffect(() => {
 ```
 
 > **设计说明**: 订单号通过两种方式存储到共享状态：
+>
 > 1. `useEffect` 在用户输入时实时更新
 > 2. `handleExtract` 在提取开始前再次确认存储
 >
@@ -609,7 +615,7 @@ ipcMain.handle(
 
         // 2. 使用数据库工厂创建服务实例 (支持 MySQL 和 SQL Server)
         try {
-          dbService = await create()  // 工厂方法，根据 DB_TYPE 自动选择数据库
+          dbService = await create() // 工厂方法，根据 DB_TYPE 自动选择数据库
         } catch (error) {
           throw new DatabaseQueryError('数据库连接失败', 'DB_CONNECTION_FAILED', error)
         }
@@ -659,7 +665,7 @@ ipcMain.handle(
  * 支持 MySQL 和 SQL Server 双数据库
  */
 export async function create(type?: DatabaseType): Promise<IDatabaseService> {
-  const dbType = type || getDatabaseType()  // 从 DB_TYPE 环境变量读取
+  const dbType = type || getDatabaseType() // 从 DB_TYPE 环境变量读取
 
   // 返回缓存的实例（单例模式）
   const cached = instances.get(dbType)
@@ -677,7 +683,7 @@ export async function create(type?: DatabaseType): Promise<IDatabaseService> {
   }
 
   await service.connect()
-  instances.set(dbType, service)  // 缓存实例
+  instances.set(dbType, service) // 缓存实例
 
   return service
 }
@@ -835,7 +841,7 @@ extractor: {
 export interface ExtractorInput {
   orderNumbers: string[]
   batchSize?: number
-  onProgress?: (message: string, progress: number) => void  // 注意: 函数无法通过IPC传递
+  onProgress?: (message: string, progress: number) => void // 注意: 函数无法通过IPC传递
 }
 
 export interface ExtractorResult {
@@ -918,12 +924,14 @@ export interface ExtractorResult {
 **原因**: IPC 通信无法序列化函数，`onProgress` 回调无法传递到主进程。
 
 **当前实现**:
+
 ```typescript
 // extractor.ts 中调用但无效
 input.onProgress?.(`Processing batch ${i + 1}/${batches.length}`, progress)
 ```
 
 **建议实现方案**:
+
 ```typescript
 // 方案: 使用 IPC 事件通道
 
@@ -941,7 +949,7 @@ extractor: {
 useEffect(() => {
   window.electron.extractor.onProgress((data) => {
     setProgress(data)
-    setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${data.message}`])
+    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${data.message}`])
   })
 }, [])
 ```

@@ -103,3 +103,21 @@ export interface MaterialRecordSummary {
   managerName: string
   isMarked: boolean
 }
+
+/**
+ * Material type record for MaterialsTypeToBeDeleted table
+ */
+export interface MaterialTypeRecord {
+  id?: number
+  materialName: string
+  managerName: string
+}
+
+/**
+ * Material type batch request for batch operations
+ */
+export interface MaterialTypeBatchRequest {
+  toInsert: MaterialTypeRecord[]
+  toUpdate: { old: MaterialTypeRecord; new: MaterialTypeRecord }[]
+  toDelete: MaterialTypeRecord[]
+}

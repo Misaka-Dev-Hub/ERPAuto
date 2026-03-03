@@ -15,6 +15,7 @@ import {
   Settings2,
   FileSpreadsheet
 } from 'lucide-react'
+import MaterialTypeManagementDialog from '../components/MaterialTypeManagementDialog'
 
 /**
  * Material validation result interface
@@ -59,6 +60,9 @@ const CleanerPage: React.FC = () => {
   // Shared Production IDs state
   const [sharedProductionIdsCount, setSharedProductionIdsCount] = useState(0)
   console.log(sharedProductionIdsCount)
+
+  // Material type management dialog state
+  const [isTypeDialogOpen, setIsTypeDialogOpen] = useState(false)
 
   // Check admin status and get shared Production IDs on mount
   React.useEffect(() => {
@@ -470,7 +474,10 @@ const CleanerPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <button className="text-xs bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50 flex items-center gap-1.5">
+            <button
+              onClick={() => setIsTypeDialogOpen(true)}
+              className="text-xs bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50 flex items-center gap-1.5"
+            >
               <Settings2 size={14} /> 类型管理
             </button>
             <button className="text-xs bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded shadow-sm hover:bg-blue-100 flex items-center gap-1.5 font-medium">
@@ -606,6 +613,14 @@ const CleanerPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Material Type Management Dialog */}
+      <MaterialTypeManagementDialog
+        isOpen={isTypeDialogOpen}
+        onClose={() => setIsTypeDialogOpen(false)}
+        isAdmin={isAdmin}
+        currentUsername={currentUsername}
+      />
     </div>
   )
 }

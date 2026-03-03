@@ -6,7 +6,11 @@ import type { CleanerInput } from '../main/types/cleaner.types'
 import type { ResolverInput } from '../main/ipc/resolver-handler'
 import type { LoginRequest } from '../main/ipc/auth-handler'
 import type { UserInfo } from '../main/types/user.types'
-import type { ValidationRequest } from '../main/types/validation.types'
+import type {
+  ValidationRequest,
+  MaterialTypeRecord,
+  MaterialTypeBatchRequest
+} from '../main/types/validation.types'
 import type { SettingsData } from '../main/types/settings.types'
 
 // Custom APIs for renderer
@@ -94,6 +98,20 @@ const api = {
     resetDefaults: () => ipcRenderer.invoke('settings:resetDefaults'),
     testErpConnection: () => ipcRenderer.invoke('settings:testErpConnection'),
     testDbConnection: () => ipcRenderer.invoke('settings:testDbConnection')
+  },
+
+  // Material Type service
+  materialType: {
+    getAll: () => ipcRenderer.invoke('materialType:getAll'),
+    getByManager: (managerName: string) =>
+      ipcRenderer.invoke('materialType:getByManager', managerName),
+    getManagers: () => ipcRenderer.invoke('materialType:getManagers'),
+    upsert: (materialName: string, managerName: string) =>
+      ipcRenderer.invoke('materialType:upsert', { materialName, managerName }),
+    delete: (materialName: string, managerName: string) =>
+      ipcRenderer.invoke('materialType:delete', { materialName, managerName }),
+    upsertBatch: (request: MaterialTypeBatchRequest) =>
+      ipcRenderer.invoke('materialType:upsertBatch', request)
   }
 } as const
 

@@ -15,6 +15,7 @@
 在 `config-manager.ts:437-483` 中，`saveAllSettings()` 方法无条件覆盖所有配置类别。当 UI 只发送部分字段时，未包含的字段会被设置为 `undefined` 或默认值，导致原有配置丢失。
 
 **数据流问题：**
+
 ```
 SettingsPage (只修改 ERP URL)
     ↓ 发送完整的 settings 对象
@@ -69,11 +70,11 @@ ConfigManager.saveAllSettings()
 
 ### 改动点
 
-| 文件 | 改动类型 | 说明 |
-|------|---------|------|
-| `src/main/services/config/config-manager.ts` | 核心 | 新增 `savePartialSettings()`、深度合并、备份机制 |
-| `src/main/ipc/settings-handler.ts` | 调整 | IPC 参数改为 `Partial<SettingsData>` |
-| `src/renderer/src/pages/SettingsPage.tsx` | 优化 | 只发送 UI 支持的字段 |
+| 文件                                         | 改动类型 | 说明                                             |
+| -------------------------------------------- | -------- | ------------------------------------------------ |
+| `src/main/services/config/config-manager.ts` | 核心     | 新增 `savePartialSettings()`、深度合并、备份机制 |
+| `src/main/ipc/settings-handler.ts`           | 调整     | IPC 参数改为 `Partial<SettingsData>`             |
+| `src/renderer/src/pages/SettingsPage.tsx`    | 优化     | 只发送 UI 支持的字段                             |
 
 ---
 
@@ -120,7 +121,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 const UI_EDITABLE_FIELDS: string[] = [
   'erp.url',
   'erp.username',
-  'erp.password',
+  'erp.password'
   // 未来扩展：
   // 'database.dbType',
   // 'paths.dataDir',
@@ -305,6 +306,7 @@ ipcMain.handle(
 ```
 
 **关键改动：**
+
 - 参数类型从 `SettingsData` 改为 `Partial<SettingsData>`
 - 调用 `savePartialSettings()` 替代 `saveAllSettings()`
 
@@ -409,9 +411,9 @@ const UI_EDITABLE_FIELDS: string[] = [
   'erp.url',
   'erp.username',
   'erp.password',
-  'database.dbType',        // 新增
-  'paths.dataDir',          // 新增
-  'extraction.batchSize',   // 新增
+  'database.dbType', // 新增
+  'paths.dataDir', // 新增
+  'extraction.batchSize' // 新增
   // ...
 ]
 ```
@@ -425,10 +427,7 @@ const EDITABLE_FIELDS_BY_ROLE: Record<UserType, string[]> = {
   Guest: []
 }
 
-function validateEditableFields(
-  settings: Partial<SettingsData>,
-  userType: UserType
-) {
+function validateEditableFields(settings: Partial<SettingsData>, userType: UserType) {
   const allowed = EDITABLE_FIELDS_BY_ROLE[userType]
   // 验证逻辑...
 }
@@ -464,12 +463,12 @@ interface ConfigChange {
 
 ## 风险与缓解
 
-| 风险 | 影响 | 缓解措施 |
-|------|------|---------|
-| 深度合并逻辑错误 | 配置错误 | 完善单元测试覆盖 |
-| 备份文件权限问题 | 无法恢复 | 错误处理 + 日志 |
-| 白名单漏配置 | 功能受限 | 清晰的文档 + 代码注释 |
-| 并发保存冲突 | 数据不一致 | 单实例 ConfigManager + 文件锁 |
+| 风险             | 影响       | 缓解措施                      |
+| ---------------- | ---------- | ----------------------------- |
+| 深度合并逻辑错误 | 配置错误   | 完善单元测试覆盖              |
+| 备份文件权限问题 | 无法恢复   | 错误处理 + 日志               |
+| 白名单漏配置     | 功能受限   | 清晰的文档 + 代码注释         |
+| 并发保存冲突     | 数据不一致 | 单实例 ConfigManager + 文件锁 |
 
 ---
 

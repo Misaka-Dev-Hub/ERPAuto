@@ -12,6 +12,7 @@
 ### Bug Description
 
 For **User type (non-Admin)** users:
+
 1. The table shows only materials assigned to the current user (filtered by `filteredResults`)
 2. Clicking "取消" (Uncheck All) was unchecking **ALL** materials in `validationResults`, including invisible ones
 3. Clicking "确认删除" (Confirm Deletion) processed **ALL** materials in `validationResults`, not just visible ones
@@ -20,12 +21,14 @@ For **User type (non-Admin)** users:
 ### Root Causes
 
 #### 1. "取消" Button (Line 420)
+
 ```typescript
 // ❌ WRONG: Clears ALL selected items
 onClick={() => setSelectedItems(new Set())}
 ```
 
 #### 2. `handleConfirmDeletion` Function (Line 165)
+
 ```typescript
 // ❌ WRONG: Iterates ALL validation results
 for (const result of validationResults) {
@@ -87,6 +90,7 @@ graph TB
 ```
 
 **What Changed**:
+
 - Before: `setSelectedItems(new Set())` - clears everything
 - After: Iterates through `filteredResults` and removes only visible items from `selectedItems`
 - Preserves selections for items not currently visible (e.g., other users' data)
@@ -115,6 +119,7 @@ const handleConfirmDeletion = async () => {
 ```
 
 **What Changed**:
+
 - Before: `for (const result of validationResults)` - processes all 1000 items
 - After: `for (const result of resultsToProcess)` where:
   - `Admin` → processes `validationResults` (all items)
@@ -127,20 +132,24 @@ const handleConfirmDeletion = async () => {
 ### Scenario 1: User Unchecks Own Data Only
 
 **Setup**:
+
 - User A logs in (non-Admin)
 - 100 materials visible (assigned to User A)
 - 900 materials invisible (assigned to other users)
 - All 1000 materials are initially checked
 
 **Actions**:
+
 1. User A clicks "取消"
 2. Table shows all checkboxes unchecked
 
 **Expected**:
+
 - ✅ User A's 100 materials are unchecked
 - ✅ Other users' 900 materials **remain checked** (not affected)
 
 **Verification**:
+
 ```typescript
 // Before fix: selectedItems.size === 0
 // After fix: selectedItems.size === 900 (other users' items still checked)
@@ -149,16 +158,19 @@ const handleConfirmDeletion = async () => {
 ### Scenario 2: User Confirms Deletion
 
 **Setup**:
+
 - User A logs in (non-Admin)
 - User A unchecks 50 of their 100 materials
 - 50 items checked (User A's)
 - 900 items checked (other users')
 
 **Actions**:
+
 1. User A clicks "确认删除"
 2. Confirm dialog shows: "写入/更新 50 条记录"
 
 **Expected**:
+
 - ✅ Only User A's 50 materials are upserted to database
 - ✅ Other users' 900 materials are **NOT touched**
 - ✅ No materials are deleted (since other users' items aren't processed)
@@ -166,15 +178,18 @@ const handleConfirmDeletion = async () => {
 ### Scenario 3: Admin Behavior Unchanged
 
 **Setup**:
+
 - Admin logs in
 - All 1000 materials visible
 - All filtered by selected managers
 
 **Actions**:
+
 1. Admin clicks "取消" → all visible items unchecked
 2. Admin clicks "确认删除" → processes all filtered items
 
 **Expected**:
+
 - ✅ Admin behavior unchanged (can manage all data)
 - ✅ Admin can still filter by managers and process filtered results
 
@@ -183,6 +198,7 @@ const handleConfirmDeletion = async () => {
 ## Security & Scope Implications
 
 ### Before Fix (Vulnerability)
+
 ```mermaid
 flowchart LR
     UserA[User A] --> Sees[Sees 100 items]
@@ -193,6 +209,7 @@ flowchart LR
 ```
 
 ### After Fix (Secure)
+
 ```mermaid
 flowchart LR
     UserA[User A] --> Sees[Sees 100 items]
@@ -209,9 +226,9 @@ flowchart LR
 
 ### File: `src/renderer/src/pages/CleanerPage.tsx`
 
-| Line | Change | Description |
-|------|--------|-------------|
-| 419-432 | Modified "取消" button | Only uncheck visible filteredResults |
+| Line    | Change                           | Description                               |
+| ------- | -------------------------------- | ----------------------------------------- |
+| 419-432 | Modified "取消" button           | Only uncheck visible filteredResults      |
 | 158-222 | Modified `handleConfirmDeletion` | Use `resultsToProcess` based on `isAdmin` |
 
 ### Variables Used
@@ -227,6 +244,7 @@ flowchart LR
 ## Verification Steps
 
 1. **Test as User A**:
+
    ```bash
    # Login as user1
    npm run dev
@@ -237,6 +255,7 @@ flowchart LR
    ```
 
 2. **Test as User B**:
+
    ```bash
    # Login as user2
    # Verify user1's changes didn't affect user2's data

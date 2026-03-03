@@ -8,7 +8,12 @@ import type {
   UserSelectionResponse,
   CurrentUserResponse
 } from '../main/ipc/auth-handler'
-import type { ValidationRequest, ValidationResponse } from '../main/types/validation.types'
+import type {
+  ValidationRequest,
+  ValidationResponse,
+  MaterialTypeRecord,
+  MaterialTypeBatchRequest
+} from '../main/types/validation.types'
 import type {
   SettingsData,
   UserType,
@@ -178,6 +183,49 @@ export interface SettingsAPI {
   testDbConnection: () => Promise<ConnectionTestResult>
 }
 
+/**
+ * Material Type API
+ */
+export interface MaterialTypeAPI {
+  /**
+   * Get all material type records
+   */
+  getAll: () => Promise<{ success: boolean; data?: MaterialTypeRecord[]; error?: string }>
+  /**
+   * Get material types by manager
+   * @param managerName - Manager name
+   */
+  getByManager: (
+    managerName: string
+  ) => Promise<{ success: boolean; data?: MaterialTypeRecord[]; error?: string }>
+  /**
+   * Get list of managers
+   */
+  getManagers: () => Promise<{ success: boolean; data?: string[]; error?: string }>
+  /**
+   * Upsert (insert or update) a material type record
+   */
+  upsert: (
+    materialName: string,
+    managerName: string
+  ) => Promise<{ success: boolean; error?: string }>
+  /**
+   * Delete a material type record
+   */
+  delete: (
+    materialName: string,
+    managerName: string
+  ) => Promise<{ success: boolean; error?: string }>
+  /**
+   * Batch operation for material types
+   */
+  upsertBatch: (request: MaterialTypeBatchRequest) => Promise<{
+    success: boolean
+    stats?: { total: number; success: number; failed: number }
+    error?: string
+  }>
+}
+
 declare global {
   interface Window {
     electron: {
@@ -205,6 +253,7 @@ declare global {
       validation: ValidationAPI
       materials: MaterialsAPI
       settings: SettingsAPI
+      materialType: MaterialTypeAPI
     }
     api: unknown
   }

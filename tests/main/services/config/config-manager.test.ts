@@ -101,11 +101,38 @@ describe('ConfigManager.savePartialSettings', () => {
 
     // Setup initial state with multiple categories
     await manager.saveAllSettings({
-      erp: { url: 'http://old.com', username: 'user1', password: 'pass1', headless: true, ignoreHttpsErrors: true, autoCloseBrowser: true },
-      database: { dbType: 'mysql', server: '', mysqlHost: '192.168.1.1', mysqlPort: 3306, database: 'testdb', username: 'dbuser', password: '' },
+      erp: {
+        url: 'http://old.com',
+        username: 'user1',
+        password: 'pass1',
+        headless: true,
+        ignoreHttpsErrors: true,
+        autoCloseBrowser: true
+      },
+      database: {
+        dbType: 'mysql',
+        server: '',
+        mysqlHost: '192.168.1.1',
+        mysqlPort: 3306,
+        database: 'testdb',
+        username: 'dbuser',
+        password: ''
+      },
       paths: { dataDir: '/old/path', defaultOutput: 'out.xlsx', validationOutput: 'val.xlsx' },
-      extraction: { batchSize: 50, verbose: true, autoConvert: true, mergeBatches: true, enableDbPersistence: true },
-      validation: { dataSource: 'database_full', batchSize: 1000, matchMode: 'exact', enableCrud: false, defaultManager: '' },
+      extraction: {
+        batchSize: 50,
+        verbose: true,
+        autoConvert: true,
+        mergeBatches: true,
+        enableDbPersistence: true
+      },
+      validation: {
+        dataSource: 'database_full',
+        batchSize: 1000,
+        matchMode: 'exact',
+        enableCrud: false,
+        defaultManager: ''
+      },
       ui: { fontFamily: 'Tahoma', fontSize: 14, productionIdInputWidth: 25 },
       execution: { dryRun: true }
     })
@@ -160,11 +187,38 @@ describe('ConfigManager.savePartialSettings', () => {
     await manager.save()
 
     await manager.saveAllSettings({
-      erp: { url: 'http://test.com', username: 'u', password: 'p', headless: false, ignoreHttpsErrors: false, autoCloseBrowser: false },
-      database: { dbType: 'mysql', server: '', mysqlHost: 'localhost', mysqlPort: 3306, database: 'db', username: 'user', password: '' },
+      erp: {
+        url: 'http://test.com',
+        username: 'u',
+        password: 'p',
+        headless: false,
+        ignoreHttpsErrors: false,
+        autoCloseBrowser: false
+      },
+      database: {
+        dbType: 'mysql',
+        server: '',
+        mysqlHost: 'localhost',
+        mysqlPort: 3306,
+        database: 'db',
+        username: 'user',
+        password: ''
+      },
       paths: { dataDir: '/data', defaultOutput: 'out.xlsx', validationOutput: 'val.xlsx' },
-      extraction: { batchSize: 100, verbose: true, autoConvert: true, mergeBatches: true, enableDbPersistence: true },
-      validation: { dataSource: 'database_full', batchSize: 2000, matchMode: 'substring', enableCrud: false, defaultManager: '' },
+      extraction: {
+        batchSize: 100,
+        verbose: true,
+        autoConvert: true,
+        mergeBatches: true,
+        enableDbPersistence: true
+      },
+      validation: {
+        dataSource: 'database_full',
+        batchSize: 2000,
+        matchMode: 'substring',
+        enableCrud: false,
+        defaultManager: ''
+      },
       ui: { fontFamily: 'Arial', fontSize: 12, productionIdInputWidth: 20 },
       execution: { dryRun: false }
     })

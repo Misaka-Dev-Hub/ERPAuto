@@ -13,6 +13,7 @@
 ## Task 1: Add Utility Functions to ConfigManager
 
 **Files:**
+
 - Modify: `src/main/services/config/config-manager.ts`
 
 **Step 1: Write failing test for deep merge**
@@ -31,11 +32,38 @@ describe('ConfigManager - deep merge utilities', () => {
 
     // Setup initial state
     const initial: SettingsData = {
-      erp: { url: 'http://old.com', username: 'user1', password: 'pass1', headless: true, ignoreHttpsErrors: true, autoCloseBrowser: true },
-      database: { dbType: 'mysql', server: '', mysqlHost: 'localhost', mysqlPort: 3306, database: 'db', username: 'user', password: '' },
+      erp: {
+        url: 'http://old.com',
+        username: 'user1',
+        password: 'pass1',
+        headless: true,
+        ignoreHttpsErrors: true,
+        autoCloseBrowser: true
+      },
+      database: {
+        dbType: 'mysql',
+        server: '',
+        mysqlHost: 'localhost',
+        mysqlPort: 3306,
+        database: 'db',
+        username: 'user',
+        password: ''
+      },
       paths: { dataDir: '/data', defaultOutput: 'out.xlsx', validationOutput: 'validation.xlsx' },
-      extraction: { batchSize: 100, verbose: true, autoConvert: true, mergeBatches: true, enableDbPersistence: true },
-      validation: { dataSource: 'database_full', batchSize: 2000, matchMode: 'substring', enableCrud: false, defaultManager: '' },
+      extraction: {
+        batchSize: 100,
+        verbose: true,
+        autoConvert: true,
+        mergeBatches: true,
+        enableDbPersistence: true
+      },
+      validation: {
+        dataSource: 'database_full',
+        batchSize: 2000,
+        matchMode: 'substring',
+        enableCrud: false,
+        defaultManager: ''
+      },
       ui: { fontFamily: 'Arial', fontSize: 12, productionIdInputWidth: 20 },
       execution: { dryRun: false }
     }
@@ -113,7 +141,7 @@ function deepMerge<T>(source: T, target: Partial<T>): T {
 const UI_EDITABLE_FIELDS: string[] = [
   'erp.url',
   'erp.username',
-  'erp.password',
+  'erp.password'
   // Add more fields as UI expands
 ]
 
@@ -163,6 +191,7 @@ git commit -m "feat: add deep merge and validation utility functions to ConfigMa
 ## Task 2: Add Backup and Restore Mechanism
 
 **Files:**
+
 - Modify: `src/main/services/config/config-manager.ts`
 
 **Step 1: Write test for backup functionality**
@@ -302,6 +331,7 @@ git commit -m "feat: add backup and restore mechanism to ConfigManager"
 ## Task 3: Implement savePartialSettings Method
 
 **Files:**
+
 - Modify: `src/main/services/config/config-manager.ts`
 
 **Step 1: Write comprehensive test for savePartialSettings**
@@ -316,11 +346,38 @@ describe('ConfigManager.savePartialSettings', () => {
 
     // Setup initial state with multiple categories
     await manager.saveAllSettings({
-      erp: { url: 'http://old.com', username: 'user1', password: 'pass1', headless: true, ignoreHttpsErrors: true, autoCloseBrowser: true },
-      database: { dbType: 'mysql', server: '', mysqlHost: '192.168.1.1', mysqlPort: 3306, database: 'testdb', username: 'dbuser', password: '' },
+      erp: {
+        url: 'http://old.com',
+        username: 'user1',
+        password: 'pass1',
+        headless: true,
+        ignoreHttpsErrors: true,
+        autoCloseBrowser: true
+      },
+      database: {
+        dbType: 'mysql',
+        server: '',
+        mysqlHost: '192.168.1.1',
+        mysqlPort: 3306,
+        database: 'testdb',
+        username: 'dbuser',
+        password: ''
+      },
       paths: { dataDir: '/old/path', defaultOutput: 'out.xlsx', validationOutput: 'val.xlsx' },
-      extraction: { batchSize: 50, verbose: true, autoConvert: true, mergeBatches: true, enableDbPersistence: true },
-      validation: { dataSource: 'database_full', batchSize: 1000, matchMode: 'exact', enableCrud: false, defaultManager: '' },
+      extraction: {
+        batchSize: 50,
+        verbose: true,
+        autoConvert: true,
+        mergeBatches: true,
+        enableDbPersistence: true
+      },
+      validation: {
+        dataSource: 'database_full',
+        batchSize: 1000,
+        matchMode: 'exact',
+        enableCrud: false,
+        defaultManager: ''
+      },
       ui: { fontFamily: 'Tahoma', fontSize: 14, productionIdInputWidth: 25 },
       execution: { dryRun: true }
     })
@@ -367,11 +424,38 @@ describe('ConfigManager.savePartialSettings', () => {
     await manager.initialize()
 
     await manager.saveAllSettings({
-      erp: { url: 'http://test.com', username: 'u', password: 'p', headless: false, ignoreHttpsErrors: false, autoCloseBrowser: false },
-      database: { dbType: 'mysql', server: '', mysqlHost: 'localhost', mysqlPort: 3306, database: 'db', username: 'user', password: '' },
+      erp: {
+        url: 'http://test.com',
+        username: 'u',
+        password: 'p',
+        headless: false,
+        ignoreHttpsErrors: false,
+        autoCloseBrowser: false
+      },
+      database: {
+        dbType: 'mysql',
+        server: '',
+        mysqlHost: 'localhost',
+        mysqlPort: 3306,
+        database: 'db',
+        username: 'user',
+        password: ''
+      },
       paths: { dataDir: '/data', defaultOutput: 'out.xlsx', validationOutput: 'val.xlsx' },
-      extraction: { batchSize: 100, verbose: true, autoConvert: true, mergeBatches: true, enableDbPersistence: true },
-      validation: { dataSource: 'database_full', batchSize: 2000, matchMode: 'substring', enableCrud: false, defaultManager: '' },
+      extraction: {
+        batchSize: 100,
+        verbose: true,
+        autoConvert: true,
+        mergeBatches: true,
+        enableDbPersistence: true
+      },
+      validation: {
+        dataSource: 'database_full',
+        batchSize: 2000,
+        matchMode: 'substring',
+        enableCrud: false,
+        defaultManager: ''
+      },
       ui: { fontFamily: 'Arial', fontSize: 12, productionIdInputWidth: 20 },
       execution: { dryRun: false }
     })
@@ -516,6 +600,7 @@ git commit -m "feat: implement savePartialSettings with validation and rollback"
 ## Task 4: Update IPC Handler to Use Partial Save
 
 **Files:**
+
 - Modify: `src/main/ipc/settings-handler.ts`
 
 **Step 1: Update settings:saveSettings handler**
@@ -523,42 +608,42 @@ git commit -m "feat: implement savePartialSettings with validation and rollback"
 Find the `settings:saveSettings` handler (around line 83) and replace it:
 
 ```typescript
-  /**
-   * Save settings (updated to use partial save)
-   */
-  ipcMain.handle(
-    'settings:saveSettings',
-    async (_event, settings: Partial<SettingsData>): Promise<SaveSettingsResult> => {
-      try {
-        log.info('Saving settings', {
-          sections: Object.keys(settings)
+/**
+ * Save settings (updated to use partial save)
+ */
+ipcMain.handle(
+  'settings:saveSettings',
+  async (_event, settings: Partial<SettingsData>): Promise<SaveSettingsResult> => {
+    try {
+      log.info('Saving settings', {
+        sections: Object.keys(settings)
+      })
+
+      // Use partial save method
+      const result = await configManager.savePartialSettings(settings)
+
+      if (result.success) {
+        log.info('Settings saved successfully')
+        return { success: true }
+      } else {
+        log.warn('Failed to save settings', {
+          error: result.error
         })
-
-        // Use partial save method
-        const result = await configManager.savePartialSettings(settings)
-
-        if (result.success) {
-          log.info('Settings saved successfully')
-          return { success: true }
-        } else {
-          log.warn('Failed to save settings', {
-            error: result.error
-          })
-          return {
-            success: false,
-            error: result.error || '保存设置失败'
-          }
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        log.error('Error saving settings', { error: message })
         return {
           success: false,
-          error: `保存设置失败：${message}`
+          error: result.error || '保存设置失败'
         }
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      log.error('Error saving settings', { error: message })
+      return {
+        success: false,
+        error: `保存设置失败：${message}`
+      }
     }
-  )
+  }
+)
 ```
 
 **Step 2: Run typecheck**
@@ -580,6 +665,7 @@ git commit -m "feat: update settings handler to use savePartialSettings"
 ## Task 5: Update Frontend to Send Only Necessary Fields
 
 **Files:**
+
 - Modify: `src/renderer/src/pages/SettingsPage.tsx`
 
 **Step 1: Update handleSaveSettings to send partial settings**
@@ -587,29 +673,29 @@ git commit -m "feat: update settings handler to use savePartialSettings"
 Find the `handleSaveSettings` function (around line 61) and replace it:
 
 ```typescript
-  const handleSaveSettings = async () => {
-    try {
-      // Only send UI-supported fields (double safety)
-      const partialSettings = {
-        erp: {
-          url: settings.erp?.url,
-          username: settings.erp?.username,
-          password: settings.erp?.password
-        }
+const handleSaveSettings = async () => {
+  try {
+    // Only send UI-supported fields (double safety)
+    const partialSettings = {
+      erp: {
+        url: settings.erp?.url,
+        username: settings.erp?.username,
+        password: settings.erp?.password
       }
-
-      const result = await window.electron.settings.saveSettings(partialSettings as any)
-
-      if (result.success) {
-        setIsModified(false)
-        showMessage('success', '设置保存成功')
-      } else {
-        showMessage('error', result.error || '保存失败')
-      }
-    } catch (error) {
-      showMessage('error', '保存设置时发生错误')
     }
+
+    const result = await window.electron.settings.saveSettings(partialSettings as any)
+
+    if (result.success) {
+      setIsModified(false)
+      showMessage('success', '设置保存成功')
+    } else {
+      showMessage('error', result.error || '保存失败')
+    }
+  } catch (error) {
+    showMessage('error', '保存设置时发生错误')
   }
+}
 ```
 
 **Step 2: Run typecheck**
@@ -631,6 +717,7 @@ git commit -m "feat: send only ERP fields from settings page (defensive programm
 ## Task 6: Manual Testing and Verification
 
 **Files:**
+
 - Manual test procedure
 
 **Step 1: Prepare test environment**
@@ -701,6 +788,7 @@ cat .env
 ```
 
 Expected results:
+
 - `ERP_URL` should be `http://modified-test.com` (CHANGED)
 - `DB_TYPE` should still be `mysql` (PRESERVED)
 - `VALIDATION_MATCH_MODE` should still be `substring` (PRESERVED)
@@ -790,6 +878,7 @@ git commit -m "test: add manual test report for settings partial save"
 ## Task 7: Update Documentation
 
 **Files:**
+
 - Create: `docs/settings-partial-save.md`
 - Update: `README.md` (if applicable)
 
@@ -797,7 +886,7 @@ git commit -m "test: add manual test report for settings partial save"
 
 Create `docs/settings-partial-save.md`:
 
-```markdown
+````markdown
 # Settings Partial Save Feature
 
 ## Overview
@@ -813,6 +902,7 @@ The settings system now implements partial save functionality to prevent uninten
 ## Editable Fields
 
 Currently editable via UI:
+
 - `erp.url` - ERP system URL
 - `erp.username` - ERP login username
 - `erp.password` - ERP login password
@@ -828,9 +918,10 @@ const UI_EDITABLE_FIELDS: string[] = [
   'erp.url',
   'erp.username',
   'erp.password',
-  'database.dbType',  // Add new field here
+  'database.dbType' // Add new field here
 ]
 ```
+````
 
 2. Add UI input in `src/renderer/src/pages/SettingsPage.tsx`
 3. Update `handleSaveSettings` to include the new field
@@ -844,6 +935,7 @@ Saves only the provided fields, preserving all existing configuration.
 **Returns:** `{ success: boolean, error?: string }`
 
 **Validation:**
+
 - Checks whitelist before applying changes
 - Returns error for unauthorized fields
 
@@ -858,7 +950,8 @@ Saves only the provided fields, preserving all existing configuration.
 Location: `.env.backup` (in project root)
 
 Created before every save operation. Used for rollback on failure.
-```
+
+````
 
 **Step 2: Update CLAUDE.md if needed**
 
@@ -870,13 +963,14 @@ Add to "Development Commands" or "Architecture Overview" sections if there's rel
 cd D:/Node/ERPAuto-settings-fix
 git add docs/settings-partial-save.md
 git commit -m "docs: add settings partial save feature documentation"
-```
+````
 
 ---
 
 ## Task 8: Final Verification and Cleanup
 
 **Files:**
+
 - All modified files
 
 **Step 1: Run full test suite**
@@ -937,6 +1031,7 @@ This implementation plan fixes the settings save issue through:
 **Total estimated implementation time:** 2-3 hours
 
 **Key files modified:**
+
 - `src/main/services/config/config-manager.ts` (core logic)
 - `src/main/ipc/settings-handler.ts` (IPC layer)
 - `src/renderer/src/pages/SettingsPage.tsx` (frontend)

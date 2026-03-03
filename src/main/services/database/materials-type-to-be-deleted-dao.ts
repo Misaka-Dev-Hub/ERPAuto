@@ -1,0 +1,376 @@
+/**
+ * Data Access Object for MaterialsTypeToBeDeleted table
+ *
+ * Manages material type keywords for identifying materials to be deleted.
+ * Used for matching material names against type keywords to assign managers.
+ */
+
+import { create, type IDatabaseService } from './index'
+import { createLogger } from '../logger'
+
+const log = createLogger('MaterialsTypeToBeDeletedDAO')
+
+/**
+ * Material type record interface
+ */
+export interface MaterialTypeRecord {
+  id?: number
+  materialName: string
+  managerName: string
+}
+
+/**
+ * Batch update request
+ */
+export interface MaterialTypeBatchRequest {
+  toInsert: MaterialTypeRecord[]
+  toUpdate: { old: MaterialTypeRecord; new: MaterialTypeRecord }[]
+  toDelete: MaterialTypeRecord[]
+}
+
+/**
+ * Configuration for MaterialsTypeToBeDeleted table
+ */
+export const MATERIALS_TYPE_TO_BE_DELETED_CONFIG = {
+  TABLE_NAME_SQLSERVER: '[dbo].[MaterialsTypeToBeDeleted]',
+  TABLE_NAME_MYSQL: 'dbo_MaterialsTypeToBeDeleted',
+  COLUMNS: {
+    ID: 'ID',
+    MATERIAL_NAME: 'MaterialName',
+    MANAGER_NAME: 'ManagerName'
+  }
+} as const
+
+/**
+ * MaterialsTypeToBeDeleted DAO Class
+ */
+export class MaterialsTypeToBeDeletedDAO {
+  private dbService: IDatabaseService | null = null
+
+  /**
+   * Get the appropriate table name based on database type
+   */
+  private getTableName(): string {
+    const isSqlServer = this.dbService?.type === 'sqlserver'
+    return isSqlServer
+      ? MATERIALS_TYPE_TO_BE_DELETED_CONFIG.TABLE_NAME_SQLSERVER
+      : MATERIALS_TYPE_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL
+  }
+
+  /**
+   * Get database service instance using DatabaseFactory
+   */
+  private async getDatabaseService(): Promise<IDatabaseService> {
+    if (this.dbService && this.dbService.isConnected()) {
+      return this.dbService
+    }
+
+    this.dbService = await create()
+    return this.dbService
+  }
+
+  // ==================== READ ====================
+
+  /**
+   * Get all material type records
+   * @returns List of all material type records
+   */
+  async getAllMaterials(): Promise<MaterialTypeRecord[]> {
+    try {
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+
+      const sqlString = `
+        SELECT ID, MaterialName, ManagerName
+        FROM ${tableName}
+        WHERE MaterialName IS NOT NULL
+        ORDER BY ManagerName, MaterialName
+      `
+
+      const result = await dbService.query(sqlString)
+      return result.rows.map((row) => ({
+        id: row.ID as number,
+        materialName: row.MaterialName as string,
+        managerName: row.ManagerName as string
+      }))
+    } catch (error) {
+      log.error('Get all materials error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return []
+    }
+  }
+
+  /**
+   * Get all materials for a specific manager
+   * @param managerName - Manager name
+   * @returns List of materials for the manager
+   */
+  async getMaterialsByManager(managerName: string): Promise<MaterialTypeRecord[]> {
+    try {
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const isSqlServer = dbService.type === 'sqlserver'
+
+      const placeholder = isSqlServer ? '@p0' : '?'
+      const sqlString = `
+        SELECT ID, MaterialName, ManagerName
+        FROM ${tableName}
+        WHERE ManagerName = ${placeholder} AND MaterialName IS NOT NULL
+        ORDER BY MaterialName
+      `
+
+      const result = await dbService.query(sqlString, [managerName])
+      return result.rows.map((row) => ({
+        id: row.ID as number,
+        materialName: row.MaterialName as string,
+        managerName: row.ManagerName as string
+      }))
+    } catch (error) {
+      log.error('Get materials by manager error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return []
+    }
+  }
+
+  /**
+   * Get list of unique manager names
+   * @returns List of unique manager names
+   */
+  async getManagers(): Promise<string[]> {
+    try {
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+
+      const sqlString = `
+        SELECT DISTINCT ManagerName
+        FROM ${tableName}
+        WHERE ManagerName IS NOT NULL
+        ORDER BY ManagerName
+      `
+
+      const result = await dbService.query(sqlString)
+      return result.rows.map((row) => row.ManagerName as string).filter(Boolean)
+    } catch (error) {
+      log.error('Get managers error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return []
+    }
+  }
+
+  // ==================== UPSERT ====================
+
+  /**
+   * Insert or update a material type record
+   * @param materialName - Material name (type keyword)
+   * @param managerName - Manager name
+   * @returns True if successful
+   */
+  async upsertMaterial(materialName: string, managerName: string): Promise<boolean> {
+    if (!materialName || !materialName.trim()) {
+      log.error('MaterialName cannot be empty')
+      return false
+    }
+
+    try {
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const name = materialName.trim()
+      const manager = managerName?.trim() || null
+      const isSqlServer = dbService.type === 'sqlserver'
+
+      if (isSqlServer) {
+        // SQL Server MERGE statement
+        const sqlString = `
+          MERGE ${tableName} AS target
+          USING (VALUES (@p0, @p1)) AS source (MaterialName, ManagerName)
+          ON target.MaterialName = source.MaterialName
+          WHEN MATCHED THEN UPDATE SET ManagerName = source.ManagerName
+          WHEN NOT MATCHED THEN INSERT (MaterialName, ManagerName) VALUES (source.MaterialName, source.ManagerName);
+        `
+
+        await dbService.query(sqlString, [name, manager])
+      } else {
+        // MySQL ON DUPLICATE KEY UPDATE
+        const sqlString = `
+          INSERT INTO ${tableName} (MaterialName, ManagerName)
+          VALUES (?, ?)
+          ON DUPLICATE KEY UPDATE ManagerName = VALUES(ManagerName)
+        `
+
+        await dbService.query(sqlString, [name, manager])
+      }
+
+      return true
+    } catch (error) {
+      log.error('Upsert material error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return false
+    }
+  }
+
+  // ==================== DELETE ====================
+
+  /**
+   * Delete a specific material type record
+   * @param materialName - Material name
+   * @param managerName - Manager name (optional, for verification)
+   * @returns True if successful
+   */
+  async deleteMaterial(materialName: string, managerName?: string): Promise<boolean> {
+    try {
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const name = materialName.trim()
+      const isSqlServer = dbService.type === 'sqlserver'
+
+      let sqlString: string
+      let params: (string | null)[]
+
+      if (managerName) {
+        const placeholder1 = isSqlServer ? '@p0' : '?'
+        const placeholder2 = isSqlServer ? '@p1' : '?'
+        sqlString = `
+          DELETE FROM ${tableName}
+          WHERE MaterialName = ${placeholder1} AND ManagerName = ${placeholder2}
+        `
+        params = [name, managerName.trim()]
+      } else {
+        const placeholder = isSqlServer ? '@p0' : '?'
+        sqlString = `
+          DELETE FROM ${tableName}
+          WHERE MaterialName = ${placeholder}
+        `
+        params = [name]
+      }
+
+      const result = await dbService.query(sqlString, params)
+      return result.rowCount > 0
+    } catch (error) {
+      log.error('Delete material error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return false
+    }
+  }
+
+  // ==================== UPDATE ====================
+
+  /**
+   * Update a material type record (change name and/or manager)
+   * @param oldName - Current material name
+   * @param oldManager - Current manager name
+   * @param newName - New material name
+   * @param newManager - New manager name
+   * @returns True if successful
+   */
+  async updateMaterial(
+    oldName: string,
+    oldManager: string,
+    newName: string,
+    newManager: string
+  ): Promise<boolean> {
+    try {
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const isSqlServer = dbService.type === 'sqlserver'
+
+      if (isSqlServer) {
+        const sqlString = `
+          UPDATE ${tableName}
+          SET MaterialName = @p0, ManagerName = @p1
+          WHERE MaterialName = @p2 AND ManagerName = @p3
+        `
+        const result = await dbService.query(sqlString, [
+          newName.trim(),
+          newManager.trim(),
+          oldName.trim(),
+          oldManager.trim()
+        ])
+        return result.rowCount > 0
+      } else {
+        const sqlString = `
+          UPDATE ${tableName}
+          SET MaterialName = ?, ManagerName = ?
+          WHERE MaterialName = ? AND ManagerName = ?
+        `
+        const result = await dbService.query(sqlString, [
+          newName.trim(),
+          newManager.trim(),
+          oldName.trim(),
+          oldManager.trim()
+        ])
+        return result.rowCount > 0
+      }
+    } catch (error) {
+      log.error('Update material error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return false
+    }
+  }
+
+  // ==================== BATCH OPERATIONS ====================
+
+  /**
+   * Process batch changes (insert, update, delete)
+   * @param request - Batch request with toInsert, toUpdate, toDelete arrays
+   * @returns Statistics object
+   */
+  async upsertBatch(
+    request: MaterialTypeBatchRequest
+  ): Promise<{ total: number; success: number; failed: number }> {
+    const stats = { total: 0, success: 0, failed: 0 }
+
+    try {
+      // Process inserts
+      for (const record of request.toInsert) {
+        stats.total++
+        const success = await this.upsertMaterial(record.materialName, record.managerName)
+        if (success) stats.success++
+        else stats.failed++
+      }
+
+      // Process updates
+      for (const update of request.toUpdate) {
+        stats.total++
+        const success = await this.updateMaterial(
+          update.old.materialName,
+          update.old.managerName,
+          update.new.materialName,
+          update.new.managerName
+        )
+        if (success) stats.success++
+        else stats.failed++
+      }
+
+      // Process deletes
+      for (const record of request.toDelete) {
+        stats.total++
+        const success = await this.deleteMaterial(record.materialName, record.managerName)
+        if (success) stats.success++
+        else stats.failed++
+      }
+
+      return stats
+    } catch (error) {
+      log.error('Batch upsert error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return stats
+    }
+  }
+
+  /**
+   * Disconnect from database
+   */
+  async disconnect(): Promise<void> {
+    if (this.dbService) {
+      await this.dbService.disconnect()
+      this.dbService = null
+    }
+  }
+}

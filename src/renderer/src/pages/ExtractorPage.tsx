@@ -201,6 +201,14 @@ const ExtractorPage: React.FC = () => {
                 </span>
               </div>
             </div>
+            {result.mergedFile && (
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                <span className="text-slate-500 text-sm block mb-1">合并文件路径</span>
+                <span className="text-sm font-mono text-slate-700 select-all break-all">
+                  {result.mergedFile}
+                </span>
+              </div>
+            )}
           </div>
         )}
 

@@ -44,6 +44,7 @@ log.info('Starting validation', { mode: request.mode, user: username, isAdmin })
 ```
 
 **说明**:
+
 - 在 `validation:validate` handler 开始时获取当前登录用户信息
 - 提取 `isAdmin` 和 `username` 用于后续匹配逻辑
 - 如果用户未登录，返回错误响应
@@ -68,6 +69,7 @@ if (!isAdmin && username) {
 ```
 
 **匹配逻辑**:
+
 1. **适用范围**: 仅对 `isAdmin === false` 的 User 用户生效
 2. **筛选关键词**: 从 `typeKeywords` 中筛选 `managerName === username` 的记录
 3. **匹配规则**: 使用 `materialName.includes(userKeyword.materialName)` 包含关系匹配
@@ -109,11 +111,13 @@ flowchart TB
 ### 场景1: User 用户匹配到自己的 typeKeyword
 
 **输入**:
+
 - 当前用户: `user1`
 - 物料名称: `螺丝 M6`
 - MaterialsTypeToBeDeleted: `{ materialName: "螺丝", managerName: "user1" }`
 
 **预期输出**:
+
 ```json
 {
   "materialName": "螺丝 M6",
@@ -126,6 +130,7 @@ flowchart TB
 ### 场景2: User 用户覆盖其他用户的匹配
 
 **输入**:
+
 - 当前用户: `user1`
 - 物料名称: `螺丝 M6`
 - MaterialsTypeToBeDeleted:
@@ -138,12 +143,14 @@ flowchart TB
 ### 场景3: User 用户无匹配关键词
 
 **输入**:
+
 - 当前用户: `user1`
 - 物料名称: `螺丝 M6`
 - MaterialsTypeToBeDeleted:
   - `{ materialName: "螺丝", managerName: "user2" }`
 
 **预期输出**:
+
 ```json
 {
   "materialName": "螺丝 M6",
@@ -152,11 +159,13 @@ flowchart TB
   "isMarkedForDeletion": false
 }
 ```
+
 **说明**: 保持优先级2的匹配结果
 
 ### 场景4: Admin 用户不执行覆盖
 
 **输入**:
+
 - 当前用户: `admin` (isAdmin=true)
 - 物料名称: `螺丝 M6`
 - MaterialsTypeToBeDeleted:
@@ -164,6 +173,7 @@ flowchart TB
   - `{ materialName: "螺丝", managerName: "admin" }`
 
 **预期输出**:
+
 ```json
 {
   "materialName": "螺丝 M6",
@@ -172,16 +182,19 @@ flowchart TB
   "isMarkedForDeletion": false
 }
 ```
+
 **说明**: Admin 不执行优先级3，保持原有匹配行为
 
 ### 场景5: 优先级1匹配不受影响
 
 **输入**:
+
 - 当前用户: `user1`
 - 物料代码: `MAT001`
 - MaterialsToBeDeleted: `{ materialCode: "MAT001", managerName: "user2" }`
 
 **预期输出**:
+
 ```json
 {
   "materialCode": "MAT001",
@@ -190,6 +203,7 @@ flowchart TB
   "matchedTypeKeyword": undefined
 }
 ```
+
 **说明**: 优先级1的精确匹配不受覆盖影响
 
 ---
@@ -198,22 +212,22 @@ flowchart TB
 
 ### MaterialsTypeToBeDeleted 表数据
 
-| MaterialName | ManagerName | 说明 |
-|--------------|-------------|------|
+| MaterialName | ManagerName | 说明                           |
+| ------------ | ----------- | ------------------------------ |
 | 螺丝         | user1       | user1 负责所有包含"螺丝"的物料 |
 | 螺母         | user2       | user2 负责所有包含"螺母"的物料 |
-| 垫圈         | user1       | user1 也负责"垫圈"类物料 |
-| 电缆         | admin       | admin 负责电缆类物料 |
+| 垫圈         | user1       | user1 也负责"垫圈"类物料       |
+| 电缆         | admin       | admin 负责电缆类物料           |
 
 ### 匹配结果示例
 
-| 物料名称    | 当前用户 | 原匹配 (优先级2) | 覆盖后 (优先级3) |
-|------------|---------|----------------|----------------|
-| 螺丝 M6    | user1   | user2          | **user1** ✅    |
-| 螺母 M8    | user1   | user2          | user2 (无匹配)   |
-| 垫圈 φ10   | user1   | user2          | **user1** ✅    |
-| 电缆 5m    | user1   | admin          | user1 (无匹配)   |
-| 螺丝 M6    | admin   | user2          | user2 (Admin跳过) |
+| 物料名称 | 当前用户 | 原匹配 (优先级2) | 覆盖后 (优先级3)  |
+| -------- | -------- | ---------------- | ----------------- |
+| 螺丝 M6  | user1    | user2            | **user1** ✅      |
+| 螺母 M8  | user1    | user2            | user2 (无匹配)    |
+| 垫圈 φ10 | user1    | user2            | **user1** ✅      |
+| 电缆 5m  | user1    | admin            | user1 (无匹配)    |
+| 螺丝 M6  | admin    | user2            | user2 (Admin跳过) |
 
 ---
 
@@ -233,6 +247,7 @@ const filteredResults = React.useMemo(() => {
 ```
 
 **协同效果**:
+
 1. 后端匹配算法确保 User 用户的物料优先分配给自己
 2. 前端过滤器只显示属于当前用户或未分配的物料
 3. Admin 用户可以看到所有物料并切换查看不同负责人

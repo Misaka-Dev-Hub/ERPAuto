@@ -291,12 +291,8 @@ export class ConfigManager {
       lines.push('# ===========================')
       lines.push('# 数据库配置 - MySQL (切换时使用)')
       lines.push('# ===========================')
-      lines.push(
-        `DB_TYPE=${this.configCache.get('DB_TYPE') || DEFAULT_SETTINGS.database.dbType}`
-      )
-      lines.push(
-        `DB_NAME=${this.configCache.get('DB_NAME') || DEFAULT_SETTINGS.database.database}`
-      )
+      lines.push(`DB_TYPE=${this.configCache.get('DB_TYPE') || DEFAULT_SETTINGS.database.dbType}`)
+      lines.push(`DB_NAME=${this.configCache.get('DB_NAME') || DEFAULT_SETTINGS.database.database}`)
       lines.push(
         `DB_USERNAME=${this.configCache.get('DB_USERNAME') || DEFAULT_SETTINGS.database.username}`
       )

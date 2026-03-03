@@ -13,6 +13,7 @@ The settings system now implements partial save functionality to prevent uninten
 ## Editable Fields
 
 Currently editable via UI:
+
 - `erp.url` - ERP system URL
 - `erp.username` - ERP login username
 - `erp.password` - ERP login password
@@ -28,7 +29,7 @@ const UI_EDITABLE_FIELDS: string[] = [
   'erp.url',
   'erp.username',
   'erp.password',
-  'database.dbType',  // Add new field here
+  'database.dbType' // Add new field here
 ]
 ```
 
@@ -44,6 +45,7 @@ Saves only the provided fields, preserving all existing configuration.
 **Returns:** `{ success: boolean, error?: string }`
 
 **Validation:**
+
 - Checks whitelist before applying changes
 - Returns error for unauthorized fields
 

@@ -11,6 +11,7 @@ import { registerResolverHandlers } from './resolver-handler'
 import { registerAuthHandlers } from './auth-handler'
 import { registerValidationHandlers } from './validation-handler'
 import { registerSettingsHandlers } from './settings-handler'
+import { registerMaterialTypeHandlers } from './material-type-handler'
 import { createLogger } from '../services/logger'
 import { getErrorMessage, getErrorCode, isBaseError } from '../types/errors'
 
@@ -73,5 +74,6 @@ export function registerIpcHandlers(): void {
   registerAuthHandlers()
   registerValidationHandlers()
   registerSettingsHandlers()
+  registerMaterialTypeHandlers()
   log.info('All IPC handlers registered')
 }
