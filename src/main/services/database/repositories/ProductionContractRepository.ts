@@ -113,4 +113,60 @@ export class ProductionContractRepository {
       return new Map()
     }
   }
+
+  /**
+   * Verify that order numbers exist in database
+   * @param orderNumbers - Array of order numbers (生产订单号)
+   * @returns Array of valid order numbers
+   */
+  async verifyOrderNumbers(orderNumbers: string[]): Promise<string[]> {
+    if (!orderNumbers.length) {
+      return []
+    }
+
+    try {
+      const repo = await this.getRepository()
+      const dbType = await this.getDatabaseType()
+      const validNumbers: string[] = []
+
+      // Process in batches of 2000
+      const batchSize = 2000
+
+      for (let i = 0; i < orderNumbers.length; i += batchSize) {
+        const batch = orderNumbers.slice(i, i + batchSize)
+
+        if (dbType === 'mysql') {
+          // MySQL syntax
+          const placeholders = batch.map(() => '?').join(', ')
+          const query = `
+            SELECT \`生产订单号\`
+            FROM \`productionContractData_26年压力表合同数据\`
+            WHERE \`生产订单号\` IN (${placeholders})
+          `
+
+          const results = await repo.query(query, batch)
+          validNumbers.push(...results.map((r: any) => r['生产订单号'] as string).filter(Boolean))
+        } else {
+          // SQL Server syntax
+          const placeholders = batch.map((_, idx) => `@p${idx}`).join(', ')
+          const query = `
+            SELECT [生产订单号]
+            FROM [productionContractData_26年压力表合同数据]
+            WHERE [生产订单号] IN (${placeholders})
+          `
+
+          const results = await repo.query(query, batch)
+          validNumbers.push(...results.map((r: any) => r['生产订单号'] as string).filter(Boolean))
+        }
+      }
+
+      return validNumbers
+    } catch (error) {
+      log.error('verifyOrderNumbers failed', {
+        count: orderNumbers.length,
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return []
+    }
+  }
 }
