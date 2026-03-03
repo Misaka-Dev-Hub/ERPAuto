@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { ProductionContractRepository } from '@services/database/repositories/ProductionContractRepository'
+import { ProductionContractRepository } from '../../src/main/services/database/repositories/ProductionContractRepository'
 import { DataSource } from 'typeorm'
-import { ProductionContract } from '@services/database/entities/ProductionContract'
+import { ProductionContract } from '../../src/main/services/database/entities/ProductionContract'
+import { getDataSource } from '../../src/main/services/database/data-source'
 
 describe('ProductionContractRepository', () => {
   let repository: ProductionContractRepository
@@ -9,7 +10,6 @@ describe('ProductionContractRepository', () => {
 
   beforeEach(async () => {
     // Get data source and ensure it's initialized
-    const { getDataSource } = require('@services/database/data-source')
     dataSource = getDataSource()
     if (!dataSource.isInitialized) {
       await dataSource.initialize()

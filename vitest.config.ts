@@ -13,6 +13,10 @@ export default defineConfig({
       reporter: ['text', 'json', 'html']
     }
   },
+  // Ensure reflect-metadata is loaded for TypeORM decorators
+  define: {
+    'import.meta.vitest': 'undefined'
+  },
   resolve: {
     alias: {
       '@main': path.resolve(__dirname, './src/main'),

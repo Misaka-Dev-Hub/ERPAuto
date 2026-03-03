@@ -88,6 +88,7 @@ export class ProductionContract {
 ```
 
 **Schema Definition**:
+
 - Fixed table name using existing convention
 - Both columns indexed for query performance
 - Entity registered in `data-source.ts` entities array
@@ -132,6 +133,7 @@ export class ProductionContractRepository {
 **Database-Specific Queries**:
 
 **For MySQL dialect**:
+
 ```sql
 SELECT `总排号`, `生产订单号`
 FROM `productionContractData_26年压力表合同数据`
@@ -139,6 +141,7 @@ WHERE `总排号` IN (?, ?, ?)
 ```
 
 **For SQL Server dialect**:
+
 ```sql
 SELECT [总排号], [生产订单号]
 FROM [productionContractData_26年压力表合同数据]
@@ -146,6 +149,7 @@ WHERE [总排号] IN (@p0, @p1, @p2)
 ```
 
 **Implementation Details**:
+
 - Detects database type from DataSource
 - Uses appropriate SQL syntax (backticks for MySQL, brackets for SQL Server)
 - Handles parameter binding differences (? vs @pN)
@@ -153,6 +157,7 @@ WHERE [总排号] IN (@p0, @p1, @p2)
 - Comprehensive error handling with structured logging
 
 **Dependencies**:
+
 - `DataSource` from `data-source.ts`
 - `ProductionContract` entity
 - `createLogger` from `../../logger`
@@ -166,6 +171,7 @@ WHERE [总排号] IN (@p0, @p1, @p2)
 **Changes**:
 
 **Before**:
+
 ```typescript
 import { MySqlService } from '../database/mysql'
 
@@ -187,6 +193,7 @@ export class OrderNumberResolver {
 ```
 
 **After**:
+
 ```typescript
 import { ProductionContractRepository } from '../database/repositories/ProductionContractRepository'
 
@@ -202,12 +209,14 @@ export class OrderNumberResolver {
 ```
 
 **Method Changes**:
+
 - `resolveProductionIds()`: Now calls `repository.findByProductionIds()`
 - `verifyOrderNumbers()`: Now calls `repository.verifyOrderNumbers()`
 - All MySQL-specific query logic removed
 - Error handling adapted for Repository exceptions
 
 **Benefits**:
+
 - Database-agnostic (works with MySQL or SQL Server)
 - Cleaner separation of concerns
 - Type-safe repository interface
@@ -222,6 +231,7 @@ export class OrderNumberResolver {
 **Changes**:
 
 **Before**:
+
 ```typescript
 import { MySqlService } from '../services/database/mysql'
 
@@ -245,6 +255,7 @@ if (mysqlService) {
 ```
 
 **After**:
+
 ```typescript
 import { getDataSource } from '../services/database/data-source'
 import { ProductionContractRepository } from '../services/database/repositories/ProductionContractRepository'
@@ -262,6 +273,7 @@ const resolver = new OrderNumberResolver(repository)
 ```
 
 **Cleanup**:
+
 - Remove `MySqlService` import
 - Remove mysql configuration parsing
 - Remove `mysqlService.disconnect()` from finally block
@@ -552,6 +564,7 @@ const resolver = new OrderNumberResolver(repository)
    - ✅ Returns empty results on query errors (doesn't crash)
 
 **Test Setup**:
+
 - Use existing TypeORM test database (configured in `.env.test`)
 - Seed test data before each test:
   ```sql
@@ -595,6 +608,7 @@ const resolver = new OrderNumberResolver(repository)
    - ✅ Handles all edge cases (empty, all valid, all invalid)
 
 **Test Setup**:
+
 - Mock ProductionContractRepository:
   ```typescript
   const mockRepository = {
@@ -636,6 +650,7 @@ const resolver = new OrderNumberResolver(repository)
    - ✅ ERP login failure (existing tests)
 
 **Test Setup**:
+
 - Use integration test databases
 - Mock ERP service (focus on database layer)
 - Test real TypeORM queries
@@ -645,6 +660,7 @@ const resolver = new OrderNumberResolver(repository)
 ### 4.4 Manual Testing Procedure
 
 **Prerequisites**:
+
 1. Create git worktree for isolated testing
 2. Configure both MySQL and SQL Server test databases
 3. Seed test data in both databases:
@@ -659,6 +675,7 @@ const resolver = new OrderNumberResolver(repository)
 **Test Steps**:
 
 **Step 1: MySQL Testing**
+
 ```bash
 # Set MySQL configuration in .env
 DB_TYPE=mysql
@@ -681,6 +698,7 @@ npm run dev
 ```
 
 **Step 2: SQL Server Testing**
+
 ```bash
 # Set SQL Server configuration in .env
 DB_TYPE=mssql
@@ -704,6 +722,7 @@ npm run dev
 ```
 
 **Step 3: Error Handling**
+
 ```bash
 # Test with invalid production ID
 # Input: "INVALID123"
@@ -719,6 +738,7 @@ npm run dev
 ```
 
 **Step 4: Performance**
+
 ```bash
 # Seed large dataset (1000+ records)
 # Input: 1000 production IDs
@@ -731,6 +751,7 @@ npm run dev
 ```
 
 **Step 5: Edge Cases**
+
 ```bash
 # Test duplicate production IDs
 # Input: "22A1", "22A1"
@@ -750,6 +771,7 @@ npm run dev
 ### 4.5 Type Safety Verification
 
 **Commands**:
+
 ```bash
 # Run TypeScript checks
 npm run typecheck
@@ -763,6 +785,7 @@ npm run typecheck
 ```
 
 **Expected Output**:
+
 ```
 src/main/services/database/entities/ProductionContract.ts:12:15 - error: No errors
 src/main/services/database/repositories/ProductionContractRepository.ts:45:10 - error: No errors
@@ -775,6 +798,7 @@ src/main/ipc/extractor-handler.ts:52:30 - error: No errors
 ### 4.6 Automated Test Coverage
 
 **Commands**:
+
 ```bash
 # Run all unit tests
 npm run test
@@ -793,9 +817,11 @@ npm run test:coverage
 ## 5. Implementation Phases
 
 ### Phase 1: Foundation (Worktree Setup & Entity Creation)
+
 **Goal**: Create isolated work environment and core entity
 
 **Tasks**:
+
 1. Create new git worktree: `feature/extractor-orm-refactor`
 2. Create `ProductionContract.ts` entity
 3. Register entity in `data-source.ts`
@@ -803,12 +829,15 @@ npm run test:coverage
 5. Commit: "feat: add ProductionContract TypeORM entity"
 
 **Files Created**:
+
 - `src/main/services/database/entities/ProductionContract.ts`
 
 **Files Modified**:
+
 - `src/main/services/database/data-source.ts`
 
 **Verification**:
+
 ```bash
 npm run typecheck  # Should pass with no errors
 ```
@@ -816,9 +845,11 @@ npm run typecheck  # Should pass with no errors
 ---
 
 ### Phase 2: Repository Implementation
+
 **Goal**: Build ProductionContractRepository with dual SQL support
 
 **Tasks**:
+
 1. Create `ProductionContractRepository.ts`
 2. Implement `findByProductionIds()` with MySQL dialect
 3. Implement `findByProductionIds()` with SQL Server dialect
@@ -830,10 +861,12 @@ npm run typecheck  # Should pass with no errors
 9. Commit: "feat: add ProductionContractRepository with dual SQL support"
 
 **Files Created**:
+
 - `src/main/services/database/repositories/ProductionContractRepository.ts`
 - `src/main/services/database/repositories/__tests__/ProductionContractRepository.test.ts`
 
 **Verification**:
+
 ```bash
 npm run test              # All repository tests pass
 npm run test:coverage     # Coverage >90%
@@ -842,9 +875,11 @@ npm run test:coverage     # Coverage >90%
 ---
 
 ### Phase 3: Resolver Refactoring
+
 **Goal**: Update OrderNumberResolver to use Repository
 
 **Tasks**:
+
 1. Refactor `OrderNumberResolver` constructor to accept Repository
 2. Update `resolveProductionIds()` to use repository methods
 3. Update `verifyOrderNumbers()` to use repository methods
@@ -855,10 +890,12 @@ npm run test:coverage     # Coverage >90%
 8. Commit: "refactor: migrate OrderNumberResolver to TypeORM repository"
 
 **Files Modified**:
+
 - `src/main/services/erp/order-resolver.ts`
 - `src/main/services/erp/__tests__/order-resolver.test.ts`
 
 **Verification**:
+
 ```bash
 npm run test              # All resolver tests pass
 npm run typecheck         # No type errors
@@ -867,9 +904,11 @@ npm run typecheck         # No type errors
 ---
 
 ### Phase 4: Handler Integration
+
 **Goal**: Update extractor-handler to use TypeORM DataSource
 
 **Tasks**:
+
 1. Update `extractor-handler.ts` imports
 2. Replace MySqlService instantiation with DataSource
 3. Remove MySQL configuration parsing (host, port, user, password)
@@ -880,10 +919,12 @@ npm run typecheck         # No type errors
 8. Commit: "refactor: use TypeORM DataSource in extractor-handler"
 
 **Files Modified**:
+
 - `src/main/ipc/extractor-handler.ts`
 - `src/main/ipc/__tests__/extractor-handler.integration.test.ts`
 
 **Verification**:
+
 ```bash
 # Manual testing
 DB_TYPE=mysql npm run dev     # Test with MySQL
@@ -896,9 +937,11 @@ npm run test                  # All tests pass
 ---
 
 ### Phase 5: Testing & Validation
+
 **Goal**: Comprehensive testing before merge
 
 **Tasks**:
+
 1. Run full test suite: `npm run test`
 2. Run typecheck: `npm run typecheck`
 3. Run linting: `npm run lint`
@@ -911,6 +954,7 @@ npm run test                  # All tests pass
 10. Final commit: "test: complete validation of ORM refactor"
 
 **Verification Checklist**:
+
 - [ ] All unit tests pass
 - [ ] All integration tests pass
 - [ ] Type checking passes with no errors
@@ -925,9 +969,11 @@ npm run test                  # All tests pass
 ---
 
 ### Phase 6: Documentation & Cleanup
+
 **Goal**: Update docs and remove obsolete code
 
 **Tasks**:
+
 1. Update CLAUDE.md with new architecture
 2. Add inline documentation for new repository
 3. Update this design document with any changes made during implementation
@@ -938,10 +984,12 @@ npm run test                  # All tests pass
 8. Create pull request to dev branch
 
 **Files Modified**:
+
 - `CLAUDE.md`
 - `docs/plans/2026-03-03-extractor-orm-refactor-design.md`
 
 **Final Verification**:
+
 ```bash
 npm run typecheck    # No errors
 npm run lint         # No warnings
@@ -955,6 +1003,7 @@ npm run test         # All pass
 ### Step-by-Step Migration Procedure
 
 #### Step 1: Create Git Worktree
+
 ```bash
 # From project root (D:\Node\ERPAuto)
 git worktree add ../ERPAuto-extractor-orm -b feature/extractor-orm-refactor
@@ -970,6 +1019,7 @@ git worktree list
 ```
 
 #### Step 2: Install Dependencies & Verify
+
 ```bash
 # In worktree directory
 npm install
@@ -982,15 +1032,18 @@ npm run test
 ```
 
 #### Step 3: Execute Implementation Phases 1-6
+
 Follow each phase sequentially as outlined in Section 5.
 
 After each phase:
+
 ```bash
 git add .
 git commit -m "<phase commit message>"
 ```
 
 #### Step 4: Final Verification
+
 ```bash
 # In worktree directory
 npm run build          # Verify build succeeds
@@ -1006,6 +1059,7 @@ DB_TYPE=mssql npm run test
 ```
 
 #### Step 5: Create Pull Request
+
 ```bash
 # Push feature branch to remote
 git push -u origin feature/extractor-orm-refactor
@@ -1037,6 +1091,7 @@ gh pr create \
 ```
 
 #### Step 6: Code Review & Merge
+
 1. Request review from team members
 2. Address review feedback
 3. Ensure CI/CD checks pass
@@ -1047,6 +1102,7 @@ gh pr create \
    ```
 
 #### Step 7: Cleanup Worktree
+
 ```bash
 # After successful merge to dev
 # From original repo directory (D:\Node\ERPAuto)
@@ -1063,6 +1119,7 @@ git branch -d feature/extractor-orm-refactor
 **If critical issues found after merge**:
 
 **Option A: Quick Revert (Recommended)**
+
 ```bash
 # Revert the merge commit
 git revert -m 1 <merge-commit-hash>
@@ -1074,6 +1131,7 @@ git push origin dev
 ```
 
 **Option B: Branch Reset (Use if urgent)**
+
 ```bash
 # Reset dev to before merge
 git checkout dev
@@ -1084,6 +1142,7 @@ git push origin dev --force
 ```
 
 **Recovery Steps After Rollback**:
+
 1. Restore MySqlService-based implementation from git history
 2. Revert extractor-handler.ts to use MySqlService
 3. Hotfix deployment if needed
@@ -1092,13 +1151,13 @@ git push origin dev --force
 
 **Common Issues & Solutions**:
 
-| Issue | Symptom | Solution |
-|-------|---------|----------|
-| TypeORM connection timeout | "Connection timeout after 30000ms" | Check DB_HOST, DB_PORT, firewall |
-| Wrong SQL syntax | "You have an error in your SQL syntax" | Verify DB_TYPE matches actual database |
-| Entity not found | "Entity metadata not found" | Ensure entity registered in data-source.ts |
-| Column name mismatch | "Unknown column 'xxx'" | Check entity column names match database |
-| Parameter binding error | "Bind parameters not matching" | Check MySQL (?) vs SQL Server (@pN) syntax |
+| Issue                      | Symptom                                | Solution                                   |
+| -------------------------- | -------------------------------------- | ------------------------------------------ |
+| TypeORM connection timeout | "Connection timeout after 30000ms"     | Check DB_HOST, DB_PORT, firewall           |
+| Wrong SQL syntax           | "You have an error in your SQL syntax" | Verify DB_TYPE matches actual database     |
+| Entity not found           | "Entity metadata not found"            | Ensure entity registered in data-source.ts |
+| Column name mismatch       | "Unknown column 'xxx'"                 | Check entity column names match database   |
+| Parameter binding error    | "Bind parameters not matching"         | Check MySQL (?) vs SQL Server (@pN) syntax |
 
 ---
 
@@ -1139,14 +1198,14 @@ The refactoring will be considered successful when:
 
 ## 8. Risks & Mitigation
 
-| Risk | Probability | Impact | Mitigation |
-|------|-------------|--------|------------|
-| TypeORM connection pool exhaustion | Low | High | Configure pool size in .env, monitor connections |
-| SQL dialect differences causing bugs | Medium | Medium | Comprehensive testing for both databases |
-| Performance regression | Low | Medium | Benchmark before/after, optimize queries if needed |
-| Breaking change for dependent code | Low | High | Ensure backwards compatibility, test all pages |
-| Rollback complexity | Low | Medium | Keep rollback plan simple, document steps |
-| Missing test coverage | Medium | Medium | Enforce coverage thresholds, review test gaps |
+| Risk                                 | Probability | Impact | Mitigation                                         |
+| ------------------------------------ | ----------- | ------ | -------------------------------------------------- |
+| TypeORM connection pool exhaustion   | Low         | High   | Configure pool size in .env, monitor connections   |
+| SQL dialect differences causing bugs | Medium      | Medium | Comprehensive testing for both databases           |
+| Performance regression               | Low         | Medium | Benchmark before/after, optimize queries if needed |
+| Breaking change for dependent code   | Low         | High   | Ensure backwards compatibility, test all pages     |
+| Rollback complexity                  | Low         | Medium | Keep rollback plan simple, document steps          |
+| Missing test coverage                | Medium      | Medium | Enforce coverage thresholds, review test gaps      |
 
 ---
 
@@ -1202,10 +1261,10 @@ NODE_ENV=development|production        # Controls TypeORM logging
 
 **Table**: `productionContractData_26年压力表合同数据`
 
-| Column Name | Type | Description | Index |
-|-------------|------|-------------|-------|
-| 总排号 | VARCHAR(50) | Production ID | Primary |
-| 生产订单号 | VARCHAR(50) | Production Order Number | Indexed |
+| Column Name | Type        | Description             | Index   |
+| ----------- | ----------- | ----------------------- | ------- |
+| 总排号      | VARCHAR(50) | Production ID           | Primary |
+| 生产订单号  | VARCHAR(50) | Production Order Number | Indexed |
 
 ### C. File Structure
 
@@ -1251,5 +1310,5 @@ src/main/
 
 ---
 
-*Last Updated: 2026-03-03*
-*Document Version: 1.0*
+_Last Updated: 2026-03-03_
+_Document Version: 1.0_

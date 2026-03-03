@@ -167,7 +167,7 @@ describe('Error Types', () => {
     })
 
     it('getErrorMessage should handle unknown types', () => {
-      expect(getErrorMessage('string error')).toBe('string error')
+      expect(getErrorMessage('string error')).toBe('An unknown error occurred')
       expect(getErrorMessage(null)).toBe('An unknown error occurred')
       expect(getErrorMessage(undefined)).toBe('An unknown error occurred')
     })

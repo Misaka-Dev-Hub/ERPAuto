@@ -5,33 +5,38 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock winston since we don't need actual file logging in tests
-vi.mock('winston', () => ({
-  default: {
-    createLogger: vi.fn(() => ({
-      add: vi.fn(),
-      child: vi.fn(() => ({
+vi.mock('winston', () => {
+  const childLogger = {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    child: vi.fn(function() { return this; })
+  }
+
+  return {
+    default: {
+      createLogger: vi.fn(() => ({
+        add: vi.fn(),
+        child: vi.fn(() => childLogger),
         info: vi.fn(),
         error: vi.fn(),
         warn: vi.fn(),
         debug: vi.fn()
       })),
-      info: vi.fn(),
-      error: vi.fn(),
-      warn: vi.fn(),
-      debug: vi.fn()
-    })),
-    format: {
-      combine: vi.fn(),
-      timestamp: vi.fn(),
-      colorize: vi.fn(),
-      printf: vi.fn(),
-      json: vi.fn()
-    },
-    transports: {
-      Console: vi.fn()
+      format: {
+        combine: vi.fn(),
+        timestamp: vi.fn(),
+        colorize: vi.fn(),
+        printf: vi.fn(),
+        json: vi.fn()
+      },
+      transports: {
+        Console: vi.fn()
+      }
     }
   }
-}))
+})
 
 vi.mock('winston-daily-rotate-file', () => ({
   default: vi.fn()
@@ -58,7 +63,7 @@ describe('Logger', () => {
     const logger = createLogger('TestContext')
 
     expect(logger).toBeDefined()
-    expect(logger.child).toBeDefined()
+    expect(typeof logger.child).toBe('function')
   })
 
   it('should have log methods', async () => {

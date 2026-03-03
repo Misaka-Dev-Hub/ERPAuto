@@ -1245,15 +1245,15 @@ flowchart TB
 
 ## 文件索引
 
-| 文件路径                                                    | 说明          | 关键行号                                                                                         |
-| ----------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------ |
-| `src/renderer/src/pages/CleanerPage.tsx`                    | 前端清理页面  | 117-155 (handleValidation)<br>166-226 (handleConfirmDeletion)                                    |
-| `src/main/ipc/validation-handler.ts`                        | IPC处理器     | 212-400 (validation:validate)<br>407-420 (materials:upsertBatch)<br>425-447 (materials:delete)   |
-| `src/main/ipc/validation-handler.ts`                        | 用户信息获取  | 218-237 (获取当前用户 isAdmin username)                                                         |
-| `src/main/ipc/validation-handler.ts`                        | 物料匹配算法  | 343-382 (优先级1-3匹配逻辑)                                                                      |
-| `src/main/services/database/discrete-material-plan-dao.ts`  | 物料计划DAO   | 191-227 (queryAllDistinctByMaterialCode)                                                         |
-| `src/main/services/database/discrete-material-plan-dao.ts`  | 物料计划DAO   | 294-377 (queryBySourceNumbersDistinct)                                                           |
-| `src/main/services/database/materials-to-be-deleted-dao.ts` | 待删除物料DAO | 180-240 (upsertBatch)<br>248-268 (getAllMaterialCodes)<br>539-586 (deleteByMaterialCodes)        |
+| 文件路径                                                    | 说明          | 关键行号                                                                                       |
+| ----------------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------- |
+| `src/renderer/src/pages/CleanerPage.tsx`                    | 前端清理页面  | 117-155 (handleValidation)<br>166-226 (handleConfirmDeletion)                                  |
+| `src/main/ipc/validation-handler.ts`                        | IPC处理器     | 212-400 (validation:validate)<br>407-420 (materials:upsertBatch)<br>425-447 (materials:delete) |
+| `src/main/ipc/validation-handler.ts`                        | 用户信息获取  | 218-237 (获取当前用户 isAdmin username)                                                        |
+| `src/main/ipc/validation-handler.ts`                        | 物料匹配算法  | 343-382 (优先级1-3匹配逻辑)                                                                    |
+| `src/main/services/database/discrete-material-plan-dao.ts`  | 物料计划DAO   | 191-227 (queryAllDistinctByMaterialCode)                                                       |
+| `src/main/services/database/discrete-material-plan-dao.ts`  | 物料计划DAO   | 294-377 (queryBySourceNumbersDistinct)                                                         |
+| `src/main/services/database/materials-to-be-deleted-dao.ts` | 待删除物料DAO | 180-240 (upsertBatch)<br>248-268 (getAllMaterialCodes)<br>539-586 (deleteByMaterialCodes)      |
 
 ---
 
