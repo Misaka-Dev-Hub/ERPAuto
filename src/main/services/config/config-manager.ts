@@ -147,8 +147,8 @@ function validateEditableFields(settings: Partial<SettingsData>): {
  */
 export class ConfigManager {
   private static instance: ConfigManager | null = null
-  private envPath: string
-  private backupPath: string
+  private envPath!: string
+  private backupPath!: string
   private configCache: Map<string, string> = new Map()
   private initialized: boolean = false
 
@@ -417,9 +417,9 @@ export class ConfigManager {
   public getAllSettings(): SettingsData {
     return {
       erp: {
-        url: this.get('ERP_URL', DEFAULT_SETTINGS.erp.url),
-        username: this.get('ERP_USERNAME', DEFAULT_SETTINGS.erp.username),
-        password: this.get('ERP_PASSWORD', DEFAULT_SETTINGS.erp.password),
+        url: this.get('ERP_URL', DEFAULT_SETTINGS.erp.url)!,
+        username: this.get('ERP_USERNAME', DEFAULT_SETTINGS.erp.username)!,
+        password: this.get('ERP_PASSWORD', DEFAULT_SETTINGS.erp.password)!,
         headless: this.getBoolean('ERP_HEADLESS', DEFAULT_SETTINGS.erp.headless),
         ignoreHttpsErrors: this.getBoolean(
           'ERP_IGNORE_HTTPS_ERRORS',
@@ -434,20 +434,20 @@ export class ConfigManager {
         dbType:
           (this.get('DB_TYPE', DEFAULT_SETTINGS.database.dbType) as DatabaseType) ||
           DEFAULT_SETTINGS.database.dbType,
-        server: this.get('DB_SERVER', DEFAULT_SETTINGS.database.server),
-        mysqlHost: this.get('DB_MYSQL_HOST', DEFAULT_SETTINGS.database.mysqlHost),
+        server: this.get('DB_SERVER', DEFAULT_SETTINGS.database.server)!,
+        mysqlHost: this.get('DB_MYSQL_HOST', DEFAULT_SETTINGS.database.mysqlHost)!,
         mysqlPort: this.getNumber('DB_MYSQL_PORT', DEFAULT_SETTINGS.database.mysqlPort),
-        database: this.get('DB_NAME', DEFAULT_SETTINGS.database.database),
-        username: this.get('DB_USERNAME', DEFAULT_SETTINGS.database.username),
-        password: this.get('DB_PASSWORD', DEFAULT_SETTINGS.database.password)
+        database: this.get('DB_NAME', DEFAULT_SETTINGS.database.database)!,
+        username: this.get('DB_USERNAME', DEFAULT_SETTINGS.database.username)!,
+        password: this.get('DB_PASSWORD', DEFAULT_SETTINGS.database.password)!
       },
       paths: {
-        dataDir: this.get('PATH_DATA_DIR', DEFAULT_SETTINGS.paths.dataDir),
-        defaultOutput: this.get('PATH_DEFAULT_OUTPUT', DEFAULT_SETTINGS.paths.defaultOutput),
+        dataDir: this.get('PATH_DATA_DIR', DEFAULT_SETTINGS.paths.dataDir)!,
+        defaultOutput: this.get('PATH_DEFAULT_OUTPUT', DEFAULT_SETTINGS.paths.defaultOutput)!,
         validationOutput: this.get(
           'PATH_VALIDATION_OUTPUT',
           DEFAULT_SETTINGS.paths.validationOutput
-        )
+        )!
       },
       extraction: {
         batchSize: this.getNumber('EXTRACTION_BATCH_SIZE', DEFAULT_SETTINGS.extraction.batchSize),
@@ -482,10 +482,10 @@ export class ConfigManager {
         defaultManager: this.get(
           'VALIDATION_DEFAULT_MANAGER',
           DEFAULT_SETTINGS.validation.defaultManager
-        )
+        )!
       },
       ui: {
-        fontFamily: this.get('UI_FONT_FAMILY', DEFAULT_SETTINGS.ui.fontFamily),
+        fontFamily: this.get('UI_FONT_FAMILY', DEFAULT_SETTINGS.ui.fontFamily)!,
         fontSize: this.getNumber('UI_FONT_SIZE', DEFAULT_SETTINGS.ui.fontSize),
         productionIdInputWidth: this.getNumber(
           'UI_PRODUCTION_ID_INPUT_WIDTH',

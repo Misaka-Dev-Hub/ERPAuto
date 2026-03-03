@@ -68,7 +68,7 @@ export function useValidation(): UseValidationReturn {
       setState((prev) => ({ ...prev, loading: true, error: null }))
 
       try {
-        const result = await window.electron.ipcRenderer.invoke('validation:validate', request)
+        const result = await window.electron.ipcRenderer.invoke('validation:validate', request) as any
 
         if (result.success) {
           setState({
@@ -77,14 +77,14 @@ export function useValidation(): UseValidationReturn {
             stats: result.stats || null,
             error: null
           })
-          return result
+          return result as ValidationResponse
         } else {
           setState((prev) => ({
             ...prev,
             loading: false,
             error: result.error || 'Validation failed'
           }))
-          return result
+          return result as ValidationResponse
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
@@ -105,7 +105,7 @@ export function useValidation(): UseValidationReturn {
 
   const getSharedProductionIds = useCallback(async (): Promise<string[]> => {
     try {
-      const result = await window.electron.ipcRenderer.invoke('validation:getSharedProductionIds')
+      const result = await window.electron.ipcRenderer.invoke('validation:getSharedProductionIds') as any
       return result?.productionIds || []
     } catch {
       return []
@@ -117,7 +117,7 @@ export function useValidation(): UseValidationReturn {
     materialCodes: string[]
   } | null> => {
     try {
-      const result = await window.electron.ipcRenderer.invoke('validation:getCleanerData')
+      const result = await window.electron.ipcRenderer.invoke('validation:getCleanerData') as any
       if (result.success) {
         return {
           orderNumbers: result.orderNumbers || [],

@@ -121,8 +121,8 @@ export class BIPUsersDAO {
         `
 
         const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
-          username: { value: username, type: sql.NVarChar },
-          password: { value: password, type: sql.NVarChar }
+          username: { value: username, type: sql.NVarChar() },
+          password: { value: password, type: sql.NVarChar() }
         })
 
         if (result.rows.length > 0) {
@@ -177,7 +177,7 @@ export class BIPUsersDAO {
         `
 
         const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
-          computerName: { value: computerName, type: sql.NVarChar }
+          computerName: { value: computerName, type: sql.NVarChar() }
         })
 
         if (result.rows.length > 0) {
@@ -265,49 +265,49 @@ export class BIPUsersDAO {
       const tableName = this.getTableName()
 
       if (this.dbType === 'sqlserver') {
-        let sql: string
+        let sqlQuery: string
         let params: Record<string, { value: unknown; type?: sql.ISqlType }>
 
         if (computerName) {
-          sql = `
+          sqlQuery = `
             INSERT INTO ${tableName}
             (UserName, Password, UserType, ComputerNmae)
             VALUES (@username, @password, @userType, @computerName)
           `
           params = {
-            username: { value: username, type: sql.NVarChar },
-            password: { value: password, type: sql.NVarChar },
-            userType: { value: userType, type: sql.NVarChar },
-            computerName: { value: computerName, type: sql.NVarChar }
+            username: { value: username, type: sql.NVarChar() },
+            password: { value: password, type: sql.NVarChar() },
+            userType: { value: userType, type: sql.NVarChar() },
+            computerName: { value: computerName, type: sql.NVarChar() }
           }
         } else {
-          sql = `
+          sqlQuery = `
             INSERT INTO ${tableName}
             (UserName, Password, UserType)
             VALUES (@username, @password, @userType)
           `
           params = {
-            username: { value: username, type: sql.NVarChar },
-            password: { value: password, type: sql.NVarChar },
-            userType: { value: userType, type: sql.NVarChar }
+            username: { value: username, type: sql.NVarChar() },
+            password: { value: password, type: sql.NVarChar() },
+            userType: { value: userType, type: sql.NVarChar() }
           }
         }
 
-        await (dbService as SqlServerService).queryWithParams(sqlString, params)
+        await (dbService as SqlServerService).queryWithParams(sqlQuery, params)
         return true
       } else {
-        let sql: string
+        let sqlQuery: string
         let params: any[]
 
         if (computerName) {
-          sql = `
+          sqlQuery = `
             INSERT INTO ${tableName}
             (UserName, Password, UserType, ComputerNmae)
             VALUES (?, ?, ?, ?)
           `
           params = [username, password, userType, computerName]
         } else {
-          sql = `
+          sqlQuery = `
             INSERT INTO ${tableName}
             (UserName, Password, UserType)
             VALUES (?, ?, ?)
@@ -315,7 +315,7 @@ export class BIPUsersDAO {
           params = [username, password, userType]
         }
 
-        await (dbService as MySqlService).query(sqlString, params)
+        await (dbService as MySqlService).query(sqlQuery, params)
         return true
       }
     } catch (error) {
@@ -343,8 +343,8 @@ export class BIPUsersDAO {
         `
 
         await (dbService as SqlServerService).queryWithParams(sqlString, {
-          username: { value: username, type: sql.NVarChar },
-          userType: { value: userType, type: sql.NVarChar }
+          username: { value: username, type: sql.NVarChar() },
+          userType: { value: userType, type: sql.NVarChar() }
         })
         return true
       } else {
@@ -382,8 +382,8 @@ export class BIPUsersDAO {
         `
 
         await (dbService as SqlServerService).queryWithParams(sqlString, {
-          username: { value: username, type: sql.NVarChar },
-          newPassword: { value: newPassword, type: sql.NVarChar }
+          username: { value: username, type: sql.NVarChar() },
+          newPassword: { value: newPassword, type: sql.NVarChar() }
         })
         return true
       } else {
@@ -419,7 +419,7 @@ export class BIPUsersDAO {
         `
 
         await (dbService as SqlServerService).queryWithParams(sqlString, {
-          username: { value: username, type: sql.NVarChar }
+          username: { value: username, type: sql.NVarChar() }
         })
         return true
       } else {
@@ -455,7 +455,7 @@ export class BIPUsersDAO {
         `
 
         const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
-          username: { value: username, type: sql.NVarChar }
+          username: { value: username, type: sql.NVarChar() }
         })
         return result.rows.length > 0 && (result.rows[0].count as number) > 0
       } else {
