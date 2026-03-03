@@ -78,25 +78,38 @@ export function registerSettingsHandlers(): void {
   })
 
   /**
-   * Save settings
+   * Save settings (updated to use partial save)
    */
   ipcMain.handle(
     'settings:saveSettings',
-    async (_event, settings: SettingsData): Promise<SaveSettingsResult> => {
+    async (_event, settings: Partial<SettingsData>): Promise<SaveSettingsResult> => {
       try {
-        log.info('Saving settings')
-        const success = await configManager.saveAllSettings(settings)
-        if (success) {
+        log.info('Saving settings', {
+          sections: Object.keys(settings)
+        })
+
+        // Use partial save method
+        const result = await configManager.savePartialSettings(settings)
+
+        if (result.success) {
           log.info('Settings saved successfully')
           return { success: true }
         } else {
-          log.warn('Failed to save settings')
-          return { success: false, error: '保存设置失败' }
+          log.warn('Failed to save settings', {
+            error: result.error
+          })
+          return {
+            success: false,
+            error: result.error || '保存设置失败'
+          }
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
         log.error('Error saving settings', { error: message })
-        return { success: false, error: `保存设置失败：${message}` }
+        return {
+          success: false,
+          error: `保存设置失败：${message}`
+        }
       }
     }
   )
