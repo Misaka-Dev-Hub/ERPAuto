@@ -356,7 +356,7 @@ export class ExcelParser {
               // Extract material data
               const material = this.parseMaterialRowInternal(allRows[dataRow], dataRow + 1)
               if (material) {
-                this.log('  Parsed material:', material.materialCode)
+                //this.log('  Parsed material:', material.materialCode)
                 materials.push(material)
               } else {
                 this.log('  Skipped material row at', dataRow + 1)
