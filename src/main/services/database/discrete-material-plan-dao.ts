@@ -208,7 +208,7 @@ export class DiscreteMaterialPlanDAO {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
       const isSqlServer = dbService.type === 'sqlserver'
-      const batchSize = 2000
+      const batchSize = 1500
       const allResults: any[] = []
 
       for (let i = 0; i < sourceNumbers.length; i += batchSize) {
@@ -250,7 +250,7 @@ export class DiscreteMaterialPlanDAO {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
       const isSqlServer = dbService.type === 'sqlserver'
-      const batchSize = 2000
+      const batchSize = 1500
       const allResults: any[] = []
 
       for (let i = 0; i < sourceNumbers.length; i += batchSize) {
@@ -365,16 +365,24 @@ export class DiscreteMaterialPlanDAO {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
       const isSqlServer = dbService.type === 'sqlserver'
-      const placeholders = this.buildPlaceholders(planNumbers.length, isSqlServer)
+      const batchSize = 1500
+      const allResults: any[] = []
 
-      const sqlString = `
-        SELECT *
-        FROM ${tableName}
-        WHERE PlanNumber IN (${placeholders})
-      `
+      for (let i = 0; i < planNumbers.length; i += batchSize) {
+        const batch = planNumbers.slice(i, i + batchSize)
+        const placeholders = this.buildPlaceholders(batch.length, isSqlServer)
 
-      const result = await dbService.query(sqlString, planNumbers)
-      return result.rows
+        const sqlString = `
+          SELECT *
+          FROM ${tableName}
+          WHERE PlanNumber IN (${placeholders})
+        `
+
+        const result = await dbService.query(sqlString, batch)
+        allResults.push(...result.rows)
+      }
+
+      return allResults
     } catch (error) {
       log.error('Query by plan numbers error', {
         error: error instanceof Error ? error.message : String(error)
@@ -703,17 +711,25 @@ export class DiscreteMaterialPlanDAO {
       const isSqlServer = dbService.type === 'sqlserver'
 
       if (sourceNumbers && sourceNumbers.length > 0) {
-        const placeholders = this.buildPlaceholders(sourceNumbers.length, isSqlServer)
+        const batchSize = 1500
+        const allNames: string[] = []
 
-        const sqlString = `
-          SELECT DISTINCT MaterialName
-          FROM ${tableName}
-          WHERE SourceNumber IN (${placeholders})
-            AND MaterialName IS NOT NULL
-        `
+        for (let i = 0; i < sourceNumbers.length; i += batchSize) {
+          const batch = sourceNumbers.slice(i, i + batchSize)
+          const placeholders = this.buildPlaceholders(batch.length, isSqlServer)
 
-        const result = await dbService.query(sqlString, sourceNumbers)
-        return result.rows.map((row) => row.MaterialName as string).filter(Boolean)
+          const sqlString = `
+            SELECT DISTINCT MaterialName
+            FROM ${tableName}
+            WHERE SourceNumber IN (${placeholders})
+              AND MaterialName IS NOT NULL
+          `
+
+          const result = await dbService.query(sqlString, batch)
+          allNames.push(...result.rows.map((row) => row.MaterialName as string).filter(Boolean))
+        }
+
+        return allNames
       } else {
         const sqlString = `
           SELECT DISTINCT MaterialName

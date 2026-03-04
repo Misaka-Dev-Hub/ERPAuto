@@ -162,37 +162,52 @@ async function getSourceNumbersFromInputs(
   // Column name: 生产订单号 (SourceNumber)
   if (productionIds.length > 0) {
     const contractTableName = getTableName('productionContractData_26年压力表合同数据')
+    const batchSize = 2000
 
     if (isSqlServer) {
       const sql = require('mssql')
-      const placeholders = productionIds.map((_, idx) => `@p${idx}`).join(',')
-      const params: Record<string, { value: string; type: any }> = {}
+      const allOrderNumbers: string[] = []
 
-      productionIds.forEach((id, idx) => {
-        params[`p${idx}`] = { value: id, type: sql.NVarChar }
-      })
+      for (let i = 0; i < productionIds.length; i += batchSize) {
+        const batch = productionIds.slice(i, i + batchSize)
+        const placeholders = batch.map((_, idx) => `@p${idx}`).join(',')
+        const params: Record<string, { value: string; type: any }> = {}
 
-      const contractSql = `
-        SELECT DISTINCT 生产订单号
-        FROM ${contractTableName}
-        WHERE 总排号 IN (${placeholders})
-      `
-      const contractResult = await (dbService as SqlServerService).queryWithParams(
-        contractSql,
-        params
-      )
-      const dbOrderNumbers = contractResult.rows.map((row) => row.生产订单号 as string)
-      orderNumbers.push(...dbOrderNumbers)
+        batch.forEach((id, idx) => {
+          params[`p${idx}`] = { value: id, type: sql.NVarChar }
+        })
+
+        const contractSql = `
+          SELECT DISTINCT 生产订单号
+          FROM ${contractTableName}
+          WHERE 总排号 IN (${placeholders})
+        `
+        const contractResult = await (dbService as SqlServerService).queryWithParams(
+          contractSql,
+          params
+        )
+        const dbOrderNumbers = contractResult.rows.map((row) => row.生产订单号 as string)
+        allOrderNumbers.push(...dbOrderNumbers)
+      }
+
+      orderNumbers.push(...allOrderNumbers)
     } else {
-      const placeholders = productionIds.map(() => '?').join(',')
-      const contractSql = `
-        SELECT DISTINCT 生产订单号
-        FROM ${contractTableName}
-        WHERE 总排号 IN (${placeholders})
-      `
-      const contractResult = await (dbService as MySqlService).query(contractSql, productionIds)
-      const dbOrderNumbers = contractResult.rows.map((row) => row.生产订单号 as string)
-      orderNumbers.push(...dbOrderNumbers)
+      const allOrderNumbers: string[] = []
+
+      for (let i = 0; i < productionIds.length; i += batchSize) {
+        const batch = productionIds.slice(i, i + batchSize)
+        const placeholders = batch.map(() => '?').join(',')
+        const contractSql = `
+          SELECT DISTINCT 生产订单号
+          FROM ${contractTableName}
+          WHERE 总排号 IN (${placeholders})
+        `
+        const contractResult = await (dbService as MySqlService).query(contractSql, batch)
+        const dbOrderNumbers = contractResult.rows.map((row) => row.生产订单号 as string)
+        allOrderNumbers.push(...dbOrderNumbers)
+      }
+
+      orderNumbers.push(...allOrderNumbers)
     }
   }
 

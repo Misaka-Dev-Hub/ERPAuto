@@ -313,7 +313,7 @@ export class ConfigManager {
       // Order number parsing table configuration
       lines.push('# 订单号解析表配置')
       lines.push('# 表名：包含 productionID 和 生产订单号 映射关系的表')
-      lines.push(`DB_TABLE_NAME=productionContractData_26 年压力表合同数据`)
+      lines.push(`DB_TABLE_NAME=productionContractData_26年压力表合同数据`)
       lines.push('# 字段名：总排号 (对应 productionID)')
       lines.push(`DB_FIELD_PRODUCTION_ID=总排号`)
       lines.push('# 字段名：生产订单号 (对应生产订单号)')
