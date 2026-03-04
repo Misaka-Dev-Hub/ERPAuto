@@ -1,51 +1,48 @@
-import React, { useState, useEffect } from 'react'
-import { Download, Play, Terminal, Database } from 'lucide-react'
-
-// Import result type (matches the type from main process)
-interface ImportResult {
-  success: boolean
-  recordsRead: number
-  recordsDeleted: number
-  recordsImported: number
-  uniqueSourceNumbers: number
-  errors: string[]
-}
-
-// Extractor result type (matches the type from main process)
-interface ExtractorResult {
-  downloadedFiles: string[]
-  mergedFile: string | null
-  recordCount: number
-  errors: string[]
-  importResult?: ImportResult
-}
+import React, { useState, useEffect, useRef } from 'react'
+import { Download, Play, Terminal, PanelLeftClose, PanelLeft } from 'lucide-react'
+import OrderNumberInput from '../components/OrderNumberInput'
 
 interface ExtractorProgress {
   message: string
   progress: number
 }
 
-/**
- * ExtractorPage - Main page for ERP data extraction
- */
+type LogLevel = 'info' | 'success' | 'warning' | 'error' | 'system'
+
+interface LogEntry {
+  timestamp: string
+  level: LogLevel
+  message: string
+}
+
+const getLogColor = (level: LogLevel): string => {
+  switch (level) {
+    case 'error':
+      return 'text-red-400'
+    case 'warning':
+      return 'text-amber-400'
+    case 'success':
+      return 'text-emerald-400'
+    case 'system':
+      return 'text-blue-400'
+    default:
+      return 'text-slate-400'
+  }
+}
+
 const ExtractorPage: React.FC = () => {
   const [orderNumbers, setOrderNumbers] = useState(() => {
-    // Restore from sessionStorage on mount
     return sessionStorage.getItem('extractor_orderNumbers') || ''
-  })
-  const [batchSize, setBatchSize] = useState(() => {
-    const saved = sessionStorage.getItem('extractor_batchSize')
-    return saved ? parseInt(saved, 10) : 100
   })
   const [isRunning, setIsRunning] = useState(false)
   const [progress, setProgress] = useState<ExtractorProgress | null>(null)
-  const [result, setResult] = useState<ExtractorResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const logsEndRef = useRef<HTMLDivElement>(null)
 
-  // Save to sessionStorage when orderNumbers changes
   useEffect(() => {
     sessionStorage.setItem('extractor_orderNumbers', orderNumbers)
-    // Update shared Production IDs when orderNumbers changes
     if (orderNumbers.trim()) {
       const orderNumberList = orderNumbers
         .split('\n')
@@ -55,10 +52,14 @@ const ExtractorPage: React.FC = () => {
     }
   }, [orderNumbers])
 
-  // Save to sessionStorage when batchSize changes
   useEffect(() => {
-    sessionStorage.setItem('extractor_batchSize', batchSize.toString())
-  }, [batchSize])
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [logs])
+
+  const addLog = (level: LogLevel, message: string) => {
+    const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    setLogs((prev) => [...prev, { timestamp, level, message }])
+  }
 
   const handleExtract = async () => {
     if (!orderNumbers.trim()) {
@@ -68,8 +69,10 @@ const ExtractorPage: React.FC = () => {
 
     setIsRunning(true)
     setProgress(null)
-    setResult(null)
     setError(null)
+    setLogs([])
+
+    addLog('system', '提取引擎启动，准备执行...')
 
     try {
       const orderNumberList = orderNumbers
@@ -77,208 +80,113 @@ const ExtractorPage: React.FC = () => {
         .map((line) => line.trim())
         .filter((line) => line.length > 0)
 
-      // Store Production IDs for sharing with cleaner page (before extraction starts)
       await window.electron.validation.setSharedProductionIds(orderNumberList)
-      console.log(`[Extractor] Stored ${orderNumberList.length} Production IDs for sharing`)
+      addLog('info', `已存储 ${orderNumberList.length} 个订单号用于跨模块共享`)
 
-      // Call extractor API through electron
       const response = await window.electron.extractor.runExtractor({
-        orderNumbers: orderNumberList,
-        batchSize
+        orderNumbers: orderNumberList
       })
 
       if (response.success && response.data) {
-        setResult(response.data)
+        addLog(
+          'success',
+          `提取完成：下载 ${response.data.downloadedFiles.length} 个文件，共 ${response.data.recordCount} 条记录`
+        )
+        if (response.data.errors.length > 0) {
+          addLog('warning', `存在 ${response.data.errors.length} 个错误`)
+        }
       } else {
         setError(response.error || '提取失败')
+        addLog('error', response.error || '提取失败')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '发生未知错误')
+      const errMsg = err instanceof Error ? err.message : '发生未知错误'
+      setError(errMsg)
+      addLog('error', errMsg)
     } finally {
       setIsRunning(false)
       setProgress(null)
     }
   }
 
-  const handleReset = () => {
-    setOrderNumbers('')
-    setBatchSize(100)
-    setResult(null)
-    setError(null)
-    setProgress(null)
-  }
-
-  const [logs, setLogs] = useState<string[]>([
-    '[10:00:01] [System] 提取引擎已就绪。',
-    '[10:00:02] [Info] 等待读取生产订单列表...'
-  ])
-
   useEffect(() => {
     if (progress) {
-      setLogs((prev) => [
-        ...prev,
-        `[${new Date().toLocaleTimeString()}] [Info] ${progress.message}`
-      ])
+      addLog('info', progress.message)
     }
   }, [progress])
 
+  const handleReset = () => {
+    setOrderNumbers('')
+    setError(null)
+    setProgress(null)
+    setLogs([])
+  }
+
   return (
-    <div className="flex h-full gap-6">
-      {/* 左侧：共享数据区 (仅在数据提取页面显示) */}
-      <aside className="w-80 bg-white border border-slate-200 flex flex-col shadow-sm z-10 flex-shrink-0 animate-in slide-in-from-left duration-300 rounded-xl overflow-hidden h-full">
-        <div className="flex-1 flex flex-col p-5 space-y-3 h-full">
-          <div>
-            <label className="text-sm font-medium text-slate-700">
-              支持输入总排号或者生产订单号
-            </label>
-            <p className="text-xs text-slate-500 leading-relaxed mt-1">
-              在此输入的数据将在“数据提取”与“物料清理”模块中自动共享，每行一个。
+    <div className="flex h-full gap-4 relative">
+      {!sidebarCollapsed && (
+        <aside className="w-80 flex-shrink-0 bg-white border border-slate-200 flex flex-col shadow-sm rounded-xl overflow-hidden h-full animate-in slide-in-from-left duration-300">
+          <div className="p-4 border-b border-slate-100">
+            <h3 className="text-sm font-semibold text-slate-800">订单号输入</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              数据将在"数据提取"与"物料清理"模块间自动共享
             </p>
           </div>
-
-          <textarea
-            className="flex-1 w-full border border-slate-300 rounded-lg p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none shadow-inner bg-slate-50 h-full"
-            style={{ userSelect: 'text', cursor: 'text' }}
-            placeholder="PO-20231024-001&#10;PO-20231024-002&#10;PO-20231024-003..."
-            value={orderNumbers}
-            onChange={(e) => setOrderNumbers(e.target.value)}
-            disabled={isRunning}
-          ></textarea>
-
-          <div className="flex items-center justify-between text-xs text-slate-500 pt-2">
-            <span>
-              共解析:{' '}
-              <strong className="text-slate-700">
-                {orderNumbers.split('\n').filter((l) => l.trim()).length}
-              </strong>{' '}
-              个订单
-            </span>
-            <button
-              className="text-slate-400 hover:text-slate-600"
-              onClick={handleReset}
+          <div className="flex-1 flex flex-col p-4 min-h-0">
+            <OrderNumberInput
+              value={orderNumbers}
+              onChange={setOrderNumbers}
+              label=""
+              enableFormatStats={true}
               disabled={isRunning}
-            >
-              清空
-            </button>
+              showReset={true}
+              onReset={handleReset}
+            />
           </div>
-        </div>
-      </aside>
+        </aside>
+      )}
 
-      {/* 右侧：动态功能面板 */}
-      <div className="flex-1 max-w-4xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center justify-between">
-          <div>
+      <button
+        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+        className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white border border-slate-200 rounded-r-lg p-1.5 shadow-sm hover:bg-slate-50 transition-colors"
+        style={{ left: sidebarCollapsed ? 0 : '320px' }}
+        title={sidebarCollapsed ? '展开侧栏' : '收起侧栏'}
+      >
+        {sidebarCollapsed ? (
+          <PanelLeft size={18} className="text-slate-600" />
+        ) : (
+          <PanelLeftClose size={18} className="text-slate-600" />
+        )}
+      </button>
+
+      <div className="flex-1 min-w-0 flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center justify-between">
+          <div className="flex-1">
             <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-800 mb-1">
               <Download size={20} className="text-blue-600" />
               批量数据提取
             </h2>
-            <p className="text-sm text-slate-500">
-              将遍历左侧列表中的所有生产订单，依次自动执行数据导出并保存。
-            </p>
+            <p className="text-sm text-slate-500">遍历订单列表，自动执行数据导出并保存至数据库</p>
             {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
           </div>
 
-          <button
-            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-8 py-3 rounded-lg flex items-center gap-2 font-medium shadow-sm transition-colors text-base"
-            onClick={handleExtract}
-            disabled={isRunning || !orderNumbers.trim()}
-          >
-            <Play size={20} fill="currentColor" />
-            {isRunning ? '提取中...' : '开始提取'}
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-sm transition-colors"
+              onClick={handleExtract}
+              disabled={isRunning || !orderNumbers.trim()}
+            >
+              <Play size={18} fill="currentColor" />
+              {isRunning ? '提取中...' : '开始提取'}
+            </button>
+          </div>
         </div>
 
-        {/* 结果展示 */}
-        {result && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col gap-4">
-            <h3 className="text-emerald-600 font-semibold text-lg border-b pb-2">提取结果</h3>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
-                <span className="text-slate-500 text-sm">下载文件数</span>
-                <span className="text-2xl font-bold text-slate-800">
-                  {result.downloadedFiles.length}
-                </span>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
-                <span className="text-slate-500 text-sm">记录数</span>
-                <span className="text-2xl font-bold text-slate-800">{result.recordCount}</span>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
-                <span className="text-slate-500 text-sm">错误数</span>
-                <span
-                  className={`text-2xl font-bold ${result.errors.length > 0 ? 'text-red-500' : 'text-slate-800'}`}
-                >
-                  {result.errors.length}
-                </span>
-              </div>
-            </div>
-            {result.mergedFile && (
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                <span className="text-slate-500 text-sm block mb-1">合并文件路径</span>
-                <span className="text-sm font-mono text-slate-700 select-all break-all">
-                  {result.mergedFile}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Database import results */}
-        {result?.importResult && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col gap-4">
-            <h3 className="font-semibold text-lg border-b pb-2 flex items-center gap-2">
-              <Database
-                size={20}
-                className={result.importResult.success ? 'text-emerald-600' : 'text-red-500'}
-              />
-              <span className={result.importResult.success ? 'text-emerald-600' : 'text-red-500'}>
-                数据库写入结果
-              </span>
-            </h3>
-            <div className="grid grid-cols-4 gap-4">
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
-                <span className="text-slate-500 text-sm">读取记录</span>
-                <span className="text-2xl font-bold text-slate-800">
-                  {result.importResult.recordsRead}
-                </span>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
-                <span className="text-slate-500 text-sm">删除旧记录</span>
-                <span className="text-2xl font-bold text-amber-600">
-                  {result.importResult.recordsDeleted}
-                </span>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
-                <span className="text-slate-500 text-sm">写入新记录</span>
-                <span className="text-2xl font-bold text-emerald-600">
-                  {result.importResult.recordsImported}
-                </span>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
-                <span className="text-slate-500 text-sm">来源单号数</span>
-                <span className="text-2xl font-bold text-blue-600">
-                  {result.importResult.uniqueSourceNumbers}
-                </span>
-              </div>
-            </div>
-            {result.importResult.errors.length > 0 && (
-              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                <span className="text-red-600 text-sm font-medium block mb-1">错误信息</span>
-                <ul className="text-sm text-red-500 list-disc list-inside">
-                  {result.importResult.errors.map((err, idx) => (
-                    <li key={idx}>{err}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-700 overflow-hidden flex flex-col h-[500px]">
-          <div className="bg-slate-800 px-4 py-2 flex items-center justify-between border-b border-slate-700">
+        <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-700 overflow-hidden flex flex-col min-h-[300px] flex-1">
+          <div className="bg-slate-800 px-4 py-2 flex items-center justify-between border-b border-slate-700 flex-shrink-0">
             <div className="flex items-center gap-2 text-slate-400 text-sm">
               <Terminal size={16} />
-              <span>执行日志 (Console)</span>
+              <span>执行日志</span>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs text-slate-500">进度: {progress?.progress || 0}%</span>
@@ -291,20 +199,17 @@ const ExtractorPage: React.FC = () => {
             </div>
           </div>
           <div className="flex-1 p-4 font-mono text-sm overflow-y-auto leading-relaxed">
-            {logs.map((log, index) => (
-              <div
-                key={index}
-                className={
-                  log.includes('[System]')
-                    ? 'text-emerald-500'
-                    : log.includes('error') || log.includes('失败')
-                      ? 'text-red-400'
-                      : 'text-slate-400'
-                }
-              >
-                {log}
-              </div>
-            ))}
+            {logs.length === 0 ? (
+              <div className="text-slate-500 text-center py-8">等待执行...</div>
+            ) : (
+              logs.map((log, index) => (
+                <div key={index} className={getLogColor(log.level)}>
+                  <span className="text-slate-600">[{log.timestamp}]</span>{' '}
+                  <span className="text-slate-500">[{log.level.toUpperCase()}]</span> {log.message}
+                </div>
+              ))
+            )}
+            <div ref={logsEndRef} />
           </div>
         </div>
       </div>

@@ -1,15 +1,11 @@
-import { ipcMain } from 'electron'
+import { ipcMain, shell } from 'electron'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import { createLogger } from '../services/logger'
 
 const log = createLogger('FileHandler')
 
-/**
- * Register IPC handlers for file operations
- */
 export function registerFileHandlers(): void {
-  // Read file content
   ipcMain.handle('file:read', async (_event, filePath: string): Promise<string> => {
     try {
       log.debug('Reading file', { filePath })
@@ -21,11 +17,9 @@ export function registerFileHandlers(): void {
     }
   })
 
-  // Write content to file
   ipcMain.handle('file:write', async (_event, filePath: string, content: string): Promise<void> => {
     try {
       log.debug('Writing file', { filePath })
-      // Ensure directory exists
       const dir = path.dirname(filePath)
       await fs.mkdir(dir, { recursive: true })
       await fs.writeFile(filePath, content, 'utf-8')
@@ -36,7 +30,6 @@ export function registerFileHandlers(): void {
     }
   })
 
-  // Check if file exists
   ipcMain.handle('file:exists', async (_event, filePath: string): Promise<boolean> => {
     try {
       await fs.access(filePath)
@@ -46,7 +39,6 @@ export function registerFileHandlers(): void {
     }
   })
 
-  // List files in directory
   ipcMain.handle('file:list', async (_event, dirPath: string): Promise<string[]> => {
     try {
       log.debug('Listing directory', { dirPath })
@@ -58,6 +50,17 @@ export function registerFileHandlers(): void {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to list directory'
       log.error('Failed to list directory', { dirPath, error: message })
+      throw new Error(message)
+    }
+  })
+
+  ipcMain.handle('file:openPath', async (_event, filePath: string): Promise<void> => {
+    try {
+      log.debug('Opening path in explorer', { filePath })
+      await shell.openPath(filePath)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to open path'
+      log.error('Failed to open path', { filePath, error: message })
       throw new Error(message)
     }
   })

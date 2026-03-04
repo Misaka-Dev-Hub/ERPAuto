@@ -59,30 +59,11 @@ export interface SqlServerQueryResult {
  * File operation APIs
  */
 export interface FileAPI {
-  /**
-   * Read file content as text
-   * @param filePath - Path to the file
-   */
   readFile: (filePath: string) => Promise<string>
-
-  /**
-   * Write content to file
-   * @param filePath - Path to the file
-   * @param content - Content to write
-   */
   writeFile: (filePath: string, content: string) => Promise<void>
-
-  /**
-   * Check if file exists
-   * @param filePath - Path to the file
-   */
   fileExists: (filePath: string) => Promise<boolean>
-
-  /**
-   * Get list of files in directory
-   * @param dirPath - Directory path
-   */
   listFiles: (dirPath: string) => Promise<string[]>
+  openPath: (filePath: string) => Promise<void>
 }
 
 /**

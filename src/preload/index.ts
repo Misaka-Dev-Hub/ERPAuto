@@ -21,7 +21,8 @@ const api = {
     writeFile: (filePath: string, content: string) =>
       ipcRenderer.invoke('file:write', filePath, content),
     fileExists: (filePath: string) => ipcRenderer.invoke('file:exists', filePath),
-    listFiles: (dirPath: string) => ipcRenderer.invoke('file:list', dirPath)
+    listFiles: (dirPath: string) => ipcRenderer.invoke('file:list', dirPath),
+    openPath: (filePath: string) => ipcRenderer.invoke('file:openPath', filePath)
   },
 
   // Extractor service
