@@ -114,7 +114,13 @@ export class SqlServerService implements IDatabaseService {
    */
   async queryWithParams(
     sqlString: string,
-    params: Record<string, { value: unknown; type?: sql.ISqlType }>
+    params: Record<
+      string,
+      {
+        value: unknown
+        type?: sql.ISqlType | sql.ISqlTypeFactoryWithLength | sql.ISqlTypeWithLength
+      }
+    >
   ): Promise<QueryResult> {
     if (!this.pool) {
       throw new Error('Not connected to SQL Server. Call connect() first.')

@@ -53,7 +53,11 @@ export function useAuth(): UseAuthReturn {
     setState((prev) => ({ ...prev, loading: true, error: null }))
 
     try {
-      const result = await window.electron.ipcRenderer.invoke('auth:login', credentials)
+      const result = (await window.electron.ipcRenderer.invoke('auth:login', credentials)) as {
+        success: boolean
+        userInfo?: UserInfo
+        error?: string
+      }
 
       if (result.success && result.userInfo) {
         setState({
@@ -85,7 +89,12 @@ export function useAuth(): UseAuthReturn {
     setState((prev) => ({ ...prev, loading: true, error: null }))
 
     try {
-      const result = await window.electron.ipcRenderer.invoke('auth:silentLogin')
+      const result = (await window.electron.ipcRenderer.invoke('auth:silentLogin')) as {
+        success: boolean
+        userInfo?: UserInfo
+        error?: string
+        requiresUserSelection?: boolean
+      }
 
       if (result.success && result.userInfo) {
         setState({
@@ -126,14 +135,18 @@ export function useAuth(): UseAuthReturn {
 
   const getCurrentUser = useCallback(async (): Promise<UserInfo | null> => {
     try {
-      const result = await window.electron.ipcRenderer.invoke('auth:getCurrentUser')
+      const result = (await window.electron.ipcRenderer.invoke('auth:getCurrentUser')) as {
+        isAuthenticated: boolean
+        userInfo?: UserInfo
+      }
       if (result.isAuthenticated && result.userInfo) {
+        const userInfo = result.userInfo
         setState((prev) => ({
           ...prev,
-          user: result.userInfo,
+          user: userInfo,
           isAuthenticated: true
         }))
-        return result.userInfo
+        return userInfo
       }
       return null
     } catch {
@@ -143,7 +156,7 @@ export function useAuth(): UseAuthReturn {
 
   const getAllUsers = useCallback(async (): Promise<UserInfo[]> => {
     try {
-      return await window.electron.ipcRenderer.invoke('auth:getAllUsers')
+      return (await window.electron.ipcRenderer.invoke('auth:getAllUsers')) as UserInfo[]
     } catch {
       return []
     }
@@ -153,7 +166,11 @@ export function useAuth(): UseAuthReturn {
     setState((prev) => ({ ...prev, loading: true, error: null }))
 
     try {
-      const result = await window.electron.ipcRenderer.invoke('auth:switchUser', userInfo)
+      const result = (await window.electron.ipcRenderer.invoke('auth:switchUser', userInfo)) as {
+        success: boolean
+        userInfo?: UserInfo
+        error?: string
+      }
 
       if (result.success && result.userInfo) {
         setState({
@@ -180,7 +197,7 @@ export function useAuth(): UseAuthReturn {
 
   const isAdmin = useCallback(async (): Promise<boolean> => {
     try {
-      return await window.electron.ipcRenderer.invoke('auth:isAdmin')
+      return (await window.electron.ipcRenderer.invoke('auth:isAdmin')) as boolean
     } catch {
       return false
     }

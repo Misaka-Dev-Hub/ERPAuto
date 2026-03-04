@@ -68,13 +68,18 @@ export function useValidation(): UseValidationReturn {
       setState((prev) => ({ ...prev, loading: true, error: null }))
 
       try {
-        const result = await window.electron.ipcRenderer.invoke('validation:validate', request)
+        const result = (await window.electron.ipcRenderer.invoke(
+          'validation:validate',
+          request
+        )) as ValidationResponse
 
         if (result.success) {
+          const results = result.results || null
+          const stats = result.stats || null
           setState({
             loading: false,
-            data: result.results || null,
-            stats: result.stats || null,
+            data: results,
+            stats: stats,
             error: null
           })
           return result
@@ -105,7 +110,9 @@ export function useValidation(): UseValidationReturn {
 
   const getSharedProductionIds = useCallback(async (): Promise<string[]> => {
     try {
-      const result = await window.electron.ipcRenderer.invoke('validation:getSharedProductionIds')
+      const result = (await window.electron.ipcRenderer.invoke(
+        'validation:getSharedProductionIds'
+      )) as { productionIds?: string[] }
       return result?.productionIds || []
     } catch {
       return []
@@ -117,7 +124,11 @@ export function useValidation(): UseValidationReturn {
     materialCodes: string[]
   } | null> => {
     try {
-      const result = await window.electron.ipcRenderer.invoke('validation:getCleanerData')
+      const result = (await window.electron.ipcRenderer.invoke('validation:getCleanerData')) as {
+        success: boolean
+        orderNumbers?: string[]
+        materialCodes?: string[]
+      }
       if (result.success) {
         return {
           orderNumbers: result.orderNumbers || [],

@@ -147,8 +147,8 @@ function validateEditableFields(settings: Partial<SettingsData>): {
  */
 export class ConfigManager {
   private static instance: ConfigManager | null = null
-  private envPath: string
-  private backupPath: string
+  private envPath!: string
+  private backupPath!: string
   private configCache: Map<string, string> = new Map()
   private initialized: boolean = false
 
@@ -214,6 +214,8 @@ export class ConfigManager {
    * @param key - Configuration key
    * @param defaultValue - Default value if key doesn't exist
    */
+  public get(key: string): string | undefined
+  public get(key: string, defaultValue: string): string
   public get(key: string, defaultValue?: string): string | undefined {
     return this.configCache.get(key) ?? defaultValue
   }

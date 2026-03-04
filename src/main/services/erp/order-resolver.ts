@@ -14,17 +14,9 @@
 import type { IDatabaseService } from '../database'
 import { SqlServerService } from '../database/sql-server'
 import { createLogger } from '../logger'
+import sql from 'mssql'
 
 const log = createLogger('OrderResolver')
-
-// Dynamically import mssql for SQL Server parameter types
-let mssql: typeof import('mssql') | null = null
-async function getMssql() {
-  if (!mssql) {
-    mssql = await import('mssql')
-  }
-  return mssql
-}
 
 /**
  * Order mapping result
@@ -251,18 +243,26 @@ export class OrderNumberResolver {
       const isSqlServer = this.dbService.type === 'sqlserver'
       const tableName = this.getTableName(DB_CONFIG.TABLE_NAME)
 
-      log.debug('Resolving production IDs', { count: productionIds.length, dbType: this.dbService.type })
+      log.debug('Resolving production IDs', {
+        count: productionIds.length,
+        dbType: this.dbService.type
+      })
 
       let result
 
       if (isSqlServer) {
         // Use queryWithParams for SQL Server with explicit parameter types
-        const sql = await getMssql()
         const placeholders = productionIds.map((_, idx) => `@p${idx}`).join(', ')
-        const params: Record<string, { value: string; type: sql.ISqlType }> = {}
+        const params: Record<
+          string,
+          {
+            value: string
+            type: sql.ISqlType | sql.ISqlTypeFactoryWithLength | sql.ISqlTypeWithLength
+          }
+        > = {}
 
         productionIds.forEach((id, idx) => {
-          params[`p${idx}`] = { value: id, type: sql.NVarChar }
+          params[`p${idx}`] = { value: id, type: sql.NVarChar(255) }
         })
 
         const query = `
@@ -351,12 +351,17 @@ export class OrderNumberResolver {
 
       if (isSqlServer) {
         // Use queryWithParams for SQL Server with explicit parameter types
-        const sql = await getMssql()
         const placeholders = orderNumbers.map((_, idx) => `@p${idx}`).join(', ')
-        const params: Record<string, { value: string; type: sql.ISqlType }> = {}
+        const params: Record<
+          string,
+          {
+            value: string
+            type: sql.ISqlType | sql.ISqlTypeFactoryWithLength | sql.ISqlTypeWithLength
+          }
+        > = {}
 
         orderNumbers.forEach((id, idx) => {
-          params[`p${idx}`] = { value: id, type: sql.NVarChar }
+          params[`p${idx}`] = { value: id, type: sql.NVarChar(255) }
         })
 
         const query = `

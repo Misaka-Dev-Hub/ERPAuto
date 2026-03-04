@@ -44,9 +44,13 @@ export function useCleaner(): UseCleanerReturn {
     setState({ loading: true, data: null, error: null })
 
     try {
-      const result = await window.electron.ipcRenderer.invoke('cleaner:run', input)
+      const result = (await window.electron.ipcRenderer.invoke('cleaner:run', input)) as {
+        success: boolean
+        data?: CleanerResult
+        error?: string
+      }
 
-      if (result.success) {
+      if (result.success && result.data) {
         setState({ loading: false, data: result.data, error: null })
         return result.data
       } else {
