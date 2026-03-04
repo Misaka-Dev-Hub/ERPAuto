@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, webContents } from 'electron'
 import { ErpAuthService } from '../services/erp/erp-auth'
 import { ExtractorService } from '../services/erp/extractor'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
@@ -10,13 +10,35 @@ import type { ExtractorInput, ExtractorResult } from '../types/extractor.types'
 
 const log = createLogger('ExtractorHandler')
 
+function sendProgress(windowId: number, message: string, progress: number): void {
+  try {
+    webContents.getAllWebContents().forEach((wc) => {
+      wc.send('extractor:progress', { message, progress })
+    })
+  } catch (error) {
+    log.warn('Failed to send progress event', { error })
+  }
+}
+
+function sendLog(windowId: number, level: string, message: string): void {
+  try {
+    webContents.getAllWebContents().forEach((wc) => {
+      wc.send('extractor:log', { level, message })
+    })
+  } catch (error) {
+    log.warn('Failed to send log event', { error })
+  }
+}
+
 /**
  * Register IPC handlers for extractor service
  */
 export function registerExtractorHandlers(): void {
   ipcMain.handle(
     'extractor:run',
-    async (_event, input: ExtractorInput): Promise<IpcResult<ExtractorResult>> => {
+    async (event, input: ExtractorInput): Promise<IpcResult<ExtractorResult>> => {
+      const windowId = event.sender.id
+
       return withErrorHandling(async () => {
         let authService: ErpAuthService | null = null
         let dbService: IDatabaseService | null = null
@@ -41,6 +63,9 @@ export function registerExtractorHandlers(): void {
 
           // Create database service using factory
           log.info('Connecting to database for order resolution...')
+          sendProgress(windowId, '连接数据库...', 5)
+          sendLog(windowId, 'system', '正在连接数据库...')
+
           try {
             dbService = await create()
           } catch (error) {
@@ -52,6 +77,9 @@ export function registerExtractorHandlers(): void {
           }
 
           // Resolve order numbers (convert productionIDs to 生产订单号)
+          sendProgress(windowId, '解析订单号...', 10)
+          sendLog(windowId, 'info', '正在解析订单号...')
+
           const resolver = new OrderNumberResolver(dbService)
           const mappings = await resolver.resolve(input.orderNumbers)
 
@@ -71,6 +99,7 @@ export function registerExtractorHandlers(): void {
           }
 
           log.info('Resolved order numbers', { count: validOrderNumbers.length })
+          sendLog(windowId, 'info', `已解析 ${validOrderNumbers.length} 个有效订单号`)
 
           // Create auth service and login
           authService = new ErpAuthService({
@@ -79,6 +108,9 @@ export function registerExtractorHandlers(): void {
             password: erpPassword,
             headless: true
           })
+
+          sendProgress(windowId, '登录 ERP 系统...', 15)
+          sendLog(windowId, 'system', '正在登录 ERP 系统...')
 
           log.info('Logging in to ERP...')
           try {
@@ -91,6 +123,7 @@ export function registerExtractorHandlers(): void {
             )
           }
           log.info('Login successful')
+          sendLog(windowId, 'success', 'ERP 登录成功')
 
           // Create extractor service and run extraction with resolved order numbers
           const extractor = new ExtractorService(authService)
@@ -98,8 +131,18 @@ export function registerExtractorHandlers(): void {
 
           const modifiedInput: ExtractorInput = {
             ...input,
-            orderNumbers: validOrderNumbers
+            orderNumbers: validOrderNumbers,
+            onProgress: (message, progress) => {
+              sendProgress(windowId, message, progress)
+              sendLog(windowId, 'info', message)
+            },
+            onLog: (level, message) => {
+              sendLog(windowId, level, message)
+            }
           }
+
+          sendProgress(windowId, '开始提取数据...', 20)
+          sendLog(windowId, 'system', '提取引擎启动，开始下载数据...')
 
           const result = await extractor.extract(modifiedInput)
 

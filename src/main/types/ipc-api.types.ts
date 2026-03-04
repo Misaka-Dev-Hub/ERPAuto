@@ -77,6 +77,18 @@ export interface ExtractorAPI {
   runExtractor: (
     input: ExtractorInput
   ) => Promise<{ success: boolean; data?: ExtractorResult; error?: string }>
+  /**
+   * Subscribe to progress updates
+   * @param callback - Callback function receiving progress data
+   * @returns Unsubscribe function
+   */
+  onProgress: (callback: (data: { message: string; progress: number }) => void) => () => void
+  /**
+   * Subscribe to log messages
+   * @param callback - Callback function receiving log data
+   * @returns Unsubscribe function
+   */
+  onLog: (callback: (data: { level: string; message: string }) => void) => () => void
 }
 
 /**
