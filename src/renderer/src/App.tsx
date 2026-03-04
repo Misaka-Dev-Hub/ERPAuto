@@ -378,14 +378,16 @@ function App(): React.JSX.Element {
 
       {/* ================= 主体内容区域 ================= */}
       <div className="flex flex-1 overflow-hidden relative">
-        <main className="flex-1 overflow-y-auto bg-slate-50 p-6">
+        <main className="flex-1 overflow-hidden bg-slate-50 p-6 h-full">
           {currentPage === 'home' && (
-            <div className="max-w-4xl mx-auto mt-10 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <LayoutDashboard size={48} className="mx-auto text-blue-500 mb-4" />
-              <h1 className="text-3xl font-bold text-slate-800 mb-4">欢迎使用 ERP Auto</h1>
-              <p className="text-slate-500 text-lg max-w-2xl mx-auto">
-                自动化处理 ERP 系统中的数据提取和清理任务。请使用上方导航栏选择您需要的功能模块。
-              </p>
+            <div className="h-full overflow-auto">
+              <div className="max-w-4xl mx-auto mt-10 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <LayoutDashboard size={48} className="mx-auto text-blue-500 mb-4" />
+                <h1 className="text-3xl font-bold text-slate-800 mb-4">欢迎使用 ERP Auto</h1>
+                <p className="text-slate-500 text-lg max-w-2xl mx-auto">
+                  自动化处理 ERP 系统中的数据提取和清理任务。请使用上方导航栏选择您需要的功能模块。
+                </p>
+              </div>
             </div>
           )}
           {currentPage === 'extractor' && <ExtractorPage />}

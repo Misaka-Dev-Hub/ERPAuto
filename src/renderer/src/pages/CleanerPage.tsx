@@ -65,6 +65,13 @@ const CleanerPage: React.FC = () => {
   // Material type management dialog state
   const [isTypeDialogOpen, setIsTypeDialogOpen] = useState(false)
 
+  // Execution settings state
+  const [headless, setHeadless] = useState(() => {
+    const saved = sessionStorage.getItem('cleaner_headless')
+    return saved ? saved === 'true' : true
+  })
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false)
+
   // Check admin status and get shared Production IDs on mount
   React.useEffect(() => {
     const initializePage = async () => {
@@ -99,6 +106,23 @@ const CleanerPage: React.FC = () => {
   useEffect(() => {
     sessionStorage.setItem('cleaner_dryRun', dryRun.toString())
   }, [dryRun])
+
+  useEffect(() => {
+    sessionStorage.setItem('cleaner_headless', headless.toString())
+  }, [headless])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showSettingsMenu) {
+        const target = event.target as HTMLElement
+        if (!target.closest('[data-settings-menu]')) {
+          setShowSettingsMenu(false)
+        }
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showSettingsMenu])
 
   useEffect(() => {
     sessionStorage.setItem('cleaner_validationMode', valMode)
@@ -253,7 +277,8 @@ const CleanerPage: React.FC = () => {
       const response = await window.electron.cleaner.runCleaner({
         orderNumbers: orderNumberList,
         materialCodes: materialCodeList,
-        dryRun
+        dryRun,
+        headless
       })
 
       if (response.success && response.data) {
@@ -307,10 +332,10 @@ const CleanerPage: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col xl:flex-row gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* 左栏：数据源与执行控制区 */}
-      <div className="xl:w-[380px] flex-shrink-0 flex flex-col gap-5">
-        {/* 1. 数据来源选择 (仅 Admin 可见) */}
-        {isAdmin && (
+      {/* 左栏：数据源与执行控制区 (仅 Admin 可见) */}
+      {isAdmin && (
+        <div className="w-full xl:w-[380px] flex-shrink-0 flex flex-col gap-5 xl:self-start overflow-auto">
+          {/* 1. 数据来源选择 */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <h3 className="text-base font-semibold mb-4 flex items-center gap-2 text-slate-800">
               <DatabaseZap size={18} className="text-blue-500" />
@@ -361,10 +386,8 @@ const CleanerPage: React.FC = () => {
               </label>
             </div>
           </div>
-        )}
 
-        {/* 2. 负责人筛选 (仅 Admin 可见) */}
-        {isAdmin && (
+          {/* 2. 负责人筛选 */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-semibold flex items-center gap-2 text-slate-800">
@@ -414,43 +437,24 @@ const CleanerPage: React.FC = () => {
               )}
             </div>
           </div>
-        )}
-
-        {/* 3. 基础执行控制区 */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mt-auto">
-          {isAdmin && (
-            <div className="flex items-center justify-between bg-amber-50/50 p-3 rounded-lg border border-amber-200 mb-4">
-              <div>
-                <div className="font-semibold text-sm text-amber-900">预览模式 (Dry-Run)</div>
-                <div className="text-xs text-amber-700/80 mt-0.5">
-                  仅执行页面操作定位，不保存更改
-                </div>
-              </div>
-              <button
-                onClick={() => setDryRun(!dryRun)}
-                className={`transition-colors flex-shrink-0 ml-4 ${dryRun ? 'text-amber-500' : 'text-slate-300'}`}
-              >
-                {dryRun ? <ToggleRight size={40} /> : <ToggleLeft size={40} />}
-              </button>
-            </div>
-          )}
-
-          <div className="space-y-2.5">
-            <button
-              onClick={handleValidation}
-              disabled={isValidationRunning}
-              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 py-3 rounded-lg font-medium transition-colors shadow-sm flex justify-center items-center gap-2 border border-slate-200 disabled:opacity-50"
-            >
-              <Search size={18} /> {isValidationRunning ? '正在获取...' : '获取并校验物料状态'}
-            </button>
-          </div>
         </div>
-      </div>
+      )}
 
       {/* 右栏：结果表格与工具栏 */}
-      <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden min-h-[500px]">
+      <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+        {/* 获取物料状态按钮 */}
+        <div className="p-4 border-b border-slate-200 flex-shrink-0">
+          <button
+            onClick={handleValidation}
+            disabled={isValidationRunning}
+            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 py-3 rounded-lg font-medium transition-colors shadow-sm flex justify-center items-center gap-2 border border-slate-200 disabled:opacity-50"
+          >
+            <Search size={18} /> {isValidationRunning ? '正在获取...' : '获取并校验物料状态'}
+          </button>
+        </div>
+
         {/* 顶部操作条 */}
-        <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex justify-between items-center">
+        <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex justify-between items-center flex-shrink-0">
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setSelectedItems(new Set(filteredResults.map((r) => r.materialCode)))}
@@ -525,7 +529,7 @@ const CleanerPage: React.FC = () => {
         </div>
 
         {/* 表格区域 */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-y-auto">
           <table className="w-full text-left text-sm whitespace-nowrap table-fixed">
             <thead className="bg-slate-100 text-slate-600 sticky top-0 shadow-sm z-10 text-xs font-semibold">
               <tr>
@@ -616,37 +620,67 @@ const CleanerPage: React.FC = () => {
         </div>
 
         {/* 底部状态与执行区 */}
-        <div className="bg-white border-t border-slate-200 p-4 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10">
+        <div className="bg-white border-t border-slate-200 p-4 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="text-sm text-slate-600 font-medium">
               共计 {filteredResults.length} 条记录 | 已选中{' '}
               <span className="text-blue-600">{selectedItems.size}</span> 条
             </div>
-            {isAdmin && dryRun && (
-              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded border border-amber-200">
-                当前为预览模式
-              </span>
-            )}
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                setValidationResults([])
-                setSelectedItems(new Set())
-                setHiddenItems(new Set())
-              }}
-              className="text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 px-5 py-2.5 rounded-lg font-medium transition-colors"
-            >
-              重置列表
-            </button>
+            <div className="relative" data-settings-menu>
+              <button
+                onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+                className="text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Settings2 size={16} /> 执行设置
+              </button>
+              {showSettingsMenu && (
+                <div className="absolute bottom-full right-0 mb-2 bg-white rounded-lg shadow-lg border border-slate-200 py-3 px-4 min-w-[280px] z-50">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-medium text-slate-800">预览模式 (Dry-Run)</div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          仅执行页面操作定位，不保存更改
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setDryRun(!dryRun)}
+                        className={`transition-colors flex-shrink-0 ml-4 ${dryRun ? 'text-amber-500' : 'text-slate-300'}`}
+                      >
+                        {dryRun ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+                      </button>
+                    </div>
+                    <div className="border-t border-slate-100 pt-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-medium text-slate-800">
+                            后台模式 (Headless)
+                          </div>
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            浏览器在后台运行，不显示界面
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setHeadless(!headless)}
+                          className={`transition-colors flex-shrink-0 ml-4 ${headless ? 'text-blue-500' : 'text-slate-300'}`}
+                        >
+                          {headless ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               onClick={handleExecuteDeletion}
               disabled={isRunning}
-              className={`${isAdmin && dryRun ? 'bg-amber-500 hover:bg-amber-600' : 'bg-red-600 hover:bg-red-700 shadow-red-500/30'} text-white px-8 py-2.5 rounded-lg font-medium shadow-md transition-all flex items-center gap-2 disabled:opacity-50`}
+              className={`${dryRun ? 'bg-amber-500 hover:bg-amber-600' : 'bg-red-600 hover:bg-red-700 shadow-red-500/30'} text-white px-8 py-2.5 rounded-lg font-medium shadow-md transition-all flex items-center gap-2 disabled:opacity-50 w-[300px] justify-center`}
             >
-              <Play size={18} fill="currentColor" />{' '}
-              {isAdmin && dryRun ? '开始预览执行' : '正式执行 ERP 清理'}
+              <Play size={18} fill="currentColor" /> {dryRun ? '开始预览执行' : '正式执行 ERP 清理'}
             </button>
           </div>
         </div>

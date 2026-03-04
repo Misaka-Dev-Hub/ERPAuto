@@ -2,6 +2,7 @@ export interface CleanerInput {
   orderNumbers: string[]
   materialCodes: string[]
   dryRun: boolean
+  headless?: boolean
   onProgress?: (message: string, progress?: number) => void
 }
 
