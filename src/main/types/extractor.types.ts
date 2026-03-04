@@ -1,9 +1,12 @@
 import type { ErpSession } from './erp.types'
 
+export type LogLevel = 'info' | 'success' | 'warning' | 'error' | 'system'
+
 export interface ExtractorInput {
   orderNumbers: string[]
   batchSize?: number
   onProgress?: (message: string, progress: number) => void
+  onLog?: (level: LogLevel, message: string) => void
 }
 
 /**

@@ -3,7 +3,12 @@ import fs from 'fs/promises'
 import { ExtractorCore } from './extractor-core'
 import { ErpAuthService } from './erp-auth'
 import { ExcelParser } from '../excel/excel-parser'
-import type { ExtractorInput, ExtractorResult, ImportResult } from '../../types/extractor.types'
+import type {
+  ExtractorInput,
+  ExtractorResult,
+  ImportResult,
+  LogLevel
+} from '../../types/extractor.types'
 import { DataImportService } from '../database/data-importer'
 
 /**
@@ -75,7 +80,10 @@ export class ExtractorService {
         // Auto-import to database if merge was successful
         if (result.mergedFile) {
           input.onProgress?.('正在写入数据库...', 98)
-          const importResult = await this.importToDatabase(result.mergedFile)
+          const importResult = await this.importToDatabaseWithLogging(
+            result.mergedFile,
+            input.onLog
+          )
           result.importResult = importResult
 
           if (!importResult.success && importResult.errors.length > 0) {
@@ -306,6 +314,57 @@ export class ExtractorService {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       console.error(`[Extractor] Import failed: ${errorMsg}`)
+
+      return {
+        success: false,
+        recordsRead: 0,
+        recordsDeleted: 0,
+        recordsImported: 0,
+        uniqueSourceNumbers: 0,
+        errors: [errorMsg]
+      }
+    }
+  }
+
+  /**
+   * Import merged Excel data to database with logging
+   * @param filePath - Path to the merged Excel file
+   * @param onLog - Optional log callback
+   * @returns Import result with statistics
+   */
+  private async importToDatabaseWithLogging(
+    filePath: string,
+    onLog?: (level: LogLevel, message: string) => void
+  ): Promise<ImportResult> {
+    console.log(`[Extractor] Starting database import from: ${filePath}`)
+    onLog?.('info', `开始导入数据到数据库...`)
+
+    const importService = new DataImportService()
+
+    try {
+      const result = await importService.importFromExcel(filePath, 1000)
+
+      console.log(`[Extractor] Import completed`, {
+        success: result.success,
+        recordsRead: result.recordsRead,
+        recordsDeleted: result.recordsDeleted,
+        recordsImported: result.recordsImported
+      })
+
+      if (result.success) {
+        onLog?.(
+          'success',
+          `导入完成：读取 ${result.recordsRead} 条，删除 ${result.recordsDeleted} 条，导入 ${result.recordsImported} 条`
+        )
+      } else if (result.errors.length > 0) {
+        result.errors.forEach((err) => onLog?.('error', err))
+      }
+
+      return result
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.error(`[Extractor] Import failed: ${errorMsg}`)
+      onLog?.('error', `导入失败：${errorMsg}`)
 
       return {
         success: false,

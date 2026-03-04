@@ -1,38 +1,34 @@
-import { useState, useEffect } from 'react'
-
-export interface ExtractorProgress {
-  message: string
-  progress: number
-}
-
-export type LogLevel = 'info' | 'success' | 'warning' | 'error' | 'system'
-
-export interface LogEntry {
-  timestamp: string
-  level: LogLevel
-  message: string
-}
+import { useEffect } from 'react'
+import { useExtractorStore } from '../stores/extractorStore'
 
 export function useExtractor() {
-  const [isRunning, setIsRunning] = useState(false)
-  const [progress, setProgress] = useState<ExtractorProgress | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [logs, setLogs] = useState<LogEntry[]>([])
-
-  const addLog = (level: LogLevel, message: string) => {
-    const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false })
-    setLogs((prev) => [...prev, { timestamp, level, message }])
-  }
+  const {
+    isRunning,
+    progress,
+    error,
+    logs,
+    setRunning,
+    setProgress,
+    setError,
+    addLog,
+    clearLogs,
+    resetState
+  } = useExtractorStore()
 
   useEffect(() => {
-    if (progress) {
-      addLog('info', progress.message)
-    }
-  }, [progress])
+    const unsubscribeProgress = window.electron.extractor.onProgress((data) => {
+      setProgress({ message: data.message, progress: data.progress })
+    })
 
-  const clearLogs = () => {
-    setLogs([])
-  }
+    const unsubscribeLog = window.electron.extractor.onLog((data) => {
+      addLog(data.level as any, data.message)
+    })
+
+    return () => {
+      unsubscribeProgress()
+      unsubscribeLog()
+    }
+  }, [setProgress, addLog])
 
   const startExtraction = async (orderNumbers: string) => {
     if (!orderNumbers.trim()) {
@@ -40,11 +36,8 @@ export function useExtractor() {
       return
     }
 
-    setIsRunning(true)
-    setProgress(null)
-    setError(null)
-    setLogs([])
-
+    resetState()
+    setRunning(true)
     addLog('system', '提取引擎启动，准备执行...')
 
     try {
@@ -77,7 +70,7 @@ export function useExtractor() {
       setError(errMsg)
       addLog('error', errMsg)
     } finally {
-      setIsRunning(false)
+      setRunning(false)
       setProgress(null)
     }
   }

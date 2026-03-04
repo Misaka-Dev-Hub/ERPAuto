@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import { Terminal } from 'lucide-react'
-import type { LogEntry, LogLevel, ExtractorProgress } from '../../hooks/useExtractor'
+import type { LogEntry, LogLevel, ExtractorProgress } from '../../stores/extractorStore'
 
 interface LogPanelProps {
   logs: LogEntry[]

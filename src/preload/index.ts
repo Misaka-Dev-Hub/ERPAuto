@@ -27,7 +27,23 @@ const api = {
 
   // Extractor service
   extractor: {
-    runExtractor: (input: ExtractorInput) => ipcRenderer.invoke('extractor:run', input)
+    runExtractor: (input: ExtractorInput) => ipcRenderer.invoke('extractor:run', input),
+    onProgress: (callback: (data: { message: string; progress: number }) => void) => {
+      const subscription = (
+        _event: Electron.IpcRendererEvent,
+        data: { message: string; progress: number }
+      ) => callback(data)
+      ipcRenderer.on('extractor:progress', subscription)
+      return () => ipcRenderer.removeListener('extractor:progress', subscription)
+    },
+    onLog: (callback: (data: { level: string; message: string }) => void) => {
+      const subscription = (
+        _event: Electron.IpcRendererEvent,
+        data: { level: string; message: string }
+      ) => callback(data)
+      ipcRenderer.on('extractor:log', subscription)
+      return () => ipcRenderer.removeListener('extractor:log', subscription)
+    }
   },
 
   // Cleaner service
