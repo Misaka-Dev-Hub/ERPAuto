@@ -19,34 +19,34 @@ const log = createLogger('DataImportService')
  * Excel column header to database field mapping
  */
 const EXCEL_TO_DB_MAPPING: Record<string, keyof MaterialPlanRecord> = {
-  '工厂': 'factory',
-  '备料状态': 'materialStatus',
-  '备料计划单号': 'planNumber',
-  '来源单号': 'sourceNumber',
-  '备料类型': 'materialType',
-  '产品编码': 'productCode',
-  '产品名称': 'productName',
-  '产品计划数量': 'productPlanQuantity',
-  '产品单位': 'productUnit',
-  '用料部门': 'useDepartment',
-  '备注': 'remark',
-  '制单人': 'creator',
-  '制单日期': 'createDate',
-  '审批人': 'approver',
-  '审批日期': 'approveDate',
-  '序号': 'sequenceNumber',
-  '材料编码': 'materialCode',
-  '材料名称': 'materialName',
-  '规格': 'specification',
-  '型号': 'model',
-  '图号': 'drawingNumber',
-  '物料材质': 'materialQuality',
-  '计划数量': 'planQuantity',
-  '单位': 'unit',
-  '需用日期': 'requiredDate',
-  '发料仓库': 'warehouse',
-  '单位用量': 'unitUsage',
-  '累计出库数量': 'cumulativeOutputQuantity'
+  工厂: 'factory',
+  备料状态: 'materialStatus',
+  备料计划单号: 'planNumber',
+  来源单号: 'sourceNumber',
+  备料类型: 'materialType',
+  产品编码: 'productCode',
+  产品名称: 'productName',
+  产品计划数量: 'productPlanQuantity',
+  产品单位: 'productUnit',
+  用料部门: 'useDepartment',
+  备注: 'remark',
+  制单人: 'creator',
+  制单日期: 'createDate',
+  审批人: 'approver',
+  审批日期: 'approveDate',
+  序号: 'sequenceNumber',
+  材料编码: 'materialCode',
+  材料名称: 'materialName',
+  规格: 'specification',
+  型号: 'model',
+  图号: 'drawingNumber',
+  物料材质: 'materialQuality',
+  计划数量: 'planQuantity',
+  单位: 'unit',
+  需用日期: 'requiredDate',
+  发料仓库: 'warehouse',
+  单位用量: 'unitUsage',
+  累计出库数量: 'cumulativeOutputQuantity'
   // Note: '打印人', '打印日期' are skipped (not in DB)
   // Note: 'BOMVersion' is skipped (not in Excel)
 }
@@ -275,11 +275,7 @@ export class DataImportService {
     }
 
     // Handle date fields
-    const dateFields: (keyof MaterialPlanRecord)[] = [
-      'createDate',
-      'approveDate',
-      'requiredDate'
-    ]
+    const dateFields: (keyof MaterialPlanRecord)[] = ['createDate', 'approveDate', 'requiredDate']
 
     if (dateFields.includes(fieldName)) {
       // ExcelJS returns date as Date object if recognized

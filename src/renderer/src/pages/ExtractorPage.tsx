@@ -227,7 +227,10 @@ const ExtractorPage: React.FC = () => {
         {result?.importResult && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col gap-4">
             <h3 className="font-semibold text-lg border-b pb-2 flex items-center gap-2">
-              <Database size={20} className={result.importResult.success ? 'text-emerald-600' : 'text-red-500'} />
+              <Database
+                size={20}
+                className={result.importResult.success ? 'text-emerald-600' : 'text-red-500'}
+              />
               <span className={result.importResult.success ? 'text-emerald-600' : 'text-red-500'}>
                 数据库写入结果
               </span>
