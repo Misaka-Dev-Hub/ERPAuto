@@ -642,7 +642,7 @@ const CleanerPage: React.FC = () => {
             </button>
             <button
               onClick={handleExecuteDeletion}
-              disabled={isRunning || validationResults.length === 0}
+              disabled={isRunning}
               className={`${isAdmin && dryRun ? 'bg-amber-500 hover:bg-amber-600' : 'bg-red-600 hover:bg-red-700 shadow-red-500/30'} text-white px-8 py-2.5 rounded-lg font-medium shadow-md transition-all flex items-center gap-2 disabled:opacity-50`}
             >
               <Play size={18} fill="currentColor" />{' '}
