@@ -12,6 +12,19 @@
  */
 
 import type { IDatabaseService } from '../database'
+import { SqlServerService } from '../database/sql-server'
+import { createLogger } from '../logger'
+
+const log = createLogger('OrderResolver')
+
+// Dynamically import mssql for SQL Server parameter types
+let mssql: typeof import('mssql') | null = null
+async function getMssql() {
+  if (!mssql) {
+    mssql = await import('mssql')
+  }
+  return mssql
+}
 
 /**
  * Order mapping result
@@ -75,6 +88,24 @@ export class OrderNumberResolver {
 
   constructor(dbService: IDatabaseService) {
     this.dbService = dbService
+  }
+
+  /**
+   * Get table name based on database type
+   * Converts MySQL schema_tablename format to SQL Server [schema].[tablename] format
+   * e.g., productionContractData_26年压力表合同数据 -> [productionContractData].[26年压力表合同数据]
+   */
+  private getTableName(mysqlTableName: string): string {
+    if (this.dbService.type === 'sqlserver') {
+      const firstUnderscoreIndex = mysqlTableName.indexOf('_')
+      if (firstUnderscoreIndex > 0) {
+        const schema = mysqlTableName.substring(0, firstUnderscoreIndex)
+        const tableName = mysqlTableName.substring(firstUnderscoreIndex + 1)
+        return `[${schema}].[${tableName}]`
+      }
+      return `[dbo].[${mysqlTableName}]`
+    }
+    return mysqlTableName
   }
 
   /**
@@ -217,35 +248,56 @@ export class OrderNumberResolver {
     }
 
     try {
-      // Build query - use different placeholder style based on database type
       const isSqlServer = this.dbService.type === 'sqlserver'
-      const placeholders = isSqlServer
-        ? productionIds.map((_, idx) => `@p${idx}`).join(', ')
-        : productionIds.map(() => '?').join(', ')
+      const tableName = this.getTableName(DB_CONFIG.TABLE_NAME)
 
-      // Use appropriate quoting for table/field names
-      const quote = isSqlServer ? '' : '`'
-      const query = `
-        SELECT ${quote}${DB_CONFIG.FIELD_PRODUCTION_ID}${quote}, ${quote}${DB_CONFIG.FIELD_ORDER_NUMBER}${quote}
-        FROM ${quote}${DB_CONFIG.TABLE_NAME}${quote}
-        WHERE ${quote}${DB_CONFIG.FIELD_PRODUCTION_ID}${quote} IN (${placeholders})
-      `
+      log.debug('Resolving production IDs', { count: productionIds.length, dbType: this.dbService.type })
 
-      const result = await this.dbService.query(query, productionIds)
+      let result
 
-      // Create a map for quick lookup
+      if (isSqlServer) {
+        // Use queryWithParams for SQL Server with explicit parameter types
+        const sql = await getMssql()
+        const placeholders = productionIds.map((_, idx) => `@p${idx}`).join(', ')
+        const params: Record<string, { value: string; type: sql.ISqlType }> = {}
+
+        productionIds.forEach((id, idx) => {
+          params[`p${idx}`] = { value: id, type: sql.NVarChar }
+        })
+
+        const query = `
+          SELECT ${DB_CONFIG.FIELD_PRODUCTION_ID}, ${DB_CONFIG.FIELD_ORDER_NUMBER}
+          FROM ${tableName}
+          WHERE ${DB_CONFIG.FIELD_PRODUCTION_ID} IN (${placeholders})
+        `
+
+        result = await (this.dbService as SqlServerService).queryWithParams(query, params)
+      } else {
+        // Use standard query for MySQL
+        const placeholders = productionIds.map(() => '?').join(', ')
+        const query = `
+          SELECT \`${DB_CONFIG.FIELD_PRODUCTION_ID}\`, \`${DB_CONFIG.FIELD_ORDER_NUMBER}\`
+          FROM ${tableName}
+          WHERE \`${DB_CONFIG.FIELD_PRODUCTION_ID}\` IN (${placeholders})
+        `
+        result = await this.dbService.query(query, productionIds)
+      }
+
+      // Create a map for quick lookup (use lowercase key for case-insensitive matching)
       const resultMap = new Map<string, string>()
       for (const row of result.rows) {
         const prodId = row[DB_CONFIG.FIELD_PRODUCTION_ID] as string
         const orderNum = row[DB_CONFIG.FIELD_ORDER_NUMBER] as string
         if (prodId && orderNum) {
-          resultMap.set(prodId, orderNum)
+          // Store with lowercase key for case-insensitive matching
+          resultMap.set(prodId.toLowerCase(), orderNum)
         }
       }
 
       // Build mappings
       for (const pid of productionIds) {
-        const orderNumber = resultMap.get(pid)
+        // Use lowercase for case-insensitive lookup
+        const orderNumber = resultMap.get(pid.toLowerCase())
 
         if (orderNumber) {
           mappings.push({
@@ -292,21 +344,39 @@ export class OrderNumberResolver {
     }
 
     try {
-      // Build query - use different placeholder style based on database type
       const isSqlServer = this.dbService.type === 'sqlserver'
-      const placeholders = isSqlServer
-        ? orderNumbers.map((_, idx) => `@p${idx}`).join(', ')
-        : orderNumbers.map(() => '?').join(', ')
+      const tableName = this.getTableName(DB_CONFIG.TABLE_NAME)
 
-      // Use appropriate quoting for table/field names
-      const quote = isSqlServer ? '' : '`'
-      const query = `
-        SELECT ${quote}${DB_CONFIG.FIELD_ORDER_NUMBER}${quote}
-        FROM ${quote}${DB_CONFIG.TABLE_NAME}${quote}
-        WHERE ${quote}${DB_CONFIG.FIELD_ORDER_NUMBER}${quote} IN (${placeholders})
-      `
+      let result
 
-      const result = await this.dbService.query(query, orderNumbers)
+      if (isSqlServer) {
+        // Use queryWithParams for SQL Server with explicit parameter types
+        const sql = await getMssql()
+        const placeholders = orderNumbers.map((_, idx) => `@p${idx}`).join(', ')
+        const params: Record<string, { value: string; type: sql.ISqlType }> = {}
+
+        orderNumbers.forEach((id, idx) => {
+          params[`p${idx}`] = { value: id, type: sql.NVarChar }
+        })
+
+        const query = `
+          SELECT ${DB_CONFIG.FIELD_ORDER_NUMBER}
+          FROM ${tableName}
+          WHERE ${DB_CONFIG.FIELD_ORDER_NUMBER} IN (${placeholders})
+        `
+
+        result = await (this.dbService as SqlServerService).queryWithParams(query, params)
+      } else {
+        // Use standard query for MySQL
+        const placeholders = orderNumbers.map(() => '?').join(', ')
+        const query = `
+          SELECT \`${DB_CONFIG.FIELD_ORDER_NUMBER}\`
+          FROM ${tableName}
+          WHERE \`${DB_CONFIG.FIELD_ORDER_NUMBER}\` IN (${placeholders})
+        `
+        result = await this.dbService.query(query, orderNumbers)
+      }
+
       return result.rows.map((row) => row[DB_CONFIG.FIELD_ORDER_NUMBER] as string)
     } catch (error) {
       console.warn('[OrderResolver] Failed to verify order numbers:', error)
