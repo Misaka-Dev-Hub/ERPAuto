@@ -3,7 +3,7 @@
  * These types define the API exposed to the renderer process via contextBridge
  */
 
-import type { ExtractorInput, ExtractorResult } from './extractor.types'
+import type { ExtractorInput, ExtractorResult, ExtractionProgress } from './extractor.types'
 import type {
   CleanerInput,
   CleanerResult,
@@ -82,7 +82,7 @@ export interface ExtractorAPI {
    * @param callback - Callback function receiving progress data
    * @returns Unsubscribe function
    */
-  onProgress: (callback: (data: { message: string; progress: number }) => void) => () => void
+  onProgress: (callback: (data: ExtractionProgress) => void) => () => void
   /**
    * Subscribe to log messages
    * @param callback - Callback function receiving log data

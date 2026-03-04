@@ -2,27 +2,37 @@ import { create } from 'zustand'
 
 export type LogLevel = 'info' | 'success' | 'warning' | 'error' | 'system'
 
+export type ExtractionPhase = 'login' | 'downloading' | 'merging' | 'importing'
+
 export interface LogEntry {
   timestamp: string
   level: LogLevel
   message: string
 }
 
-export interface ExtractorProgress {
+export interface ExtractionProgress {
   message: string
   progress: number
+  phase?: ExtractionPhase
+  currentBatch?: number
+  totalBatches?: number
+  subProgress?: {
+    step: string
+    current: number
+    total: number
+  }
 }
 
 export interface ExtractorState {
   isRunning: boolean
-  progress: ExtractorProgress | null
+  progress: ExtractionProgress | null
   error: string | null
   logs: LogEntry[]
 }
 
 export interface ExtractorActions {
   setRunning: (isRunning: boolean) => void
-  setProgress: (progress: ExtractorProgress | null) => void
+  setProgress: (progress: ExtractionProgress | null) => void
   setError: (error: string | null) => void
   addLog: (level: LogLevel, message: string) => void
   clearLogs: () => void
@@ -41,7 +51,7 @@ export const useExtractorStore = create<ExtractorState & ExtractorActions>((set)
 
   setRunning: (isRunning: boolean) => set({ isRunning }),
 
-  setProgress: (progress: ExtractorProgress | null) => set({ progress }),
+  setProgress: (progress: ExtractionProgress | null) => set({ progress }),
 
   setError: (error: string | null) => set({ error }),
 

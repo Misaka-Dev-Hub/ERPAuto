@@ -2,10 +2,25 @@ import type { ErpSession } from './erp.types'
 
 export type LogLevel = 'info' | 'success' | 'warning' | 'error' | 'system'
 
+export type ExtractionPhase = 'login' | 'downloading' | 'merging' | 'importing'
+
+export interface ExtractionProgress {
+  message: string
+  progress: number
+  phase?: ExtractionPhase
+  currentBatch?: number
+  totalBatches?: number
+  subProgress?: {
+    step: string
+    current: number
+    total: number
+  }
+}
+
 export interface ExtractorInput {
   orderNumbers: string[]
   batchSize?: number
-  onProgress?: (message: string, progress: number) => void
+  onProgress?: (message: string, progress: number, extra?: Partial<ExtractionProgress>) => void
   onLog?: (level: LogLevel, message: string) => void
 }
 
@@ -43,7 +58,7 @@ export interface ExtractorCoreInput {
   orderNumbers: string[]
   downloadDir: string
   batchSize: number
-  onProgress?: (message: string, progress: number) => void
+  onProgress?: (message: string, progress: number, extra?: Partial<ExtractionProgress>) => void
 }
 
 /**

@@ -17,7 +17,14 @@ export function useExtractor() {
 
   useEffect(() => {
     const unsubscribeProgress = window.electron.extractor.onProgress((data) => {
-      setProgress({ message: data.message, progress: data.progress })
+      setProgress({
+        message: data.message,
+        progress: data.progress,
+        phase: data.phase,
+        currentBatch: data.currentBatch,
+        totalBatches: data.totalBatches,
+        subProgress: data.subProgress
+      })
     })
 
     const unsubscribeLog = window.electron.extractor.onLog((data) => {

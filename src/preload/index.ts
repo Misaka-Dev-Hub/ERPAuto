@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { MySqlConfig, SqlServerConfig } from '../main/types/ipc-api.types'
-import type { ExtractorInput } from '../main/types/extractor.types'
+import type { ExtractorInput, ExtractionProgress } from '../main/types/extractor.types'
 import type { CleanerInput, ExportResultItem } from '../main/types/cleaner.types'
 import type { ResolverInput } from '../main/ipc/resolver-handler'
 import type { LoginRequest } from '../main/ipc/auth-handler'
@@ -28,11 +28,9 @@ const api = {
   // Extractor service
   extractor: {
     runExtractor: (input: ExtractorInput) => ipcRenderer.invoke('extractor:run', input),
-    onProgress: (callback: (data: { message: string; progress: number }) => void) => {
-      const subscription = (
-        _event: Electron.IpcRendererEvent,
-        data: { message: string; progress: number }
-      ) => callback(data)
+    onProgress: (callback: (data: ExtractionProgress) => void) => {
+      const subscription = (_event: Electron.IpcRendererEvent, data: ExtractionProgress) =>
+        callback(data)
       ipcRenderer.on('extractor:progress', subscription)
       return () => ipcRenderer.removeListener('extractor:progress', subscription)
     },

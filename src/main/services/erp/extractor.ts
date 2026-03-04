@@ -7,7 +7,8 @@ import type {
   ExtractorInput,
   ExtractorResult,
   ImportResult,
-  LogLevel
+  LogLevel,
+  ExtractionProgress
 } from '../../types/extractor.types'
 import { DataImportService } from '../database/data-importer'
 
@@ -64,7 +65,16 @@ export class ExtractorService {
 
       // Merge downloaded files (original logic preserved)
       if (result.downloadedFiles.length > 0) {
-        input.onProgress?.('正在合并文件...', 95)
+        const totalBatches = result.downloadedFiles.length
+        const totalPoints = 1 + totalBatches + 2
+        const progressPerPoint = 100 / totalPoints
+        const mergeProgress = (1 + totalBatches) * progressPerPoint
+        const importProgress = (1 + totalBatches + 1) * progressPerPoint
+
+        input.onProgress?.('正在合并文件...', mergeProgress, {
+          phase: 'merging',
+          totalBatches
+        })
         const mergeResult = await this.mergeFiles(result.downloadedFiles)
         result.mergedFile = mergeResult.mergedFile
         result.recordCount = mergeResult.recordCount
@@ -79,7 +89,11 @@ export class ExtractorService {
 
         // Auto-import to database if merge was successful
         if (result.mergedFile) {
-          input.onProgress?.('正在写入数据库...', 98)
+          const importProgress = (1 + totalBatches + 1) * progressPerPoint
+          input.onProgress?.('正在写入数据库...', importProgress, {
+            phase: 'importing',
+            totalBatches
+          })
           const importResult = await this.importToDatabaseWithLogging(
             result.mergedFile,
             input.onLog

@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react'
 import { Terminal } from 'lucide-react'
-import type { LogEntry, LogLevel, ExtractorProgress } from '../../stores/extractorStore'
+import type { LogEntry, LogLevel } from '../../stores/extractorStore'
+import type { ExtractionProgress } from '../../stores/extractorStore'
 
 interface LogPanelProps {
   logs: LogEntry[]
-  progress: ExtractorProgress | null
+  progress: ExtractionProgress | null
   onClear: () => void
 }
 

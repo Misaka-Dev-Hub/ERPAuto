@@ -1,7 +1,11 @@
 import path from 'path'
 import { ERP_LOCATORS } from './locators'
 import type { ErpSession } from '../../types/erp.types'
-import type { ExtractorCoreInput, ExtractorCoreResult } from '../../types/extractor.types'
+import type {
+  ExtractorCoreInput,
+  ExtractorCoreResult,
+  ExtractionProgress
+} from '../../types/extractor.types'
 
 /**
  * ExtractorCore - Handles all web page operations for data extraction
@@ -22,17 +26,25 @@ export class ExtractorCore {
       errors: []
     }
 
-    // Navigate to extractor page and get popup page + work frame
+    const totalBatches = this.createBatches(input.orderNumbers, input.batchSize).length
+    const totalPoints = 1 + totalBatches + 2
+    const progressPerPoint = 100 / totalPoints
+
     const { popupPage, workFrame } = await this.navigateToExtractorPage(input.session)
 
-    // Process orders in batches
     const batches = this.createBatches(input.orderNumbers, input.batchSize)
 
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i]
-      const progress = ((i + 1) / batches.length) * 100
+      const progress = (1 + (i + 1)) * progressPerPoint
 
-      input.onProgress?.(`Processing batch ${i + 1}/${batches.length}`, progress)
+      const progressExtra: Partial<ExtractionProgress> = {
+        phase: 'downloading',
+        currentBatch: i + 1,
+        totalBatches
+      }
+
+      input.onProgress?.(`处理批次 ${i + 1}/${totalBatches}`, progress, progressExtra)
 
       try {
         const filePath = await this.downloadBatch(

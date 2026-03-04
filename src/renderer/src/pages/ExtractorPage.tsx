@@ -3,21 +3,14 @@ import { Download, Play } from 'lucide-react'
 import OrderNumberInput from '../components/OrderNumberInput'
 import { useExtractor } from '../hooks/useExtractor'
 import LogPanel from '../components/ui/LogPanel'
+import { SegmentedProgressBar } from '../components/ui/SegmentedProgressBar'
 
 const ExtractorPage: React.FC = () => {
   const [orderNumbers, setOrderNumbers] = useState(() => {
     return sessionStorage.getItem('extractor_orderNumbers') || ''
   })
 
-  const {
-    isRunning,
-    progress,
-    error,
-    logs,
-    startExtraction,
-    clearLogs,
-    setError
-  } = useExtractor()
+  const { isRunning, progress, error, logs, startExtraction, clearLogs, setError } = useExtractor()
 
   useEffect(() => {
     sessionStorage.setItem('extractor_orderNumbers', orderNumbers)
@@ -81,6 +74,16 @@ const ExtractorPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {isRunning && progress && (
+          <SegmentedProgressBar
+            progress={progress.progress}
+            phase={progress.phase}
+            currentBatch={progress.currentBatch}
+            totalBatches={progress.totalBatches}
+            subProgress={progress.subProgress}
+          />
+        )}
 
         <LogPanel logs={logs} progress={progress} onClear={clearLogs} />
       </div>
