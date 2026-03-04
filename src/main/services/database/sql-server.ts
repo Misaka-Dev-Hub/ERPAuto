@@ -35,7 +35,7 @@ export class SqlServerService implements IDatabaseService {
         password: this.config.password,
         database: this.config.database,
         options: {
-          encrypt: this.config.options?.encrypt ?? true,
+          encrypt: this.config.options?.encrypt ?? false,
           trustServerCertificate: this.config.options?.trustServerCertificate ?? false
         }
       }

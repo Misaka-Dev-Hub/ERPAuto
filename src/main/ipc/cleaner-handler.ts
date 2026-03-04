@@ -28,7 +28,7 @@ async function getDatabaseService(): Promise<MySqlService | SqlServerService> {
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || '',
       options: {
-        encrypt: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes',
+        encrypt: false,
         trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes'
       }
     })
@@ -110,7 +110,7 @@ export function registerCleanerHandlers(): void {
             url: erpUrl,
             username: erpUsername,
             password: erpPassword,
-            headless: true
+            headless: input.headless ?? true
           })
 
           log.info('Logging in to ERP...')

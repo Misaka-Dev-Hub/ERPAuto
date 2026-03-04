@@ -67,7 +67,7 @@ async function getValidationDatabaseService(): Promise<MySqlService | SqlServerS
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || '',
       options: {
-        encrypt: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes',
+        encrypt: false,
         trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes'
       }
     })
