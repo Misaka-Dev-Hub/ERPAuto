@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { X } from 'lucide-react'
 
 interface OrderNumberInputProps {
   value: string
@@ -114,8 +115,9 @@ const OrderNumberInput: React.FC<OrderNumberInputProps> = ({
           <button
             onClick={onReset}
             disabled={disabled}
-            className="text-xs text-slate-400 hover:text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 px-3 py-1.5 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
+            <X size={14} />
             清空
           </button>
         </div>

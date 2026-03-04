@@ -94,7 +94,7 @@ const SettingsPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 mt-6">
+    <div className="flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-500 mt-6">
       {message && (
         <div
           className={`fixed top-5 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-[10000] text-sm font-medium transition-all ${message.type === 'success' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}`}
@@ -103,7 +103,7 @@ const SettingsPage: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="w-full max-w-xl bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="border-b border-slate-100 bg-slate-50 px-6 py-5">
           <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-800">
             <SettingsIcon size={20} className="text-slate-600" />
@@ -114,8 +114,8 @@ const SettingsPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="p-6 space-y-6 bg-white">
-          <div>
+        <div className="p-6 space-y-6 bg-white flex flex-col items-center">
+          <div className="w-full max-w-md">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               ERP 基础访问地址 (URL)
             </label>
@@ -128,7 +128,7 @@ const SettingsPage: React.FC = () => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-5">
+          <div className="w-full max-w-md grid grid-cols-2 gap-5">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
                 登录账号 (Username)
@@ -155,7 +155,7 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-6 mt-2 border-t border-slate-100 flex justify-end">
+          <div className="w-full max-w-md pt-6 mt-2 border-t border-slate-100 flex justify-center">
             <button
               className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 text-white px-8 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-sm transition-colors"
               onClick={handleSaveSettings}

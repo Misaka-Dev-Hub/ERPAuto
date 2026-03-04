@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Download, Play, Terminal, PanelLeftClose, PanelLeft } from 'lucide-react'
+import { Download, Play, Terminal } from 'lucide-react'
 import OrderNumberInput from '../components/OrderNumberInput'
 
 interface ExtractorProgress {
@@ -38,7 +38,6 @@ const ExtractorPage: React.FC = () => {
   const [progress, setProgress] = useState<ExtractorProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -124,40 +123,22 @@ const ExtractorPage: React.FC = () => {
 
   return (
     <div className="flex h-full gap-4 relative">
-      {!sidebarCollapsed && (
-        <aside className="w-80 flex-shrink-0 bg-white border border-slate-200 flex flex-col shadow-sm rounded-xl overflow-hidden h-full animate-in slide-in-from-left duration-300">
-          <div className="p-4 border-b border-slate-100">
-            <h3 className="text-sm font-semibold text-slate-800">订单号输入</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              数据将在"数据提取"与"物料清理"模块间自动共享
-            </p>
-          </div>
-          <div className="flex-1 flex flex-col p-4 min-h-0">
-            <OrderNumberInput
-              value={orderNumbers}
-              onChange={setOrderNumbers}
-              label=""
-              enableFormatStats={true}
-              disabled={isRunning}
-              showReset={true}
-              onReset={handleReset}
-            />
-          </div>
-        </aside>
-      )}
-
-      <button
-        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white border border-slate-200 rounded-r-lg p-1.5 shadow-sm hover:bg-slate-50 transition-colors"
-        style={{ left: sidebarCollapsed ? 0 : '320px' }}
-        title={sidebarCollapsed ? '展开侧栏' : '收起侧栏'}
-      >
-        {sidebarCollapsed ? (
-          <PanelLeft size={18} className="text-slate-600" />
-        ) : (
-          <PanelLeftClose size={18} className="text-slate-600" />
-        )}
-      </button>
+      <aside className="w-80 flex-shrink-0 bg-white border border-slate-200 flex flex-col shadow-sm rounded-xl overflow-hidden h-full">
+        <div className="p-4 border-b border-slate-100">
+          <h3 className="text-sm font-semibold text-slate-800">订单号输入</h3>
+        </div>
+        <div className="flex-1 flex flex-col p-4 min-h-0">
+          <OrderNumberInput
+            value={orderNumbers}
+            onChange={setOrderNumbers}
+            label=""
+            enableFormatStats={true}
+            disabled={isRunning}
+            showReset={true}
+            onReset={handleReset}
+          />
+        </div>
+      </aside>
 
       <div className="flex-1 min-w-0 flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center justify-between">
