@@ -3,6 +3,7 @@ import { ErpAuthService } from '../services/erp/erp-auth'
 import { CleanerService } from '../services/erp/cleaner'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
 import { MySqlService } from '../services/database/mysql'
+import { SqlServerService } from '../services/database/sql-server'
 import { ResultExporter } from '../services/excel/result-exporter'
 import { createLogger } from '../services/logger'
 import { withErrorHandling, type IpcResult } from './index'
@@ -16,19 +17,45 @@ import type {
 
 const log = createLogger('CleanerHandler')
 
-/**
- * Register IPC handlers for cleaner service
- */
+async function getDatabaseService(): Promise<MySqlService | SqlServerService> {
+  const dbType = process.env.DB_TYPE?.toLowerCase()
+
+  if (dbType === 'sqlserver' || dbType === 'mssql') {
+    const sqlServerService = new SqlServerService({
+      server: process.env.DB_SERVER || 'localhost',
+      port: parseInt(process.env.DB_SQLSERVER_PORT || '1433', 10),
+      user: process.env.DB_USERNAME || 'sa',
+      password: process.env.DB_PASSWORD || '',
+      database: process.env.DB_NAME || '',
+      options: {
+        encrypt: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes',
+        trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes'
+      }
+    })
+    await sqlServerService.connect()
+    return sqlServerService
+  } else {
+    const mysqlService = new MySqlService({
+      host: process.env.DB_MYSQL_HOST || 'localhost',
+      port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
+      user: process.env.DB_USERNAME || 'root',
+      password: process.env.DB_PASSWORD || '',
+      database: process.env.DB_NAME || ''
+    })
+    await mysqlService.connect()
+    return mysqlService
+  }
+}
+
 export function registerCleanerHandlers(): void {
   ipcMain.handle(
     'cleaner:run',
     async (_event, input: CleanerInput): Promise<IpcResult<CleanerResult>> => {
       return withErrorHandling(async () => {
         let authService: ErpAuthService | null = null
-        let mysqlService: MySqlService | null = null
+        let dbService: MySqlService | SqlServerService | null = null
 
         try {
-          // Check environment variables
           const erpUrl = process.env.ERP_URL || ''
           const erpUsername = process.env.ERP_USERNAME || ''
           const erpPassword = process.env.ERP_PASSWORD || ''
@@ -45,32 +72,24 @@ export function registerCleanerHandlers(): void {
             )
           }
 
-          // Resolve order numbers (convert productionIDs to 生产订单号)
-          const mysqlConfig = {
-            host: process.env.DB_MYSQL_HOST || 'localhost',
-            port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
-            user: process.env.DB_USERNAME || 'root',
-            password: process.env.DB_PASSWORD || '',
-            database: process.env.DB_NAME || ''
-          }
-
-          log.info('Connecting to MySQL for order resolution...')
-          mysqlService = new MySqlService(mysqlConfig)
+          const dbType = process.env.DB_TYPE?.toLowerCase()
+          log.info(
+            `Connecting to ${dbType === 'sqlserver' || dbType === 'mssql' ? 'SQL Server' : 'MySQL'} for order resolution...`
+          )
 
           try {
-            await mysqlService.connect()
+            dbService = await getDatabaseService()
           } catch (error) {
             throw new DatabaseQueryError(
-              'MySQL 连接失败',
+              '数据库连接失败',
               'DB_CONNECTION_FAILED',
               error instanceof Error ? error : undefined
             )
           }
 
-          const resolver = new OrderNumberResolver(mysqlService)
+          const resolver = new OrderNumberResolver(dbService)
           const mappings = await resolver.resolve(input.orderNumbers)
 
-          // Get valid order numbers and warnings
           const validOrderNumbers = resolver.getValidOrderNumbers(mappings)
           const warnings = resolver.getWarnings(mappings)
 
@@ -87,7 +106,6 @@ export function registerCleanerHandlers(): void {
 
           log.info('Resolved order numbers', { count: validOrderNumbers.length })
 
-          // Create auth service and login
           authService = new ErpAuthService({
             url: erpUrl,
             username: erpUsername,
@@ -107,7 +125,6 @@ export function registerCleanerHandlers(): void {
           }
           log.info('Login successful')
 
-          // Create cleaner service and run cleaning with resolved order numbers
           const cleaner = new CleanerService(authService)
 
           const modifiedInput: CleanerInput = {
@@ -119,7 +136,6 @@ export function registerCleanerHandlers(): void {
           log.info('Starting cleaning', { orderCount: validOrderNumbers.length })
           const result = await cleaner.clean(modifiedInput)
 
-          // Add warnings to result errors if any
           if (warnings.length > 0) {
             result.errors = [...warnings, ...result.errors]
           }
@@ -131,7 +147,6 @@ export function registerCleanerHandlers(): void {
 
           return result
         } finally {
-          // Clean up: close browser
           if (authService) {
             try {
               await authService.close()
@@ -143,13 +158,12 @@ export function registerCleanerHandlers(): void {
             }
           }
 
-          // Clean up: disconnect MySQL
-          if (mysqlService) {
+          if (dbService) {
             try {
-              await mysqlService.disconnect()
-              log.debug('MySQL disconnected')
+              await dbService.disconnect()
+              log.debug('Database disconnected')
             } catch (closeError) {
-              log.warn('Error disconnecting MySQL', {
+              log.warn('Error disconnecting database', {
                 error: closeError instanceof Error ? closeError.message : String(closeError)
               })
             }
@@ -159,9 +173,6 @@ export function registerCleanerHandlers(): void {
     }
   )
 
-  /**
-   * Export validation results to Excel
-   */
   ipcMain.handle(
     'cleaner:exportResults',
     async (_event, items: ExportResultItem[]): Promise<ExportResultResponse> => {
