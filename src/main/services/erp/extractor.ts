@@ -340,7 +340,7 @@ export class ExtractorService {
       { header: '产品编码', key: 'productCode', width: 15 },
       { header: '产品名称', key: 'productName', width: 30 },
       { header: '产品计划数量', key: 'productPlannedQuantity', width: 15 },
-      { header: '单位', key: 'productUnit', width: 10 },
+      { header: '产品单位', key: 'productUnit', width: 10 },
       { header: '用料部门', key: 'department', width: 15 },
       { header: '备注', key: 'remark', width: 20 },
       { header: '制单人', key: 'creator', width: 15 },
