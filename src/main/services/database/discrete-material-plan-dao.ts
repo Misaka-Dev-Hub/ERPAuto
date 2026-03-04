@@ -383,6 +383,224 @@ export class DiscreteMaterialPlanDAO {
     }
   }
 
+  // ==================== DELETE OPERATIONS ====================
+
+  /**
+   * Delete records by SourceNumber list
+   * Uses batch processing for large lists
+   * @param sourceNumbers - List of SourceNumber values to delete
+   * @returns Number of records deleted
+   */
+  async deleteBySourceNumbers(sourceNumbers: string[]): Promise<number> {
+    if (!sourceNumbers || sourceNumbers.length === 0) {
+      return 0
+    }
+
+    try {
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const isSqlServer = dbService.type === 'sqlserver'
+      const batchSize = 2000
+      let totalDeleted = 0
+
+      // Get unique source numbers
+      const uniqueSourceNumbers = [...new Set(sourceNumbers.filter(Boolean))]
+
+      for (let i = 0; i < uniqueSourceNumbers.length; i += batchSize) {
+        const batch = uniqueSourceNumbers.slice(i, i + batchSize)
+        const placeholders = this.buildPlaceholders(batch.length, isSqlServer)
+
+        const sqlString = `
+          DELETE FROM ${tableName}
+          WHERE SourceNumber IN (${placeholders})
+        `
+
+        const result = await dbService.query(sqlString, batch)
+        totalDeleted += result.rowCount || 0
+
+        log.debug('Deleted batch', {
+          batch: i / batchSize + 1,
+          count: result.rowCount
+        })
+      }
+
+      log.info('Deleted records by source numbers', {
+        totalDeleted,
+        sourceNumberCount: uniqueSourceNumbers.length
+      })
+
+      return totalDeleted
+    } catch (error) {
+      log.error('Delete by source numbers error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+      throw error
+    }
+  }
+
+  // ==================== INSERT OPERATIONS ====================
+
+  /**
+   * Insert records in batches
+   * @param records - List of MaterialPlanRecord to insert
+   * @param batchSize - Number of records per batch (default: 1000)
+   * @returns Number of records inserted
+   */
+  async batchInsert(records: MaterialPlanRecord[], batchSize = 1000): Promise<number> {
+    if (!records || records.length === 0) {
+      return 0
+    }
+
+    try {
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const isSqlServer = dbService.type === 'sqlserver'
+      let totalInserted = 0
+
+      // Process in batches
+      for (let i = 0; i < records.length; i += batchSize) {
+        const batch = records.slice(i, i + batchSize)
+        const inserted = await this.insertBatch(dbService, tableName, batch, isSqlServer)
+        totalInserted += inserted
+
+        log.debug('Inserted batch', {
+          batch: Math.floor(i / batchSize) + 1,
+          count: inserted
+        })
+      }
+
+      log.info('Batch insert completed', {
+        totalInserted,
+        batchSize
+      })
+
+      return totalInserted
+    } catch (error) {
+      log.error('Batch insert error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+      throw error
+    }
+  }
+
+  /**
+   * Insert a single batch of records
+   */
+  private async insertBatch(
+    dbService: IDatabaseService,
+    tableName: string,
+    records: MaterialPlanRecord[],
+    isSqlServer: boolean
+  ): Promise<number> {
+    if (records.length === 0) {
+      return 0
+    }
+
+    // Build column list (excluding id)
+    const columns = [
+      'Factory', 'MaterialStatus', 'PlanNumber', 'SourceNumber', 'MaterialType',
+      'ProductCode', 'ProductName', 'ProductUnit', 'ProductPlanQuantity',
+      'UseDepartment', 'Remark', 'Creator', 'CreateDate', 'Approver', 'ApproveDate',
+      'SequenceNumber', 'MaterialCode', 'MaterialName', 'Specification', 'Model',
+      'DrawingNumber', 'MaterialQuality', 'PlanQuantity', 'Unit', 'RequiredDate',
+      'Warehouse', 'UnitUsage', 'CumulativeOutputQuantity'
+    ]
+
+    // Build parameterized insert
+    const values: any[] = []
+    const rowPlaceholders: string[] = []
+
+    records.forEach((record, rowIndex) => {
+      const rowValues = this.buildRowValues(record, columns, rowIndex, isSqlServer, values)
+      rowPlaceholders.push(`(${rowValues.join(',')})`)
+    })
+
+    const sqlString = `
+      INSERT INTO ${tableName} (${columns.join(', ')})
+      VALUES ${rowPlaceholders.join(', ')}
+    `
+
+    const result = await dbService.query(sqlString, values)
+    return result.rowCount || records.length
+  }
+
+  /**
+   * Build parameter values for a single row
+   */
+  private buildRowValues(
+    record: MaterialPlanRecord,
+    columns: string[],
+    rowIndex: number,
+    isSqlServer: boolean,
+    values: any[]
+  ): string[] {
+    return columns.map((col) => {
+      const value = this.getColumnValue(record, col)
+      values.push(value)
+
+      if (isSqlServer) {
+        return `@p${values.length - 1}`
+      } else {
+        return '?'
+      }
+    })
+  }
+
+  /**
+   * Get the value for a specific column from the record
+   */
+  private getColumnValue(record: MaterialPlanRecord, column: string): any {
+    const columnMapping: Record<string, keyof MaterialPlanRecord> = {
+      Factory: 'factory',
+      MaterialStatus: 'materialStatus',
+      PlanNumber: 'planNumber',
+      SourceNumber: 'sourceNumber',
+      MaterialType: 'materialType',
+      ProductCode: 'productCode',
+      ProductName: 'productName',
+      ProductUnit: 'productUnit',
+      ProductPlanQuantity: 'productPlanQuantity',
+      UseDepartment: 'useDepartment',
+      Remark: 'remark',
+      Creator: 'creator',
+      CreateDate: 'createDate',
+      Approver: 'approver',
+      ApproveDate: 'approveDate',
+      SequenceNumber: 'sequenceNumber',
+      MaterialCode: 'materialCode',
+      MaterialName: 'materialName',
+      Specification: 'specification',
+      Model: 'model',
+      DrawingNumber: 'drawingNumber',
+      MaterialQuality: 'materialQuality',
+      PlanQuantity: 'planQuantity',
+      Unit: 'unit',
+      RequiredDate: 'requiredDate',
+      Warehouse: 'warehouse',
+      UnitUsage: 'unitUsage',
+      CumulativeOutputQuantity: 'cumulativeOutputQuantity'
+    }
+
+    const key = columnMapping[column]
+    if (!key) {
+      return null
+    }
+
+    const value = record[key]
+
+    // Handle null/undefined
+    if (value === null || value === undefined) {
+      return null
+    }
+
+    // Handle empty strings for string fields
+    if (typeof value === 'string' && value.trim() === '') {
+      return null
+    }
+
+    return value
+  }
+
   // ==================== UTILITY METHODS ====================
 
   /**

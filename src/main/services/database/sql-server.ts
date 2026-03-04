@@ -92,8 +92,8 @@ export class SqlServerService implements IDatabaseService {
 
       const result = await request.query(sqlString)
 
-      // Convert recordset to array of objects
-      const rows = result.recordset as Record<string, unknown>[]
+      // Convert recordset to array of objects (may be undefined for DELETE/INSERT/UPDATE)
+      const rows = (result.recordset as Record<string, unknown>[]) || []
       // Extract column names from the first row if available
       const columns = rows.length > 0 ? Object.keys(rows[0]) : []
 

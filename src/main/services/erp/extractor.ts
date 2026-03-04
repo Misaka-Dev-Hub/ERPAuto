@@ -3,7 +3,8 @@ import fs from 'fs/promises'
 import { ExtractorCore } from './extractor-core'
 import { ErpAuthService } from './erp-auth'
 import { ExcelParser } from '../excel/excel-parser'
-import type { ExtractorInput, ExtractorResult } from '../../types/extractor.types'
+import type { ExtractorInput, ExtractorResult, ImportResult } from '../../types/extractor.types'
+import { DataImportService } from '../database/data-importer'
 
 /**
  * ERP Data Extractor Service
@@ -70,6 +71,17 @@ export class ExtractorService {
 
         // Always clean up temporary files regardless of merge success
         await this.cleanupTempFiles(result.downloadedFiles)
+
+        // Auto-import to database if merge was successful
+        if (result.mergedFile) {
+          input.onProgress?.('正在写入数据库...', 98)
+          const importResult = await this.importToDatabase(result.mergedFile)
+          result.importResult = importResult
+
+          if (!importResult.success && importResult.errors.length > 0) {
+            result.errors.push(...importResult.errors)
+          }
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
@@ -266,6 +278,43 @@ export class ExtractorService {
       } catch (error) {
         // Log error but don't fail the main process
         console.error(`Failed to delete temporary file ${filePath}:`, error)
+      }
+    }
+  }
+}
+
+  /**
+   * Import merged Excel data to database
+   * @param filePath - Path to the merged Excel file
+   * @returns Import result with statistics
+   */
+  private async importToDatabase(filePath: string): Promise<ImportResult> {
+    console.log(`[Extractor] Starting database import from: ${filePath}`)
+
+    const importService = new DataImportService()
+
+    try {
+      const result = await importService.importFromExcel(filePath, 1000)
+
+      console.log(`[Extractor] Import completed`, {
+        success: result.success,
+        recordsRead: result.recordsRead,
+        recordsDeleted: result.recordsDeleted,
+        recordsImported: result.recordsImported
+      })
+
+      return result
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.error(`[Extractor] Import failed: ${errorMsg}`)
+
+      return {
+        success: false,
+        recordsRead: 0,
+        recordsDeleted: 0,
+        recordsImported: 0,
+        uniqueSourceNumbers: 0,
+        errors: [errorMsg]
       }
     }
   }

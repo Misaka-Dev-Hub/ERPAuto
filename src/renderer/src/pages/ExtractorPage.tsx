@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react'
-import { Download, Play, Terminal } from 'lucide-react'
+import { Download, Play, Terminal, Database } from 'lucide-react'
+
+// Import result type (matches the type from main process)
+interface ImportResult {
+  success: boolean
+  recordsRead: number
+  recordsDeleted: number
+  recordsImported: number
+  uniqueSourceNumbers: number
+  errors: string[]
+}
 
 // Extractor result type (matches the type from main process)
 interface ExtractorResult {
@@ -7,6 +17,7 @@ interface ExtractorResult {
   mergedFile: string | null
   recordCount: number
   errors: string[]
+  importResult?: ImportResult
 }
 
 interface ExtractorProgress {
@@ -207,6 +218,54 @@ const ExtractorPage: React.FC = () => {
                 <span className="text-sm font-mono text-slate-700 select-all break-all">
                   {result.mergedFile}
                 </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Database import results */}
+        {result?.importResult && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col gap-4">
+            <h3 className="font-semibold text-lg border-b pb-2 flex items-center gap-2">
+              <Database size={20} className={result.importResult.success ? 'text-emerald-600' : 'text-red-500'} />
+              <span className={result.importResult.success ? 'text-emerald-600' : 'text-red-500'}>
+                数据库写入结果
+              </span>
+            </h3>
+            <div className="grid grid-cols-4 gap-4">
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
+                <span className="text-slate-500 text-sm">读取记录</span>
+                <span className="text-2xl font-bold text-slate-800">
+                  {result.importResult.recordsRead}
+                </span>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
+                <span className="text-slate-500 text-sm">删除旧记录</span>
+                <span className="text-2xl font-bold text-amber-600">
+                  {result.importResult.recordsDeleted}
+                </span>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
+                <span className="text-slate-500 text-sm">写入新记录</span>
+                <span className="text-2xl font-bold text-emerald-600">
+                  {result.importResult.recordsImported}
+                </span>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col items-center justify-center">
+                <span className="text-slate-500 text-sm">来源单号数</span>
+                <span className="text-2xl font-bold text-blue-600">
+                  {result.importResult.uniqueSourceNumbers}
+                </span>
+              </div>
+            </div>
+            {result.importResult.errors.length > 0 && (
+              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                <span className="text-red-600 text-sm font-medium block mb-1">错误信息</span>
+                <ul className="text-sm text-red-500 list-disc list-inside">
+                  {result.importResult.errors.map((err, idx) => (
+                    <li key={idx}>{err}</li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>

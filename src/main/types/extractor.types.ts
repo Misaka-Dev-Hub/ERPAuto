@@ -6,11 +6,25 @@ export interface ExtractorInput {
   onProgress?: (message: string, progress: number) => void
 }
 
+/**
+ * Result of database import operation
+ */
+export interface ImportResult {
+  success: boolean
+  recordsRead: number
+  recordsDeleted: number
+  recordsImported: number
+  uniqueSourceNumbers: number
+  errors: string[]
+}
+
 export interface ExtractorResult {
   downloadedFiles: string[]
   mergedFile: string | null
   recordCount: number
   errors: string[]
+  /** Database import result (only populated if mergedFile was created) */
+  importResult?: ImportResult
 }
 
 export interface OrderInfo {
