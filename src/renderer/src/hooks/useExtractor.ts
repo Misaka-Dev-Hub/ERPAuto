@@ -1,77 +1,94 @@
-/**
- * IPC Hook for Extractor operations
- *
- * Provides a React-friendly interface for extractor IPC calls
- * with loading state, error handling, and data management.
- */
+import { useState, useEffect } from 'react'
 
-import { useState, useCallback } from 'react'
-
-// Types based on the extractor types
-interface ExtractorInput {
-  orderNumbers: string[]
-  batchSize?: number
+export interface ExtractorProgress {
+  message: string
+  progress: number
 }
 
-interface ExtractorResult {
-  data: Record<string, unknown>[]
-  errors: string[]
+export type LogLevel = 'info' | 'success' | 'warning' | 'error' | 'system'
+
+export interface LogEntry {
+  timestamp: string
+  level: LogLevel
+  message: string
 }
 
-interface UseExtractorState {
-  loading: boolean
-  data: ExtractorResult | null
-  error: string | null
-}
+export function useExtractor() {
+  const [isRunning, setIsRunning] = useState(false)
+  const [progress, setProgress] = useState<ExtractorProgress | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [logs, setLogs] = useState<LogEntry[]>([])
 
-interface UseExtractorReturn extends UseExtractorState {
-  execute: (input: ExtractorInput) => Promise<ExtractorResult | null>
-  reset: () => void
-}
+  const addLog = (level: LogLevel, message: string) => {
+    const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    setLogs((prev) => [...prev, { timestamp, level, message }])
+  }
 
-/**
- * Hook for executing extractor operations
- */
-export function useExtractor(): UseExtractorReturn {
-  const [state, setState] = useState<UseExtractorState>({
-    loading: false,
-    data: null,
-    error: null
-  })
+  useEffect(() => {
+    if (progress) {
+      addLog('info', progress.message)
+    }
+  }, [progress])
 
-  const execute = useCallback(async (input: ExtractorInput): Promise<ExtractorResult | null> => {
-    setState({ loading: true, data: null, error: null })
+  const clearLogs = () => {
+    setLogs([])
+  }
+
+  const startExtraction = async (orderNumbers: string) => {
+    if (!orderNumbers.trim()) {
+      setError('请输入至少一个订单号')
+      return
+    }
+
+    setIsRunning(true)
+    setProgress(null)
+    setError(null)
+    setLogs([])
+
+    addLog('system', '提取引擎启动，准备执行...')
 
     try {
-      const result = (await window.electron.ipcRenderer.invoke('extractor:run', input)) as {
-        success: boolean
-        data?: ExtractorResult
-        error?: string
-      }
+      const orderNumberList = orderNumbers
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
 
-      if (result.success && result.data) {
-        setState({ loading: false, data: result.data, error: null })
-        return result.data
+      await window.electron.validation.setSharedProductionIds(orderNumberList)
+      addLog('info', `已存储 ${orderNumberList.length} 个订单号用于跨模块共享`)
+
+      const response = await window.electron.extractor.runExtractor({
+        orderNumbers: orderNumberList
+      })
+
+      if (response.success && response.data) {
+        addLog(
+          'success',
+          `提取完成：下载 ${response.data.downloadedFiles.length} 个文件，共 ${response.data.recordCount} 条记录`
+        )
+        if (response.data.errors.length > 0) {
+          addLog('warning', `存在 ${response.data.errors.length} 个错误`)
+        }
       } else {
-        setState({ loading: false, data: null, error: result.error || 'Unknown error' })
-        return null
+        setError(response.error || '提取失败')
+        addLog('error', response.error || '提取失败')
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      setState({ loading: false, data: null, error: message })
-      return null
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : '发生未知错误'
+      setError(errMsg)
+      addLog('error', errMsg)
+    } finally {
+      setIsRunning(false)
+      setProgress(null)
     }
-  }, [])
-
-  const reset = useCallback(() => {
-    setState({ loading: false, data: null, error: null })
-  }, [])
+  }
 
   return {
-    ...state,
-    execute,
-    reset
+    isRunning,
+    progress,
+    error,
+    logs,
+    startExtraction,
+    clearLogs,
+    setError
   }
 }
-
-export default useExtractor

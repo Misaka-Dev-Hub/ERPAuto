@@ -1,44 +1,23 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { Download, Play, Terminal } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Download, Play } from 'lucide-react'
 import OrderNumberInput from '../components/OrderNumberInput'
-
-interface ExtractorProgress {
-  message: string
-  progress: number
-}
-
-type LogLevel = 'info' | 'success' | 'warning' | 'error' | 'system'
-
-interface LogEntry {
-  timestamp: string
-  level: LogLevel
-  message: string
-}
-
-const getLogColor = (level: LogLevel): string => {
-  switch (level) {
-    case 'error':
-      return 'text-red-400'
-    case 'warning':
-      return 'text-amber-400'
-    case 'success':
-      return 'text-emerald-400'
-    case 'system':
-      return 'text-blue-400'
-    default:
-      return 'text-slate-400'
-  }
-}
+import { useExtractor } from '../hooks/useExtractor'
+import LogPanel from '../components/ui/LogPanel'
 
 const ExtractorPage: React.FC = () => {
   const [orderNumbers, setOrderNumbers] = useState(() => {
     return sessionStorage.getItem('extractor_orderNumbers') || ''
   })
-  const [isRunning, setIsRunning] = useState(false)
-  const [progress, setProgress] = useState<ExtractorProgress | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [logs, setLogs] = useState<LogEntry[]>([])
-  const logsEndRef = useRef<HTMLDivElement>(null)
+
+  const {
+    isRunning,
+    progress,
+    error,
+    logs,
+    startExtraction,
+    clearLogs,
+    setError
+  } = useExtractor()
 
   useEffect(() => {
     sessionStorage.setItem('extractor_orderNumbers', orderNumbers)
@@ -51,74 +30,14 @@ const ExtractorPage: React.FC = () => {
     }
   }, [orderNumbers])
 
-  useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [logs])
-
-  const addLog = (level: LogLevel, message: string) => {
-    const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false })
-    setLogs((prev) => [...prev, { timestamp, level, message }])
+  const handleExtract = () => {
+    startExtraction(orderNumbers)
   }
-
-  const handleExtract = async () => {
-    if (!orderNumbers.trim()) {
-      setError('请输入至少一个订单号')
-      return
-    }
-
-    setIsRunning(true)
-    setProgress(null)
-    setError(null)
-    setLogs([])
-
-    addLog('system', '提取引擎启动，准备执行...')
-
-    try {
-      const orderNumberList = orderNumbers
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-
-      await window.electron.validation.setSharedProductionIds(orderNumberList)
-      addLog('info', `已存储 ${orderNumberList.length} 个订单号用于跨模块共享`)
-
-      const response = await window.electron.extractor.runExtractor({
-        orderNumbers: orderNumberList
-      })
-
-      if (response.success && response.data) {
-        addLog(
-          'success',
-          `提取完成：下载 ${response.data.downloadedFiles.length} 个文件，共 ${response.data.recordCount} 条记录`
-        )
-        if (response.data.errors.length > 0) {
-          addLog('warning', `存在 ${response.data.errors.length} 个错误`)
-        }
-      } else {
-        setError(response.error || '提取失败')
-        addLog('error', response.error || '提取失败')
-      }
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : '发生未知错误'
-      setError(errMsg)
-      addLog('error', errMsg)
-    } finally {
-      setIsRunning(false)
-      setProgress(null)
-    }
-  }
-
-  useEffect(() => {
-    if (progress) {
-      addLog('info', progress.message)
-    }
-  }, [progress])
 
   const handleReset = () => {
     setOrderNumbers('')
     setError(null)
-    setProgress(null)
-    setLogs([])
+    clearLogs()
   }
 
   return (
@@ -163,36 +82,7 @@ const ExtractorPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-700 overflow-hidden flex flex-col min-h-[300px] flex-1">
-          <div className="bg-slate-800 px-4 py-2 flex items-center justify-between border-b border-slate-700 flex-shrink-0">
-            <div className="flex items-center gap-2 text-slate-400 text-sm">
-              <Terminal size={16} />
-              <span>执行日志</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-500">进度: {progress?.progress || 0}%</span>
-              <button
-                className="text-xs text-slate-400 hover:text-white transition-colors"
-                onClick={() => setLogs([])}
-              >
-                清空
-              </button>
-            </div>
-          </div>
-          <div className="flex-1 p-4 font-mono text-sm overflow-y-auto leading-relaxed">
-            {logs.length === 0 ? (
-              <div className="text-slate-500 text-center py-8">等待执行...</div>
-            ) : (
-              logs.map((log, index) => (
-                <div key={index} className={getLogColor(log.level)}>
-                  <span className="text-slate-600">[{log.timestamp}]</span>{' '}
-                  <span className="text-slate-500">[{log.level.toUpperCase()}]</span> {log.message}
-                </div>
-              ))
-            )}
-            <div ref={logsEndRef} />
-          </div>
-        </div>
+        <LogPanel logs={logs} progress={progress} onClear={clearLogs} />
       </div>
     </div>
   )
