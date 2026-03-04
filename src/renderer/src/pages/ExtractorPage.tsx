@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Download, Play } from 'lucide-react'
+import { Download, Play, CheckCircle } from 'lucide-react'
 import OrderNumberInput from '../components/OrderNumberInput'
 import { useExtractor } from '../hooks/useExtractor'
 import LogPanel from '../components/ui/LogPanel'
@@ -10,7 +10,8 @@ const ExtractorPage: React.FC = () => {
     return sessionStorage.getItem('extractor_orderNumbers') || ''
   })
 
-  const { isRunning, progress, error, logs, startExtraction, clearLogs, setError } = useExtractor()
+  const { isRunning, progress, error, logs, startExtraction, clearLogs, setError, isComplete } =
+    useExtractor()
 
   useEffect(() => {
     sessionStorage.setItem('extractor_orderNumbers', orderNumbers)
@@ -74,6 +75,13 @@ const ExtractorPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {!isRunning && isComplete && (
+          <div className="bg-green-50 rounded-xl p-8 flex items-center justify-center gap-4 shadow-md">
+            <CheckCircle className="text-green-600" size={35} />
+            <p className="text-4xl font-bold text-green-600">提取完毕</p>
+          </div>
+        )}
 
         {isRunning && progress && (
           <SegmentedProgressBar

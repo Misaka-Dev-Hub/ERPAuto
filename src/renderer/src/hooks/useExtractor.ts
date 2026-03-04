@@ -4,12 +4,14 @@ import { useExtractorStore } from '../stores/extractorStore'
 export function useExtractor() {
   const {
     isRunning,
+    isComplete,
     progress,
     error,
     logs,
     setRunning,
     setProgress,
     setError,
+    setComplete,
     addLog,
     clearLogs,
     resetState
@@ -79,6 +81,7 @@ export function useExtractor() {
     } finally {
       setRunning(false)
       setProgress(null)
+      setComplete(true)
     }
   }
 
@@ -87,8 +90,10 @@ export function useExtractor() {
     progress,
     error,
     logs,
+    isComplete,
     startExtraction,
     clearLogs,
-    setError
+    setError,
+    setComplete
   }
 }

@@ -28,12 +28,14 @@ export interface ExtractorState {
   progress: ExtractionProgress | null
   error: string | null
   logs: LogEntry[]
+  isComplete: boolean
 }
 
 export interface ExtractorActions {
   setRunning: (isRunning: boolean) => void
   setProgress: (progress: ExtractionProgress | null) => void
   setError: (error: string | null) => void
+  setComplete: (isComplete: boolean) => void
   addLog: (level: LogLevel, message: string) => void
   clearLogs: () => void
   resetState: () => void
@@ -43,7 +45,8 @@ const initialState: ExtractorState = {
   isRunning: false,
   progress: null,
   error: null,
-  logs: []
+  logs: [],
+  isComplete: false
 }
 
 export const useExtractorStore = create<ExtractorState & ExtractorActions>((set) => ({
@@ -54,6 +57,8 @@ export const useExtractorStore = create<ExtractorState & ExtractorActions>((set)
   setProgress: (progress: ExtractionProgress | null) => set({ progress }),
 
   setError: (error: string | null) => set({ error }),
+
+  setComplete: (isComplete: boolean) => set({ isComplete }),
 
   addLog: (level: LogLevel, message: string) =>
     set((state) => {
