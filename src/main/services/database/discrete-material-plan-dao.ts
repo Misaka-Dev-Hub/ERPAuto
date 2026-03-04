@@ -443,7 +443,7 @@ export class DiscreteMaterialPlanDAO {
   /**
    * Insert records in batches
    * @param records - List of MaterialPlanRecord to insert
-   * @param batchSize - Number of records per batch (default: 1000)
+   * @param batchSize - Number of records per batch (default: 1000, auto-adjusted for SQL Server)
    * @returns Number of records inserted
    */
   async batchInsert(records: MaterialPlanRecord[], batchSize = 1000): Promise<number> {
@@ -457,21 +457,38 @@ export class DiscreteMaterialPlanDAO {
       const isSqlServer = dbService.type === 'sqlserver'
       let totalInserted = 0
 
+      // SQL Server has a limit of 2100 parameters per query
+      // Each record has 28 columns, so max rows per batch = 2100 / 28 = 75
+      // Leave some margin for query overhead
+      const columnsPerRow = 28
+      const sqlServerMaxParams = 2000
+      const effectiveBatchSize = isSqlServer
+        ? Math.min(batchSize, Math.floor(sqlServerMaxParams / columnsPerRow))
+        : batchSize
+
+      log.info('Batch insert parameters', {
+        isSqlServer,
+        dbType: dbService.type,
+        columnsPerRow,
+        effectiveBatchSize,
+        totalRecords: records.length
+      })
+
       // Process in batches
-      for (let i = 0; i < records.length; i += batchSize) {
-        const batch = records.slice(i, i + batchSize)
+      for (let i = 0; i < records.length; i += effectiveBatchSize) {
+        const batch = records.slice(i, i + effectiveBatchSize)
         const inserted = await this.insertBatch(dbService, tableName, batch, isSqlServer)
         totalInserted += inserted
 
         log.debug('Inserted batch', {
-          batch: Math.floor(i / batchSize) + 1,
+          batch: Math.floor(i / effectiveBatchSize) + 1,
           count: inserted
         })
       }
 
       log.info('Batch insert completed', {
         totalInserted,
-        batchSize
+        batchSize: effectiveBatchSize
       })
 
       return totalInserted
@@ -498,12 +515,34 @@ export class DiscreteMaterialPlanDAO {
 
     // Build column list (excluding id)
     const columns = [
-      'Factory', 'MaterialStatus', 'PlanNumber', 'SourceNumber', 'MaterialType',
-      'ProductCode', 'ProductName', 'ProductUnit', 'ProductPlanQuantity',
-      'UseDepartment', 'Remark', 'Creator', 'CreateDate', 'Approver', 'ApproveDate',
-      'SequenceNumber', 'MaterialCode', 'MaterialName', 'Specification', 'Model',
-      'DrawingNumber', 'MaterialQuality', 'PlanQuantity', 'Unit', 'RequiredDate',
-      'Warehouse', 'UnitUsage', 'CumulativeOutputQuantity'
+      'Factory',
+      'MaterialStatus',
+      'PlanNumber',
+      'SourceNumber',
+      'MaterialType',
+      'ProductCode',
+      'ProductName',
+      'ProductUnit',
+      'ProductPlanQuantity',
+      'UseDepartment',
+      'Remark',
+      'Creator',
+      'CreateDate',
+      'Approver',
+      'ApproveDate',
+      'SequenceNumber',
+      'MaterialCode',
+      'MaterialName',
+      'Specification',
+      'Model',
+      'DrawingNumber',
+      'MaterialQuality',
+      'PlanQuantity',
+      'Unit',
+      'RequiredDate',
+      'Warehouse',
+      'UnitUsage',
+      'CumulativeOutputQuantity'
     ]
 
     // Build parameterized insert

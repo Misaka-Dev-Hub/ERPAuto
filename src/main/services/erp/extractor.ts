@@ -281,7 +281,6 @@ export class ExtractorService {
       }
     }
   }
-}
 
   /**
    * Import merged Excel data to database
