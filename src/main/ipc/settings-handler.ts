@@ -11,6 +11,7 @@
 import { ipcMain } from 'electron'
 import { ConfigManager } from '../services/config/config-manager'
 import { SessionManager } from '../services/user/session-manager'
+import { UserErpConfigService } from '../services/user/user-erp-config-service'
 import { ErpAuthService } from '../services/erp/erp-auth'
 import { MySqlService } from '../services/database/mysql'
 import { SqlServerService } from '../services/database/sql-server'
@@ -44,12 +45,10 @@ function filterSettingsByUserType(settings: SettingsData, userType: UserType): S
       autoCloseBrowser: settings.erp.autoCloseBrowser
     },
     paths: settings.paths,
-    execution: settings.execution,
     // Include minimal required fields for other sections
     database: settings.database,
     extraction: settings.extraction,
-    validation: settings.validation,
-    ui: settings.ui
+    validation: settings.validation
   }
 }
 
@@ -68,17 +67,35 @@ export function registerSettingsHandlers(): void {
   })
 
   /**
-   * Get settings (filtered by user type)
+   * Get settings (ERP config from database, others from .env)
    */
   ipcMain.handle('settings:getSettings', async (): Promise<SettingsData> => {
     const userType = (sessionManager.getUserType() as UserType) || 'Guest'
     log.debug('Getting settings', { userType })
+
+    // Get base settings from .env
     const settings = configManager.getAllSettings()
+
+    // Override ERP config with user-specific config from database
+    const erpConfigService = UserErpConfigService.getInstance()
+    const userErpConfig = await erpConfigService.getCurrentUserErpConfig()
+
+    if (userErpConfig) {
+      settings.erp = {
+        url: userErpConfig.url || settings.erp.url,
+        username: userErpConfig.username || settings.erp.username,
+        password: userErpConfig.password || settings.erp.password,
+        headless: settings.erp.headless,
+        ignoreHttpsErrors: settings.erp.ignoreHttpsErrors,
+        autoCloseBrowser: settings.erp.autoCloseBrowser
+      }
+    }
+
     return filterSettingsByUserType(settings, userType)
   })
 
   /**
-   * Save settings (updated to use partial save)
+   * Save settings (ERP config to database, others to .env)
    */
   ipcMain.handle(
     'settings:saveSettings',
@@ -88,21 +105,80 @@ export function registerSettingsHandlers(): void {
           sections: Object.keys(settings)
         })
 
-        // Use partial save method
-        const result = await configManager.savePartialSettings(settings)
+        // Step 1: Save ERP configuration to database (if provided)
+        if (settings.erp) {
+          const erpConfigService = UserErpConfigService.getInstance()
+          const sessionManager = SessionManager.getInstance()
+          const currentUser = sessionManager.getUserInfo()
 
-        if (result.success) {
-          log.info('Settings saved successfully')
-          return { success: true }
-        } else {
-          log.warn('Failed to save settings', {
-            error: result.error
-          })
-          return {
-            success: false,
-            error: result.error || '保存设置失败'
+          if (!currentUser) {
+            log.warn('No authenticated user found')
+            return {
+              success: false,
+              error: '未找到认证用户，无法保存 ERP 配置'
+            }
+          }
+
+          // Only save if ERP fields are provided
+          const hasErpFields =
+            settings.erp.url !== undefined ||
+            settings.erp.username !== undefined ||
+            settings.erp.password !== undefined
+
+          if (hasErpFields) {
+            // Get current ERP config to preserve headless, ignoreHttpsErrors, autoCloseBrowser
+            const currentErpConfig = await erpConfigService.getCurrentUserErpConfig()
+
+            const erpConfigToSave = {
+              url: settings.erp.url ?? currentErpConfig?.url ?? '',
+              username: settings.erp.username ?? currentErpConfig?.username ?? '',
+              password: settings.erp.password ?? currentErpConfig?.password ?? ''
+            }
+
+            log.info('Saving ERP config to database for user', {
+              username: currentUser.username,
+              url: erpConfigToSave.url
+            })
+
+            const erpSaveSuccess =
+              await erpConfigService.updateCurrentUserErpConfig(erpConfigToSave)
+
+            if (!erpSaveSuccess) {
+              log.error('Failed to save ERP config to database')
+              return {
+                success: false,
+                error: '保存 ERP 配置到数据库失败'
+              }
+            }
           }
         }
+
+        // Step 2: Save other settings (database, paths, extraction, validation, execution) to .env
+        // Filter out ERP fields since they're now in database
+        const nonErpSettings: Partial<SettingsData> = { ...settings }
+        delete nonErpSettings.erp
+
+        // Only save to .env if there are non-ERP settings
+        if (Object.keys(nonErpSettings).length > 0) {
+          log.info('Saving non-ERP settings to .env file', {
+            sections: Object.keys(nonErpSettings)
+          })
+
+          const result = await configManager.savePartialSettings(nonErpSettings)
+
+          if (!result.success) {
+            log.error('Failed to save settings to .env', {
+              error: result.error
+            })
+            return {
+              success: false,
+              error: result.error || '保存配置到文件失败'
+            }
+          }
+        }
+
+        log.info('Settings saved successfully')
+        return { success: true }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
         log.error('Error saving settings', { error: message })
@@ -148,10 +224,17 @@ export function registerSettingsHandlers(): void {
   ipcMain.handle('settings:testErpConnection', async (): Promise<ConnectionTestResult> => {
     try {
       log.info('Testing ERP connection')
-      const settings = configManager.getAllSettings()
-      const erpConfig = settings.erp
 
-      if (!erpConfig.url || !erpConfig.username || !erpConfig.password) {
+      // Get current user's ERP config from database
+      const erpConfigService = UserErpConfigService.getInstance()
+      const userErpConfig = await erpConfigService.getCurrentUserErpConfig()
+
+      if (
+        !userErpConfig ||
+        !userErpConfig.url ||
+        !userErpConfig.username ||
+        !userErpConfig.password
+      ) {
         log.warn('ERP connection test failed - missing configuration')
         return {
           success: false,
@@ -160,7 +243,11 @@ export function registerSettingsHandlers(): void {
       }
 
       // Create ERP auth service and try to login
-      const erpAuthService = new ErpAuthService(erpConfig)
+      const erpAuthService = new ErpAuthService({
+        url: userErpConfig.url,
+        username: userErpConfig.username,
+        password: userErpConfig.password
+      })
 
       try {
         await erpAuthService.login()

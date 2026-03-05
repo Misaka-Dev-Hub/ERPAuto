@@ -61,14 +61,6 @@ const DEFAULT_SETTINGS: SettingsData = {
     matchMode: 'substring',
     enableCrud: false,
     defaultManager: ''
-  },
-  ui: {
-    fontFamily: 'Microsoft YaHei UI',
-    fontSize: 10,
-    productionIdInputWidth: 20
-  },
-  execution: {
-    dryRun: false
   }
 }
 
@@ -371,29 +363,6 @@ export class ConfigManager {
       )
       lines.push('')
 
-      // UI Configuration
-      lines.push('# ===========================')
-      lines.push('# UI 配置')
-      lines.push('# ===========================')
-      lines.push(
-        `UI_FONT_FAMILY=${this.configCache.get('UI_FONT_FAMILY') || DEFAULT_SETTINGS.ui.fontFamily}`
-      )
-      lines.push(
-        `UI_FONT_SIZE=${this.configCache.get('UI_FONT_SIZE') || DEFAULT_SETTINGS.ui.fontSize}`
-      )
-      lines.push(
-        `UI_PRODUCTION_ID_INPUT_WIDTH=${this.configCache.get('UI_PRODUCTION_ID_INPUT_WIDTH') || DEFAULT_SETTINGS.ui.productionIdInputWidth}`
-      )
-      lines.push('')
-
-      // Execution Configuration
-      lines.push('# ===========================')
-      lines.push('# 执行配置')
-      lines.push('# ===========================')
-      lines.push(
-        `EXECUTION_DRYRUN=${this.configCache.get('EXECUTION_DRYRUN') || DEFAULT_SETTINGS.execution.dryRun}`
-      )
-
       const content = lines.join('\n')
       fs.writeFileSync(this.envPath, content, 'utf-8')
       return true
@@ -472,17 +441,6 @@ export class ConfigManager {
           'VALIDATION_DEFAULT_MANAGER',
           DEFAULT_SETTINGS.validation.defaultManager
         )
-      },
-      ui: {
-        fontFamily: this.get('UI_FONT_FAMILY', DEFAULT_SETTINGS.ui.fontFamily),
-        fontSize: this.getNumber('UI_FONT_SIZE', DEFAULT_SETTINGS.ui.fontSize),
-        productionIdInputWidth: this.getNumber(
-          'UI_PRODUCTION_ID_INPUT_WIDTH',
-          DEFAULT_SETTINGS.ui.productionIdInputWidth
-        )
-      },
-      execution: {
-        dryRun: this.getBoolean('EXECUTION_DRYRUN', DEFAULT_SETTINGS.execution.dryRun)
       }
     }
   }
@@ -522,14 +480,6 @@ export class ConfigManager {
     this.set('VALIDATION_MATCH_MODE', settings.validation.matchMode)
     this.set('VALIDATION_ENABLE_CRUD', settings.validation.enableCrud)
     this.set('VALIDATION_DEFAULT_MANAGER', settings.validation.defaultManager)
-
-    // UI settings
-    this.set('UI_FONT_FAMILY', settings.ui.fontFamily)
-    this.set('UI_FONT_SIZE', settings.ui.fontSize)
-    this.set('UI_PRODUCTION_ID_INPUT_WIDTH', settings.ui.productionIdInputWidth)
-
-    // Execution settings
-    this.set('EXECUTION_DRYRUN', settings.execution.dryRun)
 
     return this.save()
   }
@@ -645,12 +595,6 @@ export class ConfigManager {
     this.set('VALIDATION_MATCH_MODE', DEFAULT_SETTINGS.validation.matchMode)
     this.set('VALIDATION_ENABLE_CRUD', DEFAULT_SETTINGS.validation.enableCrud)
     this.set('VALIDATION_DEFAULT_MANAGER', DEFAULT_SETTINGS.validation.defaultManager)
-
-    this.set('UI_FONT_FAMILY', DEFAULT_SETTINGS.ui.fontFamily)
-    this.set('UI_FONT_SIZE', DEFAULT_SETTINGS.ui.fontSize)
-    this.set('UI_PRODUCTION_ID_INPUT_WIDTH', DEFAULT_SETTINGS.ui.productionIdInputWidth)
-
-    this.set('EXECUTION_DRYRUN', DEFAULT_SETTINGS.execution.dryRun)
 
     return DEFAULT_SETTINGS
   }

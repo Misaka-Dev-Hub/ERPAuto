@@ -111,26 +111,6 @@ export interface ValidationConfig {
 }
 
 /**
- * UI configuration
- */
-export interface UiConfig {
-  /** Font family */
-  fontFamily: string
-  /** Font size */
-  fontSize: number
-  /** Production ID input width */
-  productionIdInputWidth: number
-}
-
-/**
- * Execution configuration (User-only)
- */
-export interface ExecutionConfig {
-  /** Dry run mode */
-  dryRun: boolean
-}
-
-/**
  * Complete settings data structure
  */
 export interface SettingsData {
@@ -144,10 +124,6 @@ export interface SettingsData {
   extraction: ExtractionConfig
   /** Validation configuration */
   validation: ValidationConfig
-  /** UI configuration */
-  ui: UiConfig
-  /** Execution configuration */
-  execution: ExecutionConfig
 }
 
 /**
