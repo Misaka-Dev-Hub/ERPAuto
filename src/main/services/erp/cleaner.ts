@@ -87,6 +87,8 @@ export class CleanerService {
       details: []
     }
 
+    const totalOrders = input.orderNumbers.length
+
     // Create delete set for O(1) lookup
     const deleteSet = new Set(input.materialCodes)
 
@@ -100,14 +102,8 @@ export class CleanerService {
       await this.setupQueryInterface(workFrame)
 
       // Process each order
-      for (let i = 0; i < input.orderNumbers.length; i++) {
+      for (let i = 0; i < totalOrders; i++) {
         const orderNumber = input.orderNumbers[i]
-        const progress = ((i + 1) / input.orderNumbers.length) * 100
-
-        input.onProgress?.(
-          `Processing order ${i + 1}/${input.orderNumbers.length}: ${orderNumber}`,
-          progress
-        )
 
         try {
           const detail = await this.processOrder({
@@ -115,7 +111,7 @@ export class CleanerService {
             popupPage,
             orderNumber,
             orderIndex: i,
-            totalOrders: input.orderNumbers.length,
+            totalOrders,
             deleteSet,
             dryRun: input.dryRun ?? this.dryRun,
             onProgress: input.onProgress
@@ -212,7 +208,11 @@ export class CleanerService {
     totalOrders: number
     deleteSet: Set<string>
     dryRun: boolean
-    onProgress?: (message: string, progress?: number) => void
+    onProgress?: (
+      message: string,
+      progress?: number,
+      extra?: Partial<import('../../types/cleaner.types').CleanerProgress>
+    ) => void
   }): Promise<OrderCleanDetail> {
     const {
       workFrame,
@@ -280,6 +280,19 @@ export class CleanerService {
       const statusMatch = statusText.replace(/\n/g, '').match(/备料状态:(.+)$/)
       const detailStatus = statusMatch ? statusMatch[1].trim() : ''
 
+      // Send progress for order start
+      onProgress?.(
+        `开始处理订单 ${orderIndex + 1}/${totalOrders}: ${orderNumber}`,
+        ((1 + orderIndex) / (1 + totalOrders)) * 100,
+        {
+          currentOrderIndex: orderIndex + 1,
+          totalOrders,
+          currentMaterialIndex: 0,
+          totalMaterialsInOrder: detailCount,
+          currentOrderNumber: orderNumber
+        }
+      )
+
       // Process based on status (Python lines 228-441)
       if (detailStatus === '审批通过' && detailCount > 0) {
         // Click modify button (Python line 235)
@@ -319,10 +332,20 @@ export class CleanerService {
           const materialName = await this.getInputValue(childForm, /^材料名称/)
           const pendingQty = await this.getInputValue(childForm, /^累计待发数量$/)
 
-          // Report progress
+          // Report progress using formula: (1 + i + j/Mᵢ) / (1 + N) × 100
+          // where i = orderIndex (0-based), j = materialIdx (1-based), Mᵢ = detailCount, N = totalOrders
+          const progress = ((1 + orderIndex + materialIdx / detailCount) / (1 + totalOrders)) * 100
+
           onProgress?.(
-            `Order ${orderNumber} - Material ${materialIdx}/${detailCount}: ${materialName}`,
-            ((orderIndex + materialIdx / detailCount) / totalOrders) * 100
+            `订单 ${orderIndex + 1}/${totalOrders} - 物料 ${materialIdx}/${detailCount}: ${materialName}`,
+            progress,
+            {
+              currentOrderIndex: orderIndex + 1,
+              totalOrders,
+              currentMaterialIndex: materialIdx,
+              totalMaterialsInOrder: detailCount,
+              currentOrderNumber: orderNumber
+            }
           )
 
           // Check if should delete (Python lines 284-406)

@@ -1,9 +1,22 @@
+export type CleanerPhase = 'login' | 'processing' | 'complete'
+
+export interface CleanerProgress {
+  message: string
+  progress: number
+  currentOrderIndex: number
+  totalOrders: number
+  currentMaterialIndex: number
+  totalMaterialsInOrder: number
+  currentOrderNumber?: string
+  phase: CleanerPhase
+}
+
 export interface CleanerInput {
   orderNumbers: string[]
   materialCodes: string[]
   dryRun: boolean
   headless?: boolean
-  onProgress?: (message: string, progress?: number) => void
+  onProgress?: (message: string, progress?: number, extra?: Partial<CleanerProgress>) => void
 }
 
 export interface CleanerResult {

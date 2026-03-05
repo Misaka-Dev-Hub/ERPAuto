@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, webContents } from 'electron'
 import { ErpAuthService } from '../services/erp/erp-auth'
 import { CleanerService } from '../services/erp/cleaner'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
@@ -11,11 +11,37 @@ import { ErpConnectionError, ValidationError, DatabaseQueryError } from '../type
 import type {
   CleanerInput,
   CleanerResult,
+  CleanerProgress,
   ExportResultItem,
   ExportResultResponse
 } from '../types/cleaner.types'
 
 const log = createLogger('CleanerHandler')
+
+function sendProgress(
+  windowId: number,
+  message: string,
+  progress: number,
+  extra?: Partial<CleanerProgress>
+): void {
+  try {
+    const progressData: CleanerProgress = {
+      message,
+      progress,
+      currentOrderIndex: extra?.currentOrderIndex ?? 0,
+      totalOrders: extra?.totalOrders ?? 0,
+      currentMaterialIndex: extra?.currentMaterialIndex ?? 0,
+      totalMaterialsInOrder: extra?.totalMaterialsInOrder ?? 0,
+      currentOrderNumber: extra?.currentOrderNumber,
+      phase: extra?.phase ?? 'processing'
+    }
+    webContents.getAllWebContents().forEach((wc) => {
+      wc.send('cleaner:progress', progressData)
+    })
+  } catch (error) {
+    log.warn('Failed to send progress event', { error })
+  }
+}
 
 async function getDatabaseService(): Promise<MySqlService | SqlServerService> {
   const dbType = process.env.DB_TYPE?.toLowerCase()
@@ -50,7 +76,9 @@ async function getDatabaseService(): Promise<MySqlService | SqlServerService> {
 export function registerCleanerHandlers(): void {
   ipcMain.handle(
     'cleaner:run',
-    async (_event, input: CleanerInput): Promise<IpcResult<CleanerResult>> => {
+    async (event, input: CleanerInput): Promise<IpcResult<CleanerResult>> => {
+      const windowId = event.sender.id
+
       return withErrorHandling(async () => {
         let authService: ErpAuthService | null = null
         let dbService: MySqlService | SqlServerService | null = null
@@ -125,12 +153,25 @@ export function registerCleanerHandlers(): void {
           }
           log.info('Login successful')
 
+          // Send login complete progress
+          const totalOrders = validOrderNumbers.length
+          const loginProgress = (1 / (1 + totalOrders)) * 100
+          sendProgress(windowId, 'ERP 登录成功', loginProgress, {
+            phase: 'login',
+            currentOrderIndex: 0,
+            totalOrders,
+            currentMaterialIndex: 0,
+            totalMaterialsInOrder: 0
+          })
+
           const cleaner = new CleanerService(authService)
 
           const modifiedInput: CleanerInput = {
             ...input,
             orderNumbers: validOrderNumbers,
-            onProgress: input.onProgress
+            onProgress: (message, progress, extra) => {
+              sendProgress(windowId, message, progress ?? 0, extra)
+            }
           }
 
           log.info('Starting cleaning', { orderCount: validOrderNumbers.length })
@@ -139,6 +180,15 @@ export function registerCleanerHandlers(): void {
           if (warnings.length > 0) {
             result.errors = [...warnings, ...result.errors]
           }
+
+          // Send completion progress
+          sendProgress(windowId, '清理完成', 100, {
+            phase: 'complete',
+            currentOrderIndex: totalOrders,
+            totalOrders,
+            currentMaterialIndex: 0,
+            totalMaterialsInOrder: 0
+          })
 
           log.info('Cleaning completed', {
             processedCount: result.ordersProcessed,
