@@ -10,6 +10,17 @@ export interface ValidationResult {
   matchedTypeKeyword?: string
 }
 
+export interface CleanerProgress {
+  message: string
+  progress: number
+  currentOrderIndex: number
+  totalOrders: number
+  currentMaterialIndex: number
+  totalMaterialsInOrder: number
+  currentOrderNumber?: string
+  phase: 'login' | 'processing' | 'complete'
+}
+
 export function useCleaner() {
   // Authentication & permissions
   const [isAdmin, setIsAdmin] = useState(false)
@@ -37,6 +48,7 @@ export function useCleaner() {
   const [isRunning, setIsRunning] = useState(false)
   const [isValidationRunning, setIsValidationRunning] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [isExecuting, setIsExecuting] = useState(false)
 
   // Shared Production IDs state
   const [sharedProductionIdsCount, setSharedProductionIdsCount] = useState(0)
@@ -52,6 +64,9 @@ export function useCleaner() {
     materialsSkipped: number
     errors: string[]
   } | null>(null)
+
+  // Progress state
+  const [progress, setProgress] = useState<CleanerProgress | null>(null)
 
   // Execution settings state
   const [headless, setHeadless] = useState(() => {
@@ -94,6 +109,17 @@ export function useCleaner() {
       }
     }
     initializePage()
+  }, [])
+
+  // Subscribe to cleaner progress events
+  useEffect(() => {
+    const unsubscribeProgress = window.electron.cleaner.onProgress((data) => {
+      setProgress(data)
+    })
+
+    return () => {
+      unsubscribeProgress()
+    }
   }, [])
 
   useEffect(() => {
@@ -288,6 +314,10 @@ export function useCleaner() {
     }
 
     setIsRunning(true)
+    setIsExecuting(true)
+    setProgress(null)
+    setIsReportDialogOpen(true)
+
     try {
       const cleanerDataResult = await window.electron.validation.getCleanerData()
       if (!cleanerDataResult.success) {
@@ -316,7 +346,6 @@ export function useCleaner() {
           materialsSkipped: response.data.materialsSkipped,
           errors: response.data.errors
         })
-        setIsReportDialogOpen(true)
       } else {
         throw new Error(response.error || '清理失败')
       }
@@ -324,6 +353,8 @@ export function useCleaner() {
       alert(err instanceof Error ? err.message : '发生未知错误')
     } finally {
       setIsRunning(false)
+      setIsExecuting(false)
+      setProgress(null)
     }
   }
 
@@ -376,6 +407,7 @@ export function useCleaner() {
     selectedManagers,
     setSelectedManagers,
     isRunning,
+    isExecuting,
     isValidationRunning,
     isExporting,
     sharedProductionIdsCount,
@@ -397,6 +429,7 @@ export function useCleaner() {
     saveEdit,
     cancelEdit,
     handleAssignManagerOnSelect,
+    progress,
     handleValidation,
     handleCheckboxToggle,
     handleConfirmDeletion,

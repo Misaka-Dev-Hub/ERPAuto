@@ -1,142 +1,220 @@
 /**
- * Execution Report Dialog - Shows execution results after cleaner runs
+ * Execution Report Dialog - Shows execution progress and results after cleaner runs
  *
  * Displays:
- * - Orders processed count
- * - Materials deleted count
- * - Materials skipped count
+ * - Progress bar during execution
+ * - Orders processed count, Materials deleted/skipped count after completion
  * - Error list (if any)
  */
 
 import React from 'react'
-import { CheckCircle, XCircle, SkipForward, Package } from 'lucide-react'
+import { CheckCircle, XCircle, SkipForward, Package, Loader2 } from 'lucide-react'
+
+interface CleanerProgress {
+  message: string
+  progress: number
+  currentOrderIndex: number
+  totalOrders: number
+  currentMaterialIndex: number
+  totalMaterialsInOrder: number
+  currentOrderNumber?: string
+  phase: 'login' | 'processing' | 'complete'
+}
 
 interface ExecutionReportDialogProps {
   isOpen: boolean
   onClose: () => void
-  ordersProcessed: number
-  materialsDeleted: number
-  materialsSkipped: number
+  ordersProcessed?: number
+  materialsDeleted?: number
+  materialsSkipped?: number
   errors?: string[]
   dryRun?: boolean
+  isExecuting?: boolean
+  progress?: CleanerProgress | null
 }
 
 export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
   isOpen,
   onClose,
-  ordersProcessed,
-  materialsDeleted,
-  materialsSkipped,
+  ordersProcessed = 0,
+  materialsDeleted = 0,
+  materialsSkipped = 0,
   errors = [],
-  dryRun = false
+  dryRun = false,
+  isExecuting = false,
+  progress = null
 }) => {
   if (!isOpen) return null
 
   const hasErrors = errors.length > 0
+  const showProgress = isExecuting && progress
 
   return (
     <div className="execution-report-overlay" onClick={onClose}>
-      <div className="execution-report-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="report-header">
-          <div className="report-icon-wrapper">
-            {dryRun ? (
-              <Package className="report-icon preview" />
-            ) : hasErrors ? (
-              <XCircle className="report-icon error" />
-            ) : (
-              <CheckCircle className="report-icon success" />
-            )}
+      <div
+        className="execution-report-dialog"
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: showProgress ? '560px' : '480px' }}
+      >
+        {showProgress ? (
+          // Progress View
+          <div className="progress-header">
+            <div className="progress-icon-wrapper">
+              <Loader2 className="progress-icon spinning" />
+            </div>
+            <h2 className="progress-title">正在执行清理...</h2>
+            <p className="progress-subtitle">{progress?.message || '处理中...'}</p>
           </div>
-          <h2 className="report-title">
-            {dryRun ? '预览执行报告' : hasErrors ? '执行完成 (有错误)' : '执行完成'}
-          </h2>
-          <p className="report-subtitle">
-            {dryRun
-              ? '预览模式 - 未实际删除数据'
-              : hasErrors
-                ? '部分操作未能完成，请查看下方错误信息'
-                : '所有操作已成功完成'}
-          </p>
-        </div>
+        ) : (
+          // Result View
+          <div className="report-header">
+            <div className="report-icon-wrapper">
+              {dryRun ? (
+                <Package className="report-icon preview" />
+              ) : hasErrors ? (
+                <XCircle className="report-icon error" />
+              ) : (
+                <CheckCircle className="report-icon success" />
+              )}
+            </div>
+            <h2 className="report-title">
+              {dryRun ? '预览执行报告' : hasErrors ? '执行完成 (有错误)' : '执行完成'}
+            </h2>
+            <p className="report-subtitle">
+              {dryRun
+                ? '预览模式 - 未实际删除数据'
+                : hasErrors
+                  ? '部分操作未能完成，请查看下方错误信息'
+                  : '所有操作已成功完成'}
+            </p>
+          </div>
+        )}
 
         <div className="report-body">
-          <div className="stats-grid">
-            <div className="stat-card">
-              <div className="stat-icon orders">
-                <Package size={20} />
+          {showProgress ? (
+            // Progress View Content
+            <div className="progress-content">
+              <div className="progress-bar-container">
+                <div
+                  className="progress-bar-fill"
+                  style={{ width: `${progress?.progress || 0}%` }}
+                />
               </div>
-              <div className="stat-content">
-                <div className="stat-label">处理订单</div>
-                <div className="stat-value">{ordersProcessed}</div>
-              </div>
-            </div>
 
-            <div className="stat-card">
-              <div className="stat-icon deleted">
-                <CheckCircle size={20} />
-              </div>
-              <div className="stat-content">
-                <div className="stat-label">{dryRun ? '拟删除物料' : '删除物料'}</div>
-                <div className="stat-value">{materialsDeleted}</div>
-              </div>
-            </div>
-
-            <div className="stat-card">
-              <div className="stat-icon skipped">
-                <SkipForward size={20} />
-              </div>
-              <div className="stat-content">
-                <div className="stat-label">跳过物料</div>
-                <div className="stat-value">{materialsSkipped}</div>
-              </div>
-            </div>
-
-            {hasErrors && (
-              <div className="stat-card">
-                <div className="stat-icon errors">
-                  <XCircle size={20} />
+              <div className="progress-stats">
+                <div className="progress-stat-item">
+                  <span className="stat-label">订单进度</span>
+                  <span className="stat-value">
+                    {Math.min(progress!.currentOrderIndex, progress!.totalOrders)} /{' '}
+                    {progress!.totalOrders}
+                  </span>
                 </div>
-                <div className="stat-content">
-                  <div className="stat-label">错误数量</div>
-                  <div className="stat-value error">{errors.length}</div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {hasErrors && (
-            <div className="errors-section">
-              <div className="errors-title">错误详情</div>
-              <div className="errors-list">
-                {errors.map((error, index) => (
-                  <div key={index} className="error-item">
-                    <XCircle size={14} className="error-icon" />
-                    <span className="error-text">{error}</span>
+                {progress!.totalMaterialsInOrder > 0 && (
+                  <div className="progress-stat-item">
+                    <span className="stat-label">物料进度</span>
+                    <span className="stat-value">
+                      {progress!.currentMaterialIndex} / {progress!.totalMaterialsInOrder}
+                    </span>
                   </div>
-                ))}
+                )}
+                <div className="progress-stat-item">
+                  <span className="stat-label">总进度</span>
+                  <span className="stat-value">{Math.round(progress?.progress || 0)}%</span>
+                </div>
               </div>
-            </div>
-          )}
 
-          {!hasErrors && !dryRun && (
-            <div className="success-message">
-              <CheckCircle size={16} className="success-icon" />
-              <span>操作已成功完成，数据已同步到 ERP 系统</span>
+              {progress?.currentOrderNumber && (
+                <div className="current-order-info">
+                  <Package size={14} className="order-icon" />
+                  <span className="order-label">当前订单:</span>
+                  <span className="order-number">{progress.currentOrderNumber}</span>
+                </div>
+              )}
             </div>
-          )}
+          ) : (
+            // Result View Content
+            <>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-icon orders">
+                    <Package size={20} />
+                  </div>
+                  <div className="stat-content">
+                    <div className="stat-label">处理订单</div>
+                    <div className="stat-value">{ordersProcessed}</div>
+                  </div>
+                </div>
 
-          {!hasErrors && dryRun && (
-            <div className="preview-message">
-              <Package size={16} className="preview-icon" />
-              <span>预览模式结束，数据未实际修改。确认无误后可正式执行。</span>
-            </div>
+                <div className="stat-card">
+                  <div className="stat-icon deleted">
+                    <CheckCircle size={20} />
+                  </div>
+                  <div className="stat-content">
+                    <div className="stat-label">{dryRun ? '拟删除物料' : '删除物料'}</div>
+                    <div className="stat-value">{materialsDeleted}</div>
+                  </div>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-icon skipped">
+                    <SkipForward size={20} />
+                  </div>
+                  <div className="stat-content">
+                    <div className="stat-label">跳过物料</div>
+                    <div className="stat-value">{materialsSkipped}</div>
+                  </div>
+                </div>
+
+                {hasErrors && (
+                  <div className="stat-card">
+                    <div className="stat-icon errors">
+                      <XCircle size={20} />
+                    </div>
+                    <div className="stat-content">
+                      <div className="stat-label">错误数量</div>
+                      <div className="stat-value error">{errors.length}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {hasErrors && (
+                <div className="errors-section">
+                  <div className="errors-title">错误详情</div>
+                  <div className="errors-list">
+                    {errors.map((error, index) => (
+                      <div key={index} className="error-item">
+                        <XCircle size={14} className="error-icon" />
+                        <span className="error-text">{error}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!hasErrors && !dryRun && (
+                <div className="success-message">
+                  <CheckCircle size={16} className="success-icon" />
+                  <span>操作已成功完成，数据已同步到 ERP 系统</span>
+                </div>
+              )}
+
+              {!hasErrors && dryRun && (
+                <div className="preview-message">
+                  <Package size={16} className="preview-icon" />
+                  <span>预览模式结束，数据未实际修改。确认无误后可正式执行。</span>
+                </div>
+              )}
+            </>
           )}
         </div>
 
         <div className="report-footer">
-          <button className="btn-report-close" onClick={onClose}>
-            关闭
-          </button>
+          {!showProgress && (
+            <button className="btn-report-close" onClick={onClose}>
+              关闭
+            </button>
+          )}
         </div>
 
         <style>{`
@@ -174,25 +252,56 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
             }
           }
 
+          @keyframes spin {
+            from {
+              transform: rotate(0deg);
+            }
+            to {
+              transform: rotate(360deg);
+            }
+          }
+
           .execution-report-dialog {
             background: #fff;
             border-radius: 8px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            width: 480px;
             max-width: 90vw;
             animation: slideDown 0.2s ease-out;
+            transition: width 0.3s ease;
           }
 
+          .progress-header,
           .report-header {
             text-align: center;
             padding: 24px 24px 16px 24px;
             border-bottom: 1px solid #f0f0f0;
           }
 
+          .progress-icon-wrapper,
           .report-icon-wrapper {
             display: flex;
             justify-content: center;
             margin-bottom: 12px;
+          }
+
+          .progress-icon {
+            width: 48px;
+            height: 48px;
+            color: #1890ff;
+            animation: spin 1.5s linear infinite;
+          }
+
+          .progress-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin: 0 0 8px 0;
+          }
+
+          .progress-subtitle {
+            font-size: 13px;
+            color: #666;
+            margin: 0;
           }
 
           .report-icon {
@@ -229,6 +338,112 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
             padding: 20px 24px;
           }
 
+          /* Progress View Styles */
+          .progress-content {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+          }
+
+          .progress-bar-container {
+            width: 100%;
+            height: 24px;
+            background: linear-gradient(90deg, #e6f7ff 0%, #bae7ff 100%);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #91d5ff;
+            position: relative;
+          }
+
+          .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #1890ff 0%, #096dd9 100%);
+            border-radius: 12px;
+            transition: width 0.3s ease;
+            position: relative;
+            overflow: hidden;
+          }
+
+          .progress-bar-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+              90deg,
+              transparent 0%,
+              rgba(255, 255, 255, 0.3) 50%,
+              transparent 100%
+            );
+            animation: shimmer 1.5s infinite;
+          }
+
+          @keyframes shimmer {
+            0% {
+              transform: translateX(-100%);
+            }
+            100% {
+              transform: translateX(100%);
+            }
+          }
+
+          .progress-stats {
+            display: flex;
+            justify-content: space-around;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e8e8e8;
+          }
+
+          .progress-stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+          }
+
+          .progress-stat-item .stat-label {
+            font-size: 12px;
+            color: #666;
+          }
+
+          .progress-stat-item .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1890ff;
+          }
+
+          .current-order-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px;
+            background: #f0f5ff;
+            border-radius: 6px;
+            border: 1px solid #d6e4ff;
+          }
+
+          .current-order-info .order-icon {
+            color: #1890ff;
+          }
+
+          .current-order-info .order-label {
+            font-size: 13px;
+            color: #666;
+          }
+
+          .current-order-info .order-number {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            font-family: monospace;
+          }
+
+          /* Result View Styles */
           .stats-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -368,10 +583,7 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
             border: 1px solid #ffd591;
           }
 
-          .success-icon {
-            flex-shrink: 0;
-          }
-
+          .success-icon,
           .preview-icon {
             flex-shrink: 0;
           }

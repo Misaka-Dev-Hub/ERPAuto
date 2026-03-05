@@ -7,6 +7,7 @@ import type { ExtractorInput, ExtractorResult, ExtractionProgress } from './extr
 import type {
   CleanerInput,
   CleanerResult,
+  CleanerProgress,
   ExportResultItem,
   ExportResultResponse
 } from './cleaner.types'
@@ -108,6 +109,13 @@ export interface CleanerAPI {
    * @param items - Validation result items to export
    */
   exportResults: (items: ExportResultItem[]) => Promise<ExportResultResponse>
+
+  /**
+   * Subscribe to progress updates
+   * @param callback - Callback function receiving progress data
+   * @returns Unsubscribe function
+   */
+  onProgress: (callback: (data: CleanerProgress) => void) => () => void
 }
 
 /**

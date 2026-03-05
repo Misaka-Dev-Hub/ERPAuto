@@ -35,6 +35,7 @@ const CleanerPage: React.FC = () => {
     selectedManagers,
     setSelectedManagers,
     isRunning,
+    isExecuting,
     isValidationRunning,
     isExporting,
     isTypeDialogOpen,
@@ -55,6 +56,7 @@ const CleanerPage: React.FC = () => {
     saveEdit,
     cancelEdit,
     handleAssignManagerOnSelect,
+    progress,
     handleValidation,
     handleCheckboxToggle,
     handleConfirmDeletion,
@@ -473,17 +475,17 @@ const CleanerPage: React.FC = () => {
       />
 
       {/* Execution Report Dialog */}
-      {reportData && (
-        <ExecutionReportDialog
-          isOpen={isReportDialogOpen}
-          onClose={() => setIsReportDialogOpen(false)}
-          ordersProcessed={reportData.ordersProcessed}
-          materialsDeleted={reportData.materialsDeleted}
-          materialsSkipped={reportData.materialsSkipped}
-          errors={reportData.errors}
-          dryRun={dryRun}
-        />
-      )}
+      <ExecutionReportDialog
+        isOpen={isReportDialogOpen}
+        onClose={() => setIsReportDialogOpen(false)}
+        ordersProcessed={reportData?.ordersProcessed}
+        materialsDeleted={reportData?.materialsDeleted}
+        materialsSkipped={reportData?.materialsSkipped}
+        errors={reportData?.errors}
+        dryRun={dryRun}
+        isExecuting={isExecuting}
+        progress={progress}
+      />
     </div>
   )
 }
