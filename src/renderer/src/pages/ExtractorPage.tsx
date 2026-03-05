@@ -10,8 +10,17 @@ const ExtractorPage: React.FC = () => {
     return sessionStorage.getItem('extractor_orderNumbers') || ''
   })
 
-  const { isRunning, progress, error, logs, startExtraction, clearLogs, setError, isComplete } =
-    useExtractor()
+  const {
+    isRunning,
+    progress,
+    error,
+    logs,
+    startExtraction,
+    clearLogs,
+    setError,
+    isComplete,
+    setComplete
+  } = useExtractor()
 
   useEffect(() => {
     sessionStorage.setItem('extractor_orderNumbers', orderNumbers)
@@ -31,6 +40,7 @@ const ExtractorPage: React.FC = () => {
   const handleReset = () => {
     setOrderNumbers('')
     setError(null)
+    setComplete(false)
     clearLogs()
   }
 
@@ -93,7 +103,7 @@ const ExtractorPage: React.FC = () => {
           />
         )}
 
-        <LogPanel logs={logs} progress={progress} onClear={clearLogs} />
+        <LogPanel logs={logs} onClear={clearLogs} />
       </div>
     </div>
   )

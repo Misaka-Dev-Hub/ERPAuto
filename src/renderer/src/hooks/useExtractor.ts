@@ -94,6 +94,7 @@ export function useExtractor() {
     startExtraction,
     clearLogs,
     setError,
-    setComplete
+    setComplete,
+    resetState
   }
 }

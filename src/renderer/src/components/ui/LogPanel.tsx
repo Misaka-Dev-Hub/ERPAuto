@@ -1,11 +1,9 @@
 import React, { useEffect, useRef } from 'react'
 import { Terminal } from 'lucide-react'
 import type { LogEntry, LogLevel } from '../../stores/extractorStore'
-import type { ExtractionProgress } from '../../stores/extractorStore'
 
 interface LogPanelProps {
   logs: LogEntry[]
-  progress: ExtractionProgress | null
   onClear: () => void
 }
 
@@ -24,7 +22,7 @@ const getLogColor = (level: LogLevel): string => {
   }
 }
 
-const LogPanel: React.FC<LogPanelProps> = ({ logs, progress, onClear }) => {
+const LogPanel: React.FC<LogPanelProps> = ({ logs, onClear }) => {
   const logsEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -38,15 +36,12 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, progress, onClear }) => {
           <Terminal size={16} />
           <span>执行日志</span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-500">进度: {progress?.progress || 0}%</span>
-          <button
-            className="text-xs text-slate-400 hover:text-white transition-colors"
-            onClick={onClear}
-          >
-            清空
-          </button>
-        </div>
+        <button
+          className="text-xs text-slate-400 hover:text-white transition-colors"
+          onClick={onClear}
+        >
+          清空
+        </button>
       </div>
       <div className="flex-1 p-4 font-mono text-sm overflow-y-auto leading-relaxed">
         {logs.length === 0 ? (
