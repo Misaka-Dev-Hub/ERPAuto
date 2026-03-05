@@ -27,7 +27,7 @@ export const BIP_USERS_CONFIG = {
     USERNAME: 'UserName',
     USER_TYPE: 'UserType',
     PASSWORD: 'Password',
-    COMPUTER_NAME: 'ComputerNmae', // Note: typo in database schema
+    COMPUTER_NAME: 'ComputerName',
     CREATE_TIME: 'CreateTime'
   }
 } as const
@@ -173,7 +173,7 @@ export class BIPUsersDAO {
         const sqlString = `
           SELECT ID, UserName, UserType
           FROM ${tableName}
-          WHERE ComputerNmae = @computerName
+          WHERE ComputerName = @computerName
         `
 
         const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
@@ -193,7 +193,7 @@ export class BIPUsersDAO {
         const sqlString = `
           SELECT ID, UserName, UserType
           FROM ${tableName}
-          WHERE ComputerNmae = ?
+          WHERE ComputerName = ?
         `
 
         const result = await (dbService as MySqlService).query(sqlString, [computerName])
@@ -277,7 +277,7 @@ export class BIPUsersDAO {
         if (computerName) {
           sqlString = `
             INSERT INTO ${tableName}
-            (UserName, Password, UserType, ComputerNmae)
+            (UserName, Password, UserType, ComputerName)
             VALUES (@username, @password, @userType, @computerName)
           `
           params = {
@@ -308,7 +308,7 @@ export class BIPUsersDAO {
         if (computerName) {
           sqlString = `
             INSERT INTO ${tableName}
-            (UserName, Password, UserType, ComputerNmae)
+            (UserName, Password, UserType, ComputerName)
             VALUES (?, ?, ?, ?)
           `
           params = [username, password, userType, computerName]
