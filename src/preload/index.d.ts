@@ -235,6 +235,39 @@ export interface MaterialTypeAPI {
   }>
 }
 
+/**
+ * User ERP Configuration API
+ */
+export interface UserErpConfigAPI {
+  /**
+   * Get current user's ERP configuration
+   */
+  getCurrent: () => Promise<{
+    success: boolean
+    config?: { url: string; username: string; password: string }
+    error?: string
+  }>
+  /**
+   * Update current user's ERP configuration
+   */
+  update: (config: { url: string; username: string; password: string }) => Promise<{
+    success: boolean
+    config?: { url: string; username: string; password: string }
+    error?: string
+  }>
+  /**
+   * Test ERP connection with provided credentials
+   */
+  testConnection: (config: { url: string; username: string; password: string }) => Promise<{
+    success: boolean
+    message?: string
+  }>
+  /**
+   * Get all users' ERP configurations (admin only)
+   */
+  getAll: () => Promise<Array<{ username: string; erpUrl: string; erpUsername: string }>>
+}
+
 declare global {
   interface Window {
     electron: {
@@ -263,6 +296,7 @@ declare global {
       materials: MaterialsAPI
       settings: SettingsAPI
       materialType: MaterialTypeAPI
+      userErpConfig: UserErpConfigAPI
     }
     api: unknown
   }

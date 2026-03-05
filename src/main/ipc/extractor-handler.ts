@@ -7,6 +7,7 @@ import { createLogger } from '../services/logger'
 import { withErrorHandling, type IpcResult } from './index'
 import { ErpConnectionError, ValidationError, DatabaseQueryError } from '../types/errors'
 import type { ExtractorInput, ExtractorResult, ExtractionProgress } from '../types/extractor.types'
+import { UserErpConfigService } from '../services/user/user-erp-config-service'
 
 const log = createLogger('ExtractorHandler')
 
@@ -37,6 +38,27 @@ function sendLog(windowId: number, level: string, message: string): void {
 }
 
 /**
+ * Get ERP configuration for current user
+ */
+async function getErpConfig(): Promise<{
+  url: string
+  username: string
+  password: string
+}> {
+  const erpConfigService = UserErpConfigService.getInstance()
+  const config = await erpConfigService.getCurrentUserErpConfig()
+
+  if (!config || !config.url || !config.username || !config.password) {
+    throw new ValidationError(
+      'ERP 配置不完整。请在设置中配置 ERP URL、用户名和密码',
+      'VAL_MISSING_REQUIRED'
+    )
+  }
+
+  return config
+}
+
+/**
  * Register IPC handlers for extractor service
  */
 export function registerExtractorHandlers(): void {
@@ -48,24 +70,17 @@ export function registerExtractorHandlers(): void {
       return withErrorHandling(async () => {
         let authService: ErpAuthService | null = null
         let dbService: IDatabaseService | null = null
+        let erpConfigService: UserErpConfigService | null = null
 
         try {
-          // Check environment variables
-          const erpUrl = process.env.ERP_URL || ''
-          const erpUsername = process.env.ERP_USERNAME || ''
-          const erpPassword = process.env.ERP_PASSWORD || ''
+          // Get ERP configuration from database for current user
+          log.info('Fetching ERP configuration from database...')
+          const erpConfig = await getErpConfig()
 
-          log.info('Config check', {
-            url: erpUrl ? 'configured' : 'EMPTY',
-            username: erpUsername ? 'configured' : 'EMPTY'
+          log.info('ERP config retrieved', {
+            url: erpConfig.url ? 'configured' : 'EMPTY',
+            username: erpConfig.username ? 'configured' : 'EMPTY'
           })
-
-          if (!erpUrl || !erpUsername || !erpPassword) {
-            throw new ValidationError(
-              'ERP 配置不完整。请检查 .env 文件中的 ERP_URL, ERP_USERNAME, ERP_PASSWORD',
-              'VAL_MISSING_REQUIRED'
-            )
-          }
 
           // Create database service using factory
           log.info('Connecting to database for order resolution...')
@@ -115,9 +130,9 @@ export function registerExtractorHandlers(): void {
 
           // Create auth service and login
           authService = new ErpAuthService({
-            url: erpUrl,
-            username: erpUsername,
-            password: erpPassword,
+            url: erpConfig.url,
+            username: erpConfig.username,
+            password: erpConfig.password,
             headless: true
           })
 

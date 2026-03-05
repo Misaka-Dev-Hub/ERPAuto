@@ -108,11 +108,13 @@ function deepMerge<T>(source: T, target: Partial<T>): T {
 /**
  * UI editable field whitelist
  * Fields that can be modified through the settings UI
+ * Note: ERP fields are no longer editable here - they are managed per-user in the database
  */
 const UI_EDITABLE_FIELDS: string[] = [
-  'erp.url',
-  'erp.username',
-  'erp.password'
+  // ERP fields removed - ERP config is now stored in dbo_BIPUsers table per user
+  // 'erp.url',
+  // 'erp.username',
+  // 'erp.password'
   // Add more fields as UI expands
 ]
 
@@ -254,17 +256,14 @@ export class ConfigManager {
       // Build .env content from cache
       const lines: string[] = []
 
-      // ERP Configuration
+      // ERP Configuration - REMOVED
+      // ERP parameters are now stored in the database (dbo_BIPUsers table)
+      // This section is kept for backward compatibility but values are not used
       lines.push('# ===========================')
-      lines.push('# ERP 系统配置')
+      lines.push('# ERP 系统配置（已迁移到数据库）')
       lines.push('# ===========================')
-      lines.push(`ERP_URL=${this.configCache.get('ERP_URL') || DEFAULT_SETTINGS.erp.url}`)
-      lines.push(
-        `ERP_USERNAME=${this.configCache.get('ERP_USERNAME') || DEFAULT_SETTINGS.erp.username}`
-      )
-      lines.push(
-        `ERP_PASSWORD=${this.configCache.get('ERP_PASSWORD') || DEFAULT_SETTINGS.erp.password}`
-      )
+      lines.push('# ERP_URL, ERP_USERNAME, ERP_PASSWORD 已从 .env 移除')
+      lines.push('# 这些参数现在存储在 dbo_BIPUsers 表中，每个用户可以有自己的 ERP 配置')
       lines.push('')
 
       // Database Configuration - SQL Server
@@ -406,13 +405,16 @@ export class ConfigManager {
 
   /**
    * Get all settings as SettingsData object
+   * Note: ERP configuration is now stored in database, not .env
+   * The ERP values here are for UI display only and will not be used for actual ERP operations
    */
   public getAllSettings(): SettingsData {
     return {
       erp: {
-        url: this.get('ERP_URL', DEFAULT_SETTINGS.erp.url),
-        username: this.get('ERP_USERNAME', DEFAULT_SETTINGS.erp.username),
-        password: this.get('ERP_PASSWORD', DEFAULT_SETTINGS.erp.password),
+        // ERP config is now from database, these are placeholder defaults for UI
+        url: DEFAULT_SETTINGS.erp.url,
+        username: DEFAULT_SETTINGS.erp.username,
+        password: DEFAULT_SETTINGS.erp.password,
         headless: true,
         ignoreHttpsErrors: true,
         autoCloseBrowser: true
@@ -487,12 +489,11 @@ export class ConfigManager {
 
   /**
    * Save settings from SettingsData object
+   * Note: ERP settings are NOT saved to .env anymore - they are stored in the database
    */
   public async saveAllSettings(settings: SettingsData): Promise<boolean> {
-    // ERP settings - use underscore uppercase keys to match .env file
-    this.set('ERP_URL', settings.erp.url)
-    this.set('ERP_USERNAME', settings.erp.username)
-    this.set('ERP_PASSWORD', settings.erp.password)
+    // ERP settings are now stored in the database (dbo_BIPUsers table)
+    // They are NOT saved to .env file anymore
 
     // Database settings
     this.set('DB_TYPE', settings.database.dbType)

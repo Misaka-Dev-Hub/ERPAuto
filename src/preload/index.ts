@@ -137,6 +137,16 @@ const api = {
       ipcRenderer.invoke('materialType:delete', { materialName, managerName }),
     upsertBatch: (request: MaterialTypeBatchRequest) =>
       ipcRenderer.invoke('materialType:upsertBatch', request)
+  },
+
+  // User ERP Configuration service
+  userErpConfig: {
+    getCurrent: () => ipcRenderer.invoke('user-erp-config:getCurrent'),
+    update: (config: { url: string; username: string; password: string }) =>
+      ipcRenderer.invoke('user-erp-config:update', config),
+    testConnection: (config: { url: string; username: string; password: string }) =>
+      ipcRenderer.invoke('user-erp-config:testConnection', config),
+    getAll: () => ipcRenderer.invoke('user-erp-config:getAll')
   }
 } as const
 

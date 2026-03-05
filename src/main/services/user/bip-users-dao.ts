@@ -28,7 +28,11 @@ export const BIP_USERS_CONFIG = {
     USER_TYPE: 'UserType',
     PASSWORD: 'Password',
     COMPUTER_NAME: 'ComputerName',
-    CREATE_TIME: 'CreateTime'
+    CREATE_TIME: 'CreateTime',
+    // ERP Configuration columns
+    ERP_URL: 'ERP_URL',
+    ERP_USERNAME: 'ERP_Username',
+    ERP_PASSWORD: 'ERP_Password'
   }
 } as const
 
@@ -477,6 +481,162 @@ export class BIPUsersDAO {
     } catch (error) {
       console.error('[BIPUsersDAO] User exists error:', error)
       return false
+    }
+  }
+
+  /**
+   * Get ERP configuration for a user
+   * @param username - The username to get ERP config for
+   * @returns ERP configuration object or null if not found
+   */
+  async getUserErpConfig(username: string): Promise<{
+    url: string
+    username: string
+    password: string
+  } | null> {
+    try {
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const cols = BIP_USERS_CONFIG.COLUMNS
+
+      if (this.dbType === 'sqlserver') {
+        const sqlString = `
+          SELECT ${cols.ERP_URL}, ${cols.ERP_USERNAME}, ${cols.ERP_PASSWORD}
+          FROM ${tableName}
+          WHERE UserName = @username
+        `
+
+        const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
+          username: { value: username, type: sql.NVarChar(255) }
+        })
+
+        if (result.rows.length > 0) {
+          const row = result.rows[0]
+          return {
+            url: (row[cols.ERP_URL] as string) || '',
+            username: (row[cols.ERP_USERNAME] as string) || '',
+            password: (row[cols.ERP_PASSWORD] as string) || ''
+          }
+        }
+        return null
+      } else {
+        const sqlString = `
+          SELECT ${cols.ERP_URL}, ${cols.ERP_USERNAME}, ${cols.ERP_PASSWORD}
+          FROM ${tableName}
+          WHERE UserName = ?
+        `
+
+        const result = await (dbService as MySqlService).query(sqlString, [username])
+
+        if (result.rows.length > 0) {
+          const row = result.rows[0]
+          return {
+            url: (row[cols.ERP_URL] as string) || '',
+            username: (row[cols.ERP_USERNAME] as string) || '',
+            password: (row[cols.ERP_PASSWORD] as string) || ''
+          }
+        }
+        return null
+      }
+    } catch (error) {
+      console.error('[BIPUsersDAO] Get user ERP config error:', error)
+      return null
+    }
+  }
+
+  /**
+   * Update ERP configuration for a user
+   * @param username - The username to update ERP config for
+   * @param erpUrl - The ERP URL
+   * @param erpUsername - The ERP username
+   * @param erpPassword - The ERP password
+   * @returns True if successful
+   */
+  async updateUserErpConfig(
+    username: string,
+    erpUrl: string,
+    erpUsername: string,
+    erpPassword: string
+  ): Promise<boolean> {
+    try {
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const cols = BIP_USERS_CONFIG.COLUMNS
+
+      if (this.dbType === 'sqlserver') {
+        const sqlString = `
+          UPDATE ${tableName}
+          SET ${cols.ERP_URL} = @erpUrl,
+              ${cols.ERP_USERNAME} = @erpUsername,
+              ${cols.ERP_PASSWORD} = @erpPassword
+          WHERE UserName = @username
+        `
+
+        await (dbService as SqlServerService).queryWithParams(sqlString, {
+          username: { value: username, type: sql.NVarChar(255) },
+          erpUrl: { value: erpUrl, type: sql.NVarChar(500) },
+          erpUsername: { value: erpUsername, type: sql.NVarChar(255) },
+          erpPassword: { value: erpPassword, type: sql.NVarChar(255) }
+        })
+        return true
+      } else {
+        const sqlString = `
+          UPDATE ${tableName}
+          SET ${cols.ERP_URL} = ?,
+              ${cols.ERP_USERNAME} = ?,
+              ${cols.ERP_PASSWORD} = ?
+          WHERE UserName = ?
+        `
+
+        await (dbService as MySqlService).query(sqlString, [
+          erpUrl,
+          erpUsername,
+          erpPassword,
+          username
+        ])
+        return true
+      }
+    } catch (error) {
+      console.error('[BIPUsersDAO] Update user ERP config error:', error)
+      return false
+    }
+  }
+
+  /**
+   * Get ERP configuration for all users (for migration/audit purposes)
+   * @returns List of users with their ERP configurations
+   */
+  async getAllUsersErpConfig(): Promise<
+    Array<{
+      username: string
+      erpUrl: string
+      erpUsername: string
+    }>
+  > {
+    try {
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const cols = BIP_USERS_CONFIG.COLUMNS
+
+      const sqlString = `
+        SELECT ${cols.USERNAME}, ${cols.ERP_URL}, ${cols.ERP_USERNAME}
+        FROM ${tableName}
+        ORDER BY ${cols.USERNAME}
+      `
+
+      const result =
+        this.dbType === 'sqlserver'
+          ? await (dbService as SqlServerService).query(sqlString)
+          : await (dbService as MySqlService).query(sqlString)
+
+      return result.rows.map((row) => ({
+        username: row[cols.USERNAME] as string,
+        erpUrl: (row[cols.ERP_URL] as string) || '',
+        erpUsername: (row[cols.ERP_USERNAME] as string) || ''
+      }))
+    } catch (error) {
+      console.error('[BIPUsersDAO] Get all users ERP config error:', error)
+      return []
     }
   }
 
