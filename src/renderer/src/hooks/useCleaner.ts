@@ -18,7 +18,7 @@ export function useCleaner() {
   // State with sessionStorage persistence
   const [dryRun, setDryRun] = useState(() => {
     const saved = sessionStorage.getItem('cleaner_dryRun')
-    return saved ? saved === 'true' : true
+    return saved ? saved === 'true' : false
   })
 
   const [valMode, setValMode] = useState<'full' | 'filtered'>(() => {
