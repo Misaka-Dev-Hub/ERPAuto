@@ -44,6 +44,15 @@ export function useCleaner() {
   // Material type management dialog state
   const [isTypeDialogOpen, setIsTypeDialogOpen] = useState(false)
 
+  // Execution report dialog state
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false)
+  const [reportData, setReportData] = useState<{
+    ordersProcessed: number
+    materialsDeleted: number
+    materialsSkipped: number
+    errors: string[]
+  } | null>(null)
+
   // Execution settings state
   const [headless, setHeadless] = useState(() => {
     const saved = sessionStorage.getItem('cleaner_headless')
@@ -246,11 +255,13 @@ export function useCleaner() {
       })
 
       if (response.success && response.data) {
-        let msg = `清理执行完毕:\n处理订单: ${response.data.ordersProcessed}\n删除物料: ${response.data.materialsDeleted}\n跳过物料: ${response.data.materialsSkipped}`
-        if (response.data.errors.length) {
-          msg += `\n错误: ${response.data.errors.join(', ')}`
-        }
-        alert(msg)
+        setReportData({
+          ordersProcessed: response.data.ordersProcessed,
+          materialsDeleted: response.data.materialsDeleted,
+          materialsSkipped: response.data.materialsSkipped,
+          errors: response.data.errors
+        })
+        setIsReportDialogOpen(true)
       } else {
         throw new Error(response.error || '清理失败')
       }
@@ -320,6 +331,9 @@ export function useCleaner() {
     showSettingsMenu,
     setShowSettingsMenu,
     filteredResults,
+    isReportDialogOpen,
+    setIsReportDialogOpen,
+    reportData,
     handleValidation,
     handleCheckboxToggle,
     handleConfirmDeletion,

@@ -16,6 +16,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react'
 import MaterialTypeManagementDialog from '../components/MaterialTypeManagementDialog'
+import ExecutionReportDialog from '../components/ExecutionReportDialog'
 import { useCleaner } from '../hooks/useCleaner'
 
 const CleanerPage: React.FC = () => {
@@ -43,6 +44,9 @@ const CleanerPage: React.FC = () => {
     showSettingsMenu,
     setShowSettingsMenu,
     filteredResults,
+    isReportDialogOpen,
+    setIsReportDialogOpen,
+    reportData,
     handleValidation,
     handleCheckboxToggle,
     handleConfirmDeletion,
@@ -413,6 +417,19 @@ const CleanerPage: React.FC = () => {
         isAdmin={isAdmin}
         currentUsername={currentUsername}
       />
+
+      {/* Execution Report Dialog */}
+      {reportData && (
+        <ExecutionReportDialog
+          isOpen={isReportDialogOpen}
+          onClose={() => setIsReportDialogOpen(false)}
+          ordersProcessed={reportData.ordersProcessed}
+          materialsDeleted={reportData.materialsDeleted}
+          materialsSkipped={reportData.materialsSkipped}
+          errors={reportData.errors}
+          dryRun={dryRun}
+        />
+      )}
     </div>
   )
 }
