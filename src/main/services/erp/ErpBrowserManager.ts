@@ -90,7 +90,7 @@ export class ErpBrowserManager {
     const context = await browserInstance.newContext({
       acceptDownloads: this.config.acceptDownloads,
       viewport: this.config.viewport,
-      ignoreHTTPSErrors: this.config.ignoreHTTPSErrors,
+      ignoreHTTPSErrors: true,
       javaScriptEnabled: true
     })
 

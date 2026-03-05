@@ -265,15 +265,6 @@ export class ConfigManager {
       lines.push(
         `ERP_PASSWORD=${this.configCache.get('ERP_PASSWORD') || DEFAULT_SETTINGS.erp.password}`
       )
-      lines.push(
-        `ERP_HEADLESS=${this.configCache.get('ERP_HEADLESS') || DEFAULT_SETTINGS.erp.headless}`
-      )
-      lines.push(
-        `ERP_IGNORE_HTTPS_ERRORS=${this.configCache.get('ERP_IGNORE_HTTPS_ERRORS') || DEFAULT_SETTINGS.erp.ignoreHttpsErrors}`
-      )
-      lines.push(
-        `ERP_AUTO_CLOSE_BROWSER=${this.configCache.get('ERP_AUTO_CLOSE_BROWSER') || DEFAULT_SETTINGS.erp.autoCloseBrowser}`
-      )
       lines.push('')
 
       // Database Configuration - SQL Server
@@ -422,15 +413,9 @@ export class ConfigManager {
         url: this.get('ERP_URL', DEFAULT_SETTINGS.erp.url),
         username: this.get('ERP_USERNAME', DEFAULT_SETTINGS.erp.username),
         password: this.get('ERP_PASSWORD', DEFAULT_SETTINGS.erp.password),
-        headless: this.getBoolean('ERP_HEADLESS', DEFAULT_SETTINGS.erp.headless),
-        ignoreHttpsErrors: this.getBoolean(
-          'ERP_IGNORE_HTTPS_ERRORS',
-          DEFAULT_SETTINGS.erp.ignoreHttpsErrors
-        ),
-        autoCloseBrowser: this.getBoolean(
-          'ERP_AUTO_CLOSE_BROWSER',
-          DEFAULT_SETTINGS.erp.autoCloseBrowser
-        )
+        headless: true,
+        ignoreHttpsErrors: true,
+        autoCloseBrowser: true
       },
       database: {
         dbType:
@@ -508,9 +493,6 @@ export class ConfigManager {
     this.set('ERP_URL', settings.erp.url)
     this.set('ERP_USERNAME', settings.erp.username)
     this.set('ERP_PASSWORD', settings.erp.password)
-    this.set('ERP_HEADLESS', settings.erp.headless)
-    this.set('ERP_IGNORE_HTTPS_ERRORS', settings.erp.ignoreHttpsErrors)
-    this.set('ERP_AUTO_CLOSE_BROWSER', settings.erp.autoCloseBrowser)
 
     // Database settings
     this.set('DB_TYPE', settings.database.dbType)
@@ -638,9 +620,6 @@ export class ConfigManager {
     this.set('ERP_URL', DEFAULT_SETTINGS.erp.url)
     this.set('ERP_USERNAME', DEFAULT_SETTINGS.erp.username)
     this.set('ERP_PASSWORD', DEFAULT_SETTINGS.erp.password)
-    this.set('ERP_HEADLESS', DEFAULT_SETTINGS.erp.headless)
-    this.set('ERP_IGNORE_HTTPS_ERRORS', DEFAULT_SETTINGS.erp.ignoreHttpsErrors)
-    this.set('ERP_AUTO_CLOSE_BROWSER', DEFAULT_SETTINGS.erp.autoCloseBrowser)
 
     this.set('DB_TYPE', DEFAULT_SETTINGS.database.dbType)
     this.set('DB_SERVER', DEFAULT_SETTINGS.database.server)
