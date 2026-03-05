@@ -47,6 +47,14 @@ const CleanerPage: React.FC = () => {
     isReportDialogOpen,
     setIsReportDialogOpen,
     reportData,
+    editingCell,
+    editValue,
+    setEditValue,
+    inputRef,
+    startEdit,
+    saveEdit,
+    cancelEdit,
+    handleAssignManagerOnSelect,
     handleValidation,
     handleCheckboxToggle,
     handleConfirmDeletion,
@@ -277,13 +285,15 @@ const CleanerPage: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredResults.map((result) => {
+                filteredResults.map((result, rowIndex) => {
                   const isChecked = selectedItems.has(result.materialCode)
                   const trClass = isChecked ? 'bg-blue-50/30' : 'hover:bg-slate-50'
                   const noManager = !result.managerName?.trim()
                   const managerCellClass = noManager
                     ? 'text-amber-500 text-xs italic'
                     : 'text-slate-700'
+                  const isEditingManager =
+                    editingCell?.rowIndex === rowIndex && editingCell?.field === 'managerName'
 
                   return (
                     <tr
@@ -293,13 +303,23 @@ const CleanerPage: React.FC = () => {
                       <td className="px-4 py-3 text-center truncate">
                         {isChecked ? (
                           <CheckSquare
-                            onClick={() => handleCheckboxToggle(result.materialCode)}
+                            onClick={() => {
+                              handleCheckboxToggle(result.materialCode)
+                              if (!isAdmin) {
+                                handleAssignManagerOnSelect(result.materialCode)
+                              }
+                            }}
                             size={16}
                             className="text-blue-600 inline cursor-pointer"
                           />
                         ) : (
                           <Square
-                            onClick={() => handleCheckboxToggle(result.materialCode)}
+                            onClick={() => {
+                              handleCheckboxToggle(result.materialCode)
+                              if (!isAdmin) {
+                                handleAssignManagerOnSelect(result.materialCode)
+                              }
+                            }}
                             size={16}
                             className="text-slate-300 inline cursor-pointer"
                           />
@@ -331,9 +351,43 @@ const CleanerPage: React.FC = () => {
                       </td>
                       <td
                         className={`px-4 py-3 truncate ${managerCellClass}`}
-                        title={result.managerName || '空(待分配)'}
+                        title={result.managerName || '空 (待分配)'}
                       >
-                        {result.managerName || '空(待分配)'}
+                        {isAdmin && isEditingManager ? (
+                          <select
+                            ref={inputRef as React.Ref<HTMLSelectElement>}
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={saveEdit}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveEdit()
+                              if (e.key === 'Escape') cancelEdit()
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full px-2 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+                          >
+                            <option value="">选择负责人</option>
+                            {managers.map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </select>
+                        ) : isAdmin ? (
+                          <div
+                            className="min-h-[24px] cursor-text"
+                            onDoubleClick={(e) => {
+                              e.stopPropagation()
+                              startEdit(rowIndex, 'managerName')
+                            }}
+                          >
+                            {result.managerName || (
+                              <span className="text-slate-400 italic">双击编辑</span>
+                            )}
+                          </div>
+                        ) : (
+                          result.managerName || '空 (待分配)'
+                        )}
                       </td>
                     </tr>
                   )

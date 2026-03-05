@@ -501,6 +501,30 @@ export function registerValidationHandlers(): void {
   })
 
   /**
+   * Update manager for a single material
+   */
+  ipcMain.handle(
+    'materials:updateManager',
+    async (
+      _event,
+      request: { materialCode: string; managerName: string }
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const dao = new MaterialsToBeDeletedDAO()
+        return await dao.updateManager(request.materialCode, request.managerName)
+      } catch (error) {
+        log.error('Update manager error', {
+          error: error instanceof Error ? error.message : String(error)
+        })
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }
+  )
+
+  /**
    * Get materials by manager
    */
   ipcMain.handle(

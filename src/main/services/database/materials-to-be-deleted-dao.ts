@@ -216,6 +216,52 @@ export class MaterialsToBeDeletedDAO {
     return stats
   }
 
+  /**
+   * Update manager for a single material
+   * @param materialCode - Material code
+   * @param managerName - New manager name
+   * @returns Success status
+   */
+  async updateManager(
+    materialCode: string,
+    managerName: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const dbService = await this.getDatabaseService()
+      const tableName = this.getTableName()
+      const isSqlServer = dbService.type === 'sqlserver'
+
+      if (isSqlServer) {
+        const sqlString = `
+          MERGE ${tableName} AS target
+          USING (VALUES (@p0, @p1)) AS source (MaterialCode, ManagerName)
+          ON target.MaterialCode = source.MaterialCode
+          WHEN MATCHED THEN UPDATE SET ManagerName = source.ManagerName
+          WHEN NOT MATCHED THEN INSERT (MaterialCode, ManagerName) VALUES (source.MaterialCode, source.ManagerName);
+        `
+        await dbService.query(sqlString, [materialCode, managerName || null])
+      } else {
+        const sqlString = `
+          INSERT INTO ${tableName} (MaterialCode, ManagerName)
+          VALUES (?, ?)
+          ON DUPLICATE KEY UPDATE ManagerName = VALUES(ManagerName)
+        `
+        await dbService.query(sqlString, [materialCode, managerName || null])
+      }
+
+      return { success: true }
+    } catch (error) {
+      log.error('Update manager error', {
+        materialCode,
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    }
+  }
+
   // ==================== READ ====================
 
   /**

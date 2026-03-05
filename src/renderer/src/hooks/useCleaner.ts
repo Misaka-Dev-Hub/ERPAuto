@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 
 export interface ValidationResult {
   materialName: string
@@ -59,6 +59,11 @@ export function useCleaner() {
     return saved ? saved === 'true' : true
   })
   const [showSettingsMenu, setShowSettingsMenu] = useState(false)
+
+  // Inline editing state for manager field (Admin only)
+  const [editingCell, setEditingCell] = useState<{ rowIndex: number; field: string } | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const inputRef = useRef<HTMLInputElement | HTMLSelectElement>(null)
 
   // Check admin status and get shared Production IDs on mount
   useEffect(() => {
@@ -157,6 +162,56 @@ export function useCleaner() {
       else newSet.add(materialCode)
       return newSet
     })
+  }
+
+  const startEdit = (rowIndex: number, field: string) => {
+    const row = filteredResults[rowIndex]
+    if (!row) return
+    setEditingCell({ rowIndex, field })
+    setEditValue(row[field as keyof ValidationResult] as string)
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus()
+        if (inputRef.current instanceof HTMLInputElement) {
+          inputRef.current.select()
+        }
+      }
+    }, 0)
+  }
+
+  const saveEdit = () => {
+    if (!editingCell) return
+    const { rowIndex } = editingCell
+    const row = filteredResults[rowIndex]
+    if (!row) return
+
+    const newValue = editValue.trim()
+    if (row.managerName === newValue) {
+      setEditingCell(null)
+      return
+    }
+
+    setValidationResults((prev) =>
+      prev.map((r) => (r.materialCode === row.materialCode ? { ...r, managerName: newValue } : r))
+    )
+    setEditingCell(null)
+  }
+
+  const cancelEdit = () => {
+    setEditingCell(null)
+  }
+
+  const handleAssignManagerOnSelect = (materialCode: string) => {
+    if (!isAdmin && currentUsername) {
+      const result = validationResults.find((r) => r.materialCode === materialCode)
+      if (result && (!result.managerName || result.managerName !== currentUsername)) {
+        setValidationResults((prev) =>
+          prev.map((r) =>
+            r.materialCode === materialCode ? { ...r, managerName: currentUsername } : r
+          )
+        )
+      }
+    }
   }
 
   const handleConfirmDeletion = async () => {
@@ -334,6 +389,14 @@ export function useCleaner() {
     isReportDialogOpen,
     setIsReportDialogOpen,
     reportData,
+    editingCell,
+    editValue,
+    setEditValue,
+    inputRef,
+    startEdit,
+    saveEdit,
+    cancelEdit,
+    handleAssignManagerOnSelect,
     handleValidation,
     handleCheckboxToggle,
     handleConfirmDeletion,

@@ -150,6 +150,15 @@ export interface MaterialsAPI {
    * Get statistics
    */
   getStatistics: () => Promise<{ stats: unknown }>
+  /**
+   * Update manager for a single material
+   * @param materialCode - Material code
+   * @param managerName - New manager name
+   */
+  updateManager: (
+    materialCode: string,
+    managerName: string
+  ) => Promise<{ success: boolean; error?: string }>
 }
 
 /**

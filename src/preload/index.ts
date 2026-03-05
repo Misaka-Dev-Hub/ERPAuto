@@ -103,7 +103,9 @@ const api = {
     getByManager: (managerName: string) =>
       ipcRenderer.invoke('materials:getByManager', managerName),
     getAll: () => ipcRenderer.invoke('materials:getAll'),
-    getStatistics: () => ipcRenderer.invoke('materials:getStatistics')
+    getStatistics: () => ipcRenderer.invoke('materials:getStatistics'),
+    updateManager: (materialCode: string, managerName: string) =>
+      ipcRenderer.invoke('materials:updateManager', { materialCode, managerName })
   },
 
   // Settings service
