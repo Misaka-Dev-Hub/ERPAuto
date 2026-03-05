@@ -82,7 +82,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
             <input
               ref={usernameInputRef}
               type="text"
-              className="form-input border border-slate-300 rounded-md p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="form-input border border-slate-300 rounded-md p-2 w-full text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="请输入用户名"
@@ -94,7 +94,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
             <label className="form-label text-slate-700">密码:</label>
             <input
               type="password"
-              className="form-input border border-slate-300 rounded-md p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="form-input border border-slate-300 rounded-md p-2 w-full text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="请输入密码"
@@ -197,6 +197,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
           border: 1px solid #d9d9d9;
           border-radius: 6px;
           font-size: 14px;
+          color: #333;
           transition: border-color 0.3s, box-shadow 0.3s;
           box-sizing: border-box;
         }
