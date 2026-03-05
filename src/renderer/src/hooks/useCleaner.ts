@@ -67,6 +67,7 @@ export function useCleaner() {
 
   // Progress state
   const [progress, setProgress] = useState<CleanerProgress | null>(null)
+  const [startTime, setStartTime] = useState<number | null>(null)
 
   // Execution settings state
   const [headless, setHeadless] = useState(() => {
@@ -316,6 +317,7 @@ export function useCleaner() {
     setIsRunning(true)
     setIsExecuting(true)
     setProgress(null)
+    setStartTime(Date.now())
     setIsReportDialogOpen(true)
 
     try {
@@ -355,6 +357,7 @@ export function useCleaner() {
       setIsRunning(false)
       setIsExecuting(false)
       setProgress(null)
+      setStartTime(null)
     }
   }
 
@@ -430,6 +433,7 @@ export function useCleaner() {
     cancelEdit,
     handleAssignManagerOnSelect,
     progress,
+    startTime,
     handleValidation,
     handleCheckboxToggle,
     handleConfirmDeletion,

@@ -57,6 +57,7 @@ const CleanerPage: React.FC = () => {
     cancelEdit,
     handleAssignManagerOnSelect,
     progress,
+    startTime,
     handleValidation,
     handleCheckboxToggle,
     handleConfirmDeletion,
@@ -485,6 +486,7 @@ const CleanerPage: React.FC = () => {
         dryRun={dryRun}
         isExecuting={isExecuting}
         progress={progress}
+        startTime={startTime}
       />
     </div>
   )

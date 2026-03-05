@@ -31,6 +31,7 @@ interface ExecutionReportDialogProps {
   dryRun?: boolean
   isExecuting?: boolean
   progress?: CleanerProgress | null
+  startTime?: number | null
 }
 
 export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
@@ -42,15 +43,55 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
   errors = [],
   dryRun = false,
   isExecuting = false,
-  progress = null
+  progress = null,
+  startTime = null
 }) => {
   if (!isOpen) return null
 
   const hasErrors = errors.length > 0
   const showProgress = isExecuting && progress
 
+  const [now, setNow] = React.useState(Date.now())
+
+  React.useEffect(() => {
+    if (!showProgress || !startTime) return
+
+    const interval = setInterval(() => {
+      setNow(Date.now())
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [showProgress, startTime])
+
+  const estimatedTime = React.useMemo(() => {
+    if (!showProgress || !startTime || !progress) return null
+
+    const currentProgress = progress.progress
+    if (currentProgress < 5) return null
+
+    const elapsedMs = now - startTime
+    const elapsedMinutes = elapsedMs / 60000
+
+    const totalEstimatedMinutes = elapsedMinutes / (currentProgress / 100)
+    const remainingMinutes = Math.max(0, totalEstimatedMinutes - elapsedMinutes)
+    const remainingRounded = Math.round(remainingMinutes)
+
+    const endTime = new Date(now + remainingMinutes * 60000)
+    const hours = endTime.getHours()
+    const minutes = endTime.getMinutes()
+    const seconds = endTime.getSeconds()
+    const period = hours >= 12 ? '下午' : '上午'
+    const displayHours = hours % 12 || 12
+    const formattedTime = `${period} ${displayHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+
+    return {
+      remainingMinutes: remainingRounded,
+      formattedTime
+    }
+  }, [showProgress, startTime, progress, now])
+
   return (
-    <div className="execution-report-overlay" onClick={onClose}>
+    <div className="execution-report-overlay" onClick={showProgress ? undefined : onClose}>
       <div
         className="execution-report-dialog"
         onClick={(e) => e.stopPropagation()}
@@ -128,6 +169,20 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
                   <Package size={14} className="order-icon" />
                   <span className="order-label">当前订单:</span>
                   <span className="order-number">{progress.currentOrderNumber}</span>
+                </div>
+              )}
+
+              {estimatedTime && (
+                <div className="estimated-time-info">
+                  <div className="estimated-time-item">
+                    <span className="time-label">预估还要</span>
+                    <span className="time-value">{estimatedTime.remainingMinutes} 分钟</span>
+                  </div>
+                  <div className="estimated-time-item">
+                    <span className="time-label">将会在</span>
+                    <span className="time-value">{estimatedTime.formattedTime}</span>
+                    <span className="time-label">执行完毕</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -441,6 +496,34 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
             font-weight: 500;
             color: #333;
             font-family: monospace;
+          }
+
+          .estimated-time-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 12px;
+            background: #f6ffed;
+            border-radius: 6px;
+            border: 1px solid #b7eb8f;
+          }
+
+          .estimated-time-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+          }
+
+          .estimated-time-item .time-label {
+            color: #666;
+          }
+
+          .estimated-time-item .time-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #52c41a;
           }
 
           /* Result View Styles */
