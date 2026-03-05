@@ -5,6 +5,8 @@ import { OrderNumberResolver } from '../services/erp/order-resolver'
 import { MySqlService } from '../services/database/mysql'
 import { SqlServerService } from '../services/database/sql-server'
 import { ResultExporter } from '../services/excel/result-exporter'
+import { CleanerReportGenerator } from '../services/report/cleaner-report-generator'
+import { SessionManager } from '../services/user/session-manager'
 import { createLogger } from '../services/logger'
 import { withErrorHandling, type IpcResult } from './index'
 import { ErpConnectionError, ValidationError, DatabaseQueryError } from '../types/errors'
@@ -78,6 +80,7 @@ export function registerCleanerHandlers(): void {
     'cleaner:run',
     async (event, input: CleanerInput): Promise<IpcResult<CleanerResult>> => {
       const windowId = event.sender.id
+      const startTime = Date.now()
 
       return withErrorHandling(async () => {
         let authService: ErpAuthService | null = null
@@ -194,6 +197,26 @@ export function registerCleanerHandlers(): void {
             processedCount: result.ordersProcessed,
             errorCount: result.errors.length
           })
+
+          // Generate report (silent, user unaware)
+          try {
+            const endTime = Date.now()
+            const currentUser = SessionManager.getInstance().getUserInfo()
+            const username = currentUser?.username ?? 'unknown'
+
+            const reportGenerator = new CleanerReportGenerator()
+            const reportPath = await reportGenerator.generateReport(result, {
+              dryRun: input.dryRun ?? false,
+              username,
+              startTime,
+              endTime
+            })
+            log.info('Report generated', { path: reportPath })
+          } catch (reportError) {
+            log.warn('Failed to generate report', {
+              error: reportError instanceof Error ? reportError.message : String(reportError)
+            })
+          }
 
           return result
         } finally {

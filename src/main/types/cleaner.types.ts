@@ -27,11 +27,19 @@ export interface CleanerResult {
   details: OrderCleanDetail[]
 }
 
+export interface SkippedMaterial {
+  materialCode: string
+  materialName: string
+  rowNumber: number
+  reason: string
+}
+
 export interface OrderCleanDetail {
   orderNumber: string
   materialsDeleted: number
   materialsSkipped: number
   errors: string[]
+  skippedMaterials: SkippedMaterial[]
 }
 
 /**

@@ -74,6 +74,21 @@ export class CleanerService {
     return true
   }
 
+  getSkipReason(params: ShouldDeleteParams): string {
+    const { rowNumber, pendingQty, materialCode, deleteSet } = params
+
+    if (!deleteSet.has(materialCode)) {
+      return '物料不在删除清单中'
+    }
+    if (rowNumber >= 7000 && rowNumber < 8000) {
+      return '行号在 7000-7999 范围内（受保护）'
+    }
+    if (pendingQty && pendingQty.trim() !== '') {
+      return '累计待发数量不为空'
+    }
+    return '未知原因'
+  }
+
   /**
    * Execute the cleaning process
    * Reference: Python clean() method lines 456-525
@@ -130,7 +145,8 @@ export class CleanerService {
             orderNumber,
             materialsDeleted: 0,
             materialsSkipped: 0,
-            errors: [message]
+            errors: [message],
+            skippedMaterials: []
           })
         }
       }
@@ -229,7 +245,8 @@ export class CleanerService {
       orderNumber,
       materialsDeleted: 0,
       materialsSkipped: 0,
-      errors: []
+      errors: [],
+      skippedMaterials: []
     }
 
     // Query the order (Python lines 187-189)
@@ -371,6 +388,18 @@ export class CleanerService {
               continue
             } else if (!shouldDelete) {
               detail.materialsSkipped++
+              const reason = this.getSkipReason({
+                rowNumber: rowNumInt,
+                pendingQty,
+                materialCode,
+                deleteSet
+              })
+              detail.skippedMaterials.push({
+                materialCode,
+                materialName,
+                rowNumber: rowNumInt,
+                reason
+              })
             }
           }
 
