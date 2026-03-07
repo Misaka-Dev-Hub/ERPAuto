@@ -46,7 +46,11 @@ function loadConfig(filePath: string): {
   const content = fs.readFileSync(filePath, 'utf-8')
   const parsed = yaml.load(content) as Record<string, unknown>
 
-  const result = mysqlConfigSchema.parse(parsed?.database?.mysql)
+  // Safely extract database.mysql config
+  const database = parsed?.database as Record<string, unknown> | undefined
+  const mysql = database?.mysql as Record<string, unknown> | undefined
+
+  const result = mysqlConfigSchema.parse(mysql)
   return result
 }
 
