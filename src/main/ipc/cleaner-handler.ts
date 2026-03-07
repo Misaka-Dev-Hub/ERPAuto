@@ -124,7 +124,6 @@ export function registerCleanerHandlers(): void {
       return withErrorHandling(async () => {
         let authService: ErpAuthService | null = null
         let dbService: MySqlService | SqlServerService | null = null
-        let erpConfigService: UserErpConfigService | null = null
 
         try {
           // Get ERP configuration from database for current user
@@ -136,9 +135,10 @@ export function registerCleanerHandlers(): void {
             username: erpConfig.username ? 'configured' : 'EMPTY'
           })
 
-          const dbType = process.env.DB_TYPE?.toLowerCase()
+          const configManager = ConfigManager.getInstance()
+          const dbType = configManager.getDatabaseType()
           log.info(
-            `Connecting to ${dbType === 'sqlserver' || dbType === 'mssql' ? 'SQL Server' : 'MySQL'} for order resolution...`
+            `Connecting to ${dbType === 'sqlserver' ? 'SQL Server' : 'MySQL'} for order resolution...`
           )
 
           try {

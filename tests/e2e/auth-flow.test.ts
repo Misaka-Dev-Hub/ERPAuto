@@ -21,7 +21,6 @@ test.describe('Authentication Flow', () => {
     electronApp = await electron.launch({
       args: [path.join(__dirname, '../../out/main/index.js')],
       env: {
-        ...process.env,
         NODE_ENV: 'test'
       }
     })

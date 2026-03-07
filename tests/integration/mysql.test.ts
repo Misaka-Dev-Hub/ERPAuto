@@ -8,13 +8,13 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { MySqlService, MySqlConfig } from '@services/database/mysql'
 
 // MySQL test configuration
-// In production, these should come from environment variables
+// For integration tests, use fixed test credentials or configure via config.yaml
 const testConfig: MySqlConfig = {
-  host: process.env.MYSQL_HOST || 'localhost',
-  port: parseInt(process.env.MYSQL_PORT || '3306'),
-  user: process.env.MYSQL_USER || 'root',
-  password: process.env.MYSQL_PASSWORD || 'password',
-  database: process.env.MYSQL_DATABASE || 'test_db'
+  host: 'localhost',
+  port: 3306,
+  user: 'root',
+  password: 'password',
+  database: 'test_db'
 }
 
 describe('MySqlService Integration Tests', () => {

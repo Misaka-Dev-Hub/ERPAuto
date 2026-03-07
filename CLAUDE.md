@@ -44,7 +44,7 @@ ERPAuto is an **Electron desktop application** for automating ERP system data pr
    - Node.js environment managing application lifecycle
    - Entry point: `src/main/index.ts`
    - Registers all IPC handlers via `registerIpcHandlers()`
-   - Loads environment variables from `.env` at startup
+   - Loads configuration from `config.yaml` via ConfigManager at startup
 
 2. **Preload Script** (`src/preload/`)
    - Security bridge between main and renderer processes
@@ -113,13 +113,23 @@ Admin users see logout buttons and can access user switching. Non-admin users ha
 - `@services` → `src/main/services` (main process, tests only)
 - `@types` → `src/main/types` (main process, tests only)
 
-## Environment Configuration
+## Configuration Management
 
-The application requires a `.env` file in the project root. Reference `.env.example` for the full structure. Key configurations:
+The application uses a YAML-based configuration system (`config.yaml`) managed by `ConfigManager`:
 
-- **ERP Settings**: URL, credentials, headless mode, HTTPS error handling
+- **Development**: `config.yaml` in project root (easy to edit and version control)
+- **Production**: `config.yaml` in user data directory (AppData on Windows)
+
+Key configurations in `config.yaml`:
+
+- **ERP Settings**: URL (fixed infrastructure)
 - **Database**: MySQL and SQL Server connection configs (dual support)
-- **App Settings**: Log level, download/temp directories
+- **Paths**: Data directory and output file settings
+- **Extraction**: Batch size, verbosity, persistence options
+- **Validation**: Data source, batch size, match mode
+- **Order Resolution**: Database table and field names for order number lookup
+
+Note: ERP credentials (username/password) are stored in the database (`dbo_BIPUsers` table) per user, managed via the Settings UI.
 
 ## Key Technologies
 

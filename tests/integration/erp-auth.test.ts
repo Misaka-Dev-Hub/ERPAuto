@@ -4,10 +4,11 @@ import type { ErpConfig } from '../../src/main/types/erp.types'
 
 describe('ERP Authentication Service (Integration)', () => {
   let authService: ErpAuthService
+  // For integration tests, use fixed test credentials or configure via config.yaml
   const config: ErpConfig = {
-    url: process.env.ERP_URL || '',
-    username: process.env.ERP_USERNAME || '',
-    password: process.env.ERP_PASSWORD || ''
+    url: '',
+    username: '',
+    password: ''
   }
 
   // Check if we have ERP credentials
