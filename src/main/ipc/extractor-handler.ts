@@ -159,6 +159,8 @@ export function registerExtractorHandlers(): void {
           try {
             await authService.login()
           } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : '未知错误'
+            sendLog(windowId, 'error', `ERP 登录失败：${errorMsg}`)
             throw new ErpConnectionError(
               'ERP 登录失败',
               'ERP_LOGIN_FAILED',
