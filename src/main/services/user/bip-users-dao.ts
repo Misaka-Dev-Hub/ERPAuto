@@ -10,6 +10,7 @@
 
 import { MySqlService } from '../database/mysql'
 import { SqlServerService } from '../database/sql-server'
+import { ConfigManager } from '../config/config-manager'
 import sql from 'mssql'
 import type { UserInfo } from '../../types/user.types'
 
@@ -43,17 +44,14 @@ export class BIPUsersDAO {
   private mysqlService: MySqlService | null = null
   private sqlServerService: SqlServerService | null = null
   private dbType: 'mysql' | 'sqlserver' = 'mysql'
+  private configManager: ConfigManager
 
   /**
-   * Constructor - determine database type from environment
+   * Constructor - get database type from ConfigManager
    */
   constructor() {
-    const dbType = process.env.DB_TYPE?.toLowerCase()
-    if (dbType === 'sqlserver' || dbType === 'mssql') {
-      this.dbType = 'sqlserver'
-    } else {
-      this.dbType = 'mysql'
-    }
+    this.configManager = ConfigManager.getInstance()
+    this.dbType = this.configManager.getDatabaseType()
   }
 
   /**
@@ -69,20 +67,23 @@ export class BIPUsersDAO {
    * Get database service instance (MySQL or SQL Server)
    */
   private async getDatabaseService(): Promise<MySqlService | SqlServerService> {
+    const config = this.configManager.getConfig()
+
     if (this.dbType === 'sqlserver') {
       if (this.sqlServerService && this.sqlServerService.isConnected()) {
         return this.sqlServerService
       }
 
+      const dbConfig = config.database.sqlserver
       this.sqlServerService = new SqlServerService({
-        server: process.env.DB_SERVER || 'localhost',
-        port: parseInt(process.env.DB_SQLSERVER_PORT || '1433', 10),
-        user: process.env.DB_USERNAME || 'sa',
-        password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || '',
+        server: dbConfig.server,
+        port: dbConfig.port,
+        user: dbConfig.username,
+        password: dbConfig.password,
+        database: dbConfig.database,
         options: {
           encrypt: false,
-          trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes'
+          trustServerCertificate: dbConfig.trustServerCertificate
         }
       })
 
@@ -93,12 +94,13 @@ export class BIPUsersDAO {
         return this.mysqlService
       }
 
+      const dbConfig = config.database.mysql
       this.mysqlService = new MySqlService({
-        host: process.env.DB_MYSQL_HOST || 'localhost',
-        port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
-        user: process.env.DB_USERNAME || 'root',
-        password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || ''
+        host: dbConfig.host,
+        port: dbConfig.port,
+        user: dbConfig.username,
+        password: dbConfig.password,
+        database: dbConfig.database
       })
 
       await this.mysqlService.connect()
@@ -485,12 +487,11 @@ export class BIPUsersDAO {
   }
 
   /**
-   * Get ERP configuration for a user
-   * @param username - The username to get ERP config for
-   * @returns ERP configuration object or null if not found
+   * Get ERP credentials for a user (username and password only, URL is from config.yaml)
+   * @param username - The username to get ERP credentials for
+   * @returns ERP credentials object or null if not found
    */
-  async getUserErpConfig(username: string): Promise<{
-    url: string
+  async getUserErpCredentials(username: string): Promise<{
     username: string
     password: string
   } | null> {
@@ -501,7 +502,7 @@ export class BIPUsersDAO {
 
       if (this.dbType === 'sqlserver') {
         const sqlString = `
-          SELECT ${cols.ERP_URL}, ${cols.ERP_USERNAME}, ${cols.ERP_PASSWORD}
+          SELECT ${cols.ERP_USERNAME}, ${cols.ERP_PASSWORD}
           FROM ${tableName}
           WHERE UserName = @username
         `
@@ -513,7 +514,6 @@ export class BIPUsersDAO {
         if (result.rows.length > 0) {
           const row = result.rows[0]
           return {
-            url: (row[cols.ERP_URL] as string) || '',
             username: (row[cols.ERP_USERNAME] as string) || '',
             password: (row[cols.ERP_PASSWORD] as string) || ''
           }
@@ -521,7 +521,7 @@ export class BIPUsersDAO {
         return null
       } else {
         const sqlString = `
-          SELECT ${cols.ERP_URL}, ${cols.ERP_USERNAME}, ${cols.ERP_PASSWORD}
+          SELECT ${cols.ERP_USERNAME}, ${cols.ERP_PASSWORD}
           FROM ${tableName}
           WHERE UserName = ?
         `
@@ -531,7 +531,6 @@ export class BIPUsersDAO {
         if (result.rows.length > 0) {
           const row = result.rows[0]
           return {
-            url: (row[cols.ERP_URL] as string) || '',
             username: (row[cols.ERP_USERNAME] as string) || '',
             password: (row[cols.ERP_PASSWORD] as string) || ''
           }
@@ -539,22 +538,20 @@ export class BIPUsersDAO {
         return null
       }
     } catch (error) {
-      console.error('[BIPUsersDAO] Get user ERP config error:', error)
+      console.error('[BIPUsersDAO] Get user ERP credentials error:', error)
       return null
     }
   }
 
   /**
-   * Update ERP configuration for a user
-   * @param username - The username to update ERP config for
-   * @param erpUrl - The ERP URL
+   * Update ERP credentials for a user (username and password only, URL is from config.yaml)
+   * @param username - The username to update ERP credentials for
    * @param erpUsername - The ERP username
    * @param erpPassword - The ERP password
    * @returns True if successful
    */
-  async updateUserErpConfig(
+  async updateUserErpCredentials(
     username: string,
-    erpUrl: string,
     erpUsername: string,
     erpPassword: string
   ): Promise<boolean> {
@@ -566,15 +563,13 @@ export class BIPUsersDAO {
       if (this.dbType === 'sqlserver') {
         const sqlString = `
           UPDATE ${tableName}
-          SET ${cols.ERP_URL} = @erpUrl,
-              ${cols.ERP_USERNAME} = @erpUsername,
+          SET ${cols.ERP_USERNAME} = @erpUsername,
               ${cols.ERP_PASSWORD} = @erpPassword
           WHERE UserName = @username
         `
 
         await (dbService as SqlServerService).queryWithParams(sqlString, {
           username: { value: username, type: sql.NVarChar(255) },
-          erpUrl: { value: erpUrl, type: sql.NVarChar(500) },
           erpUsername: { value: erpUsername, type: sql.NVarChar(255) },
           erpPassword: { value: erpPassword, type: sql.NVarChar(255) }
         })
@@ -582,22 +577,16 @@ export class BIPUsersDAO {
       } else {
         const sqlString = `
           UPDATE ${tableName}
-          SET ${cols.ERP_URL} = ?,
-              ${cols.ERP_USERNAME} = ?,
+          SET ${cols.ERP_USERNAME} = ?,
               ${cols.ERP_PASSWORD} = ?
           WHERE UserName = ?
         `
 
-        await (dbService as MySqlService).query(sqlString, [
-          erpUrl,
-          erpUsername,
-          erpPassword,
-          username
-        ])
+        await (dbService as MySqlService).query(sqlString, [erpUsername, erpPassword, username])
         return true
       }
     } catch (error) {
-      console.error('[BIPUsersDAO] Update user ERP config error:', error)
+      console.error('[BIPUsersDAO] Update user ERP credentials error:', error)
       return false
     }
   }

@@ -4,6 +4,7 @@ import { CleanerService } from '../services/erp/cleaner'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
 import { MySqlService } from '../services/database/mysql'
 import { SqlServerService } from '../services/database/sql-server'
+import { ConfigManager } from '../services/config/config-manager'
 import { ResultExporter } from '../services/excel/result-exporter'
 import { CleanerReportGenerator } from '../services/report/cleaner-report-generator'
 import { SessionManager } from '../services/user/session-manager'
@@ -47,29 +48,33 @@ function sendProgress(
 }
 
 async function getDatabaseService(): Promise<MySqlService | SqlServerService> {
-  const dbType = process.env.DB_TYPE?.toLowerCase()
+  const configManager = ConfigManager.getInstance()
+  const config = configManager.getConfig()
+  const dbType = configManager.getDatabaseType()
 
-  if (dbType === 'sqlserver' || dbType === 'mssql') {
+  if (dbType === 'sqlserver') {
+    const dbConfig = config.database.sqlserver
     const sqlServerService = new SqlServerService({
-      server: process.env.DB_SERVER || 'localhost',
-      port: parseInt(process.env.DB_SQLSERVER_PORT || '1433', 10),
-      user: process.env.DB_USERNAME || 'sa',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || '',
+      server: dbConfig.server,
+      port: dbConfig.port,
+      user: dbConfig.username,
+      password: dbConfig.password,
+      database: dbConfig.database,
       options: {
         encrypt: false,
-        trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes'
+        trustServerCertificate: dbConfig.trustServerCertificate
       }
     })
     await sqlServerService.connect()
     return sqlServerService
   } else {
+    const dbConfig = config.database.mysql
     const mysqlService = new MySqlService({
-      host: process.env.DB_MYSQL_HOST || 'localhost',
-      port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
-      user: process.env.DB_USERNAME || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || ''
+      host: dbConfig.host,
+      port: dbConfig.port,
+      user: dbConfig.username,
+      password: dbConfig.password,
+      database: dbConfig.database
     })
     await mysqlService.connect()
     return mysqlService
@@ -78,23 +83,35 @@ async function getDatabaseService(): Promise<MySqlService | SqlServerService> {
 
 /**
  * Get ERP configuration for current user
+ * URL is from config.yaml (fixed infrastructure)
+ * Username and password are from user's database config
  */
 async function getErpConfig(): Promise<{
   url: string
   username: string
   password: string
 }> {
-  const erpConfigService = UserErpConfigService.getInstance()
-  const config = await erpConfigService.getCurrentUserErpConfig()
+  // Get ERP URL from config.yaml (fixed for all users)
+  const configManager = ConfigManager.getInstance()
+  const globalConfig = configManager.getConfig()
+  const erpUrl = globalConfig.erp.url
 
-  if (!config || !config.url || !config.username || !config.password) {
+  // Get username and password from user's database config
+  const erpConfigService = UserErpConfigService.getInstance()
+  const userConfig = await erpConfigService.getCurrentUserErpConfig()
+
+  if (!userConfig || !userConfig.username || !userConfig.password) {
     throw new ValidationError(
-      'ERP 配置不完整。请在设置中配置 ERP URL、用户名和密码',
+      'ERP 配置不完整。请在设置中配置 ERP 用户名和密码',
       'VAL_MISSING_REQUIRED'
     )
   }
 
-  return config
+  return {
+    url: erpUrl,
+    username: userConfig.username,
+    password: userConfig.password
+  }
 }
 
 export function registerCleanerHandlers(): void {

@@ -5,16 +5,25 @@ directories:
 files:
   - '!**/.vscode/*'
   - '!src/*'
-  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!electron-vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - 'package.json'
+  # Include config.template.yaml in the build for reference
+  - 'config.template.yaml'
 asarUnpack:
   - resources/**
   - '**/node_modules/playwright/**'
 win:
   executableName: erpauto
+  target:
+    - nsis
+    - portable
+portable:
+  artifactName: ${name}-${version}-portable.${ext}
+  # Portable app uses user data directory (AppData), not exe directory
+  # This ensures config persists across app updates
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

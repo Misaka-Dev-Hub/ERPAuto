@@ -54,7 +54,7 @@ const createFileTransport = (level?: string): DailyRotateFile => {
 
 // Create the logger instance
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+  level: 'info', // Log level is now hardcoded, can be moved to config.yaml if needed
   defaultMeta: { service: 'erpauto' },
   transports: [
     // Console transport - always enabled
@@ -67,7 +67,7 @@ const logger = winston.createLogger({
 })
 
 // Add error-specific file transport in production
-if (process.env.NODE_ENV === 'production') {
+if (app.isPackaged) {
   logger.add(
     new DailyRotateFile({
       filename: path.join(getLogDir(), 'error-%DATE%.log'),

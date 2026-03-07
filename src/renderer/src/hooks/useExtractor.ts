@@ -63,12 +63,17 @@ export function useExtractor() {
       })
 
       if (response.success && response.data) {
+        const { data } = response
         addLog(
           'success',
-          `提取完成：下载 ${response.data.downloadedFiles.length} 个文件，共 ${response.data.recordCount} 条记录`
+          `提取完成：下载 ${data.downloadedFiles.length} 个文件，共 ${data.recordCount} 条记录`
         )
-        if (response.data.errors.length > 0) {
-          addLog('warning', `存在 ${response.data.errors.length} 个错误`)
+        if (data.errors.length > 0) {
+          addLog('warning', `存在 ${data.errors.length} 个错误`)
+          // Log each error detail for debugging
+          data.errors.forEach((err, index) => {
+            addLog('error', `错误 ${index + 1}/${data.errors.length}: ${err}`)
+          })
         }
       } else {
         setError(response.error || '提取失败')

@@ -1,23 +1,16 @@
 import React, { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, Save } from 'lucide-react'
+import { Settings as SettingsIcon, Save, User, Key } from 'lucide-react'
 
-interface Settings {
-  erp: {
-    url?: string
-    username?: string
-    password?: string
-  }
+interface ErpCredentials {
+  username: string
+  password: string
 }
 
 const SettingsPage: React.FC = () => {
-  const [settings, setSettings] = useState<Settings>({
-    erp: {
-      url: '',
-      username: '',
-      password: ''
-    }
+  const [credentials, setCredentials] = useState<ErpCredentials>({
+    username: '',
+    password: ''
   })
-
   const [isModified, setIsModified] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [message, setMessage] = useState<{
@@ -26,17 +19,25 @@ const SettingsPage: React.FC = () => {
   } | null>(null)
 
   useEffect(() => {
-    loadSettings()
+    loadCredentials()
   }, [])
 
-  const loadSettings = async () => {
+  const loadCredentials = async () => {
     try {
       setIsLoading(true)
+      // ERP credentials are loaded from database (current user's config)
       const config = await window.electron.settings.getSettings()
-      setSettings(config as unknown as Settings)
+
+      // Extract ERP credentials from the config
+      if (config && (config as any).erp) {
+        setCredentials({
+          username: (config as any).erp.username || '',
+          password: (config as any).erp.password || ''
+        })
+      }
       setIsModified(false)
     } catch (error) {
-      showMessage('error', '加载设置失败')
+      showMessage('error', '加载 ERP 配置失败')
     } finally {
       setIsLoading(false)
     }
@@ -47,38 +48,24 @@ const SettingsPage: React.FC = () => {
     setTimeout(() => setMessage(null), 3000)
   }
 
-  const updateSettings = (category: string, key: string, value: any) => {
-    setSettings((prev) => ({
-      ...prev,
-      [category]: {
-        ...(prev as any)[category],
-        [key]: value
-      }
-    }))
-    setIsModified(true)
-  }
-
-  const handleSaveSettings = async () => {
+  const handleSaveCredentials = async () => {
     try {
-      // Only send UI-supported fields (double safety)
-      const partialSettings = {
+      // Save ERP credentials to database (current user's config)
+      const result = await window.electron.settings.saveSettings({
         erp: {
-          url: settings.erp?.url,
-          username: settings.erp?.username,
-          password: settings.erp?.password
+          username: credentials.username,
+          password: credentials.password
         }
-      }
-
-      const result = await window.electron.settings.saveSettings(partialSettings as any)
+      } as any)
 
       if (result.success) {
         setIsModified(false)
-        showMessage('success', '设置保存成功')
+        showMessage('success', 'ERP 账号密码保存成功')
       } else {
         showMessage('error', result.error || '保存失败')
       }
     } catch (error) {
-      showMessage('error', '保存设置时发生错误')
+      showMessage('error', '保存配置时发生错误')
     }
   }
 
@@ -97,7 +84,11 @@ const SettingsPage: React.FC = () => {
     <div className="flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-500 mt-6">
       {message && (
         <div
-          className={`fixed top-5 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-[10000] text-sm font-medium transition-all ${message.type === 'success' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}`}
+          className={`fixed top-5 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-[10000] text-sm font-medium transition-all ${
+            message.type === 'success'
+              ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+              : 'bg-red-50 text-red-600 border border-red-200'
+          }`}
         >
           {message.text}
         </div>
@@ -107,58 +98,56 @@ const SettingsPage: React.FC = () => {
         <div className="border-b border-slate-100 bg-slate-50 px-6 py-5">
           <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-800">
             <SettingsIcon size={20} className="text-slate-600" />
-            环境与认证配置
+            ERP 账号配置
           </h2>
           <p className="text-sm text-slate-500 mt-1">
-            设置 ERP 系统的入口地址及自动化登录凭证。此配置将自动同步至本地 <code>.env</code> 文件。
+            设置 ERP 系统的登录账号和密码。此配置将存储在数据库中，按用户管理。
           </p>
         </div>
 
-        <div className="p-6 space-y-6 bg-white flex flex-col items-center">
-          <div className="w-full max-w-md">
+        <div className="p-6 space-y-6 bg-white">
+          <div className="w-full max-w-md mx-auto">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              ERP 基础访问地址 (URL)
+              <span className="flex items-center gap-2">
+                <User size={16} className="text-slate-500" />
+                ERP 登录账号
+              </span>
             </label>
             <input
-              type="url"
-              placeholder="https://erp.example.com"
+              type="text"
+              placeholder="输入 ERP 账号"
+              value={credentials.username}
+              onChange={(e) => {
+                setCredentials((prev) => ({ ...prev, username: e.target.value }))
+                setIsModified(true)
+              }}
               className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
-              value={settings.erp?.url || ''}
-              onChange={(e) => updateSettings('erp', 'url', e.target.value)}
             />
           </div>
 
-          <div className="w-full max-w-md grid grid-cols-2 gap-5">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                登录账号 (Username)
-              </label>
-              <input
-                type="text"
-                placeholder="输入 ERP 账号"
-                className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
-                value={settings.erp?.username || ''}
-                onChange={(e) => updateSettings('erp', 'username', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                登录密码 (Password)
-              </label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
-                value={settings.erp?.password || ''}
-                onChange={(e) => updateSettings('erp', 'password', e.target.value)}
-              />
-            </div>
+          <div className="w-full max-w-md mx-auto">
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              <span className="flex items-center gap-2">
+                <Key size={16} className="text-slate-500" />
+                ERP 登录密码
+              </span>
+            </label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={credentials.password}
+              onChange={(e) => {
+                setCredentials((prev) => ({ ...prev, password: e.target.value }))
+                setIsModified(true)
+              }}
+              className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
+            />
           </div>
 
-          <div className="w-full max-w-md pt-6 mt-2 border-t border-slate-100 flex justify-center">
+          <div className="w-full max-w-md mx-auto pt-6 mt-2 border-t border-slate-100 flex justify-center">
             <button
               className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 text-white px-8 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-sm transition-colors"
-              onClick={handleSaveSettings}
+              onClick={handleSaveCredentials}
               disabled={!isModified}
             >
               <Save size={18} />

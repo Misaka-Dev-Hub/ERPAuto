@@ -2,55 +2,25 @@
  * Settings IPC Handler
  *
  * Provides IPC handlers for settings management:
- * - Get/set settings
- * - Reset to defaults
- * - Test ERP connection
+ * - Get/set ERP credentials (stored in database per user)
+ * - Reset to defaults (Admin only)
  * - Test database connection
+ *
+ * Note: ERP configuration is stored in database (dbo_BIPUsers table)
+ * and managed per-user via UserErpConfigService.
+ * Other settings (database, paths, etc.) are managed via config.yaml
  */
 
 import { ipcMain } from 'electron'
 import { ConfigManager } from '../services/config/config-manager'
 import { SessionManager } from '../services/user/session-manager'
 import { UserErpConfigService } from '../services/user/user-erp-config-service'
-import { ErpAuthService } from '../services/erp/erp-auth'
 import { MySqlService } from '../services/database/mysql'
 import { SqlServerService } from '../services/database/sql-server'
 import { createLogger } from '../services/logger'
-import type {
-  SettingsData,
-  UserType,
-  ConnectionTestResult,
-  SaveSettingsResult
-} from '../types/settings.types'
+import type { UserType, ConnectionTestResult, SaveSettingsResult } from '../types/settings.types'
 
 const log = createLogger('SettingsHandler')
-
-/**
- * Filter settings by user type
- * Admin users get all settings, User users get limited settings
- */
-function filterSettingsByUserType(settings: SettingsData, userType: UserType): SettingsData {
-  if (userType === 'Admin') {
-    return settings // Return all settings for Admin
-  }
-
-  // User users get limited settings
-  return {
-    erp: {
-      username: settings.erp.username,
-      password: settings.erp.password,
-      headless: settings.erp.headless,
-      url: settings.erp.url,
-      ignoreHttpsErrors: settings.erp.ignoreHttpsErrors,
-      autoCloseBrowser: settings.erp.autoCloseBrowser
-    },
-    paths: settings.paths,
-    // Include minimal required fields for other sections
-    database: settings.database,
-    extraction: settings.extraction,
-    validation: settings.validation
-  }
-}
 
 /**
  * Register IPC handlers for settings management
@@ -58,6 +28,7 @@ function filterSettingsByUserType(settings: SettingsData, userType: UserType): S
 export function registerSettingsHandlers(): void {
   const configManager = ConfigManager.getInstance()
   const sessionManager = SessionManager.getInstance()
+  const erpConfigService = UserErpConfigService.getInstance()
 
   /**
    * Get current user type
@@ -67,125 +38,57 @@ export function registerSettingsHandlers(): void {
   })
 
   /**
-   * Get settings (ERP config from database, others from .env)
+   * Get ERP credentials for current user
    */
-  ipcMain.handle('settings:getSettings', async (): Promise<SettingsData> => {
-    const userType = (sessionManager.getUserType() as UserType) || 'Guest'
-    log.debug('Getting settings', { userType })
+  ipcMain.handle('settings:getSettings', async (): Promise<any> => {
+    try {
+      // Get ERP credentials from database for current user
+      const userErpConfig = await erpConfigService.getCurrentUserErpConfig()
 
-    // Get base settings from .env
-    const settings = configManager.getAllSettings()
-
-    // Override ERP config with user-specific config from database
-    const erpConfigService = UserErpConfigService.getInstance()
-    const userErpConfig = await erpConfigService.getCurrentUserErpConfig()
-
-    if (userErpConfig) {
-      settings.erp = {
-        url: userErpConfig.url || settings.erp.url,
-        username: userErpConfig.username || settings.erp.username,
-        password: userErpConfig.password || settings.erp.password,
-        headless: settings.erp.headless,
-        ignoreHttpsErrors: settings.erp.ignoreHttpsErrors,
-        autoCloseBrowser: settings.erp.autoCloseBrowser
+      return {
+        erp: {
+          username: userErpConfig?.username || '',
+          password: userErpConfig?.password || ''
+        }
       }
+    } catch (error) {
+      log.error('Failed to get ERP credentials', { error })
+      return { erp: { username: '', password: '' } }
     }
-
-    return filterSettingsByUserType(settings, userType)
   })
 
   /**
-   * Save settings (ERP config to database, others to .env)
+   * Save ERP credentials for current user
    */
   ipcMain.handle(
     'settings:saveSettings',
-    async (_event, settings: Partial<SettingsData>): Promise<SaveSettingsResult> => {
+    async (_event, settings: any): Promise<SaveSettingsResult> => {
       try {
-        log.info('Saving settings', {
-          sections: Object.keys(settings)
-        })
+        log.info('Saving ERP credentials')
 
-        // Step 1: Save ERP configuration to database (if provided)
         if (settings.erp) {
-          const erpConfigService = UserErpConfigService.getInstance()
-          const sessionManager = SessionManager.getInstance()
+          // Update ERP credentials in database for current user
           const currentUser = sessionManager.getUserInfo()
-
           if (!currentUser) {
-            log.warn('No authenticated user found')
-            return {
-              success: false,
-              error: '未找到认证用户，无法保存 ERP 配置'
-            }
+            return { success: false, error: '未找到当前用户' }
           }
 
-          // Only save if ERP fields are provided
-          const hasErpFields =
-            settings.erp.url !== undefined ||
-            settings.erp.username !== undefined ||
-            settings.erp.password !== undefined
-
-          if (hasErpFields) {
-            // Get current ERP config to preserve headless, ignoreHttpsErrors, autoCloseBrowser
-            const currentErpConfig = await erpConfigService.getCurrentUserErpConfig()
-
-            const erpConfigToSave = {
-              url: settings.erp.url ?? currentErpConfig?.url ?? '',
-              username: settings.erp.username ?? currentErpConfig?.username ?? '',
-              password: settings.erp.password ?? currentErpConfig?.password ?? ''
-            }
-
-            log.info('Saving ERP config to database for user', {
-              username: currentUser.username,
-              url: erpConfigToSave.url
-            })
-
-            const erpSaveSuccess =
-              await erpConfigService.updateCurrentUserErpConfig(erpConfigToSave)
-
-            if (!erpSaveSuccess) {
-              log.error('Failed to save ERP config to database')
-              return {
-                success: false,
-                error: '保存 ERP 配置到数据库失败'
-              }
-            }
+          // Ensure undefined values are converted to empty strings
+          const erpCredentials = {
+            username: settings.erp.username || '',
+            password: settings.erp.password || ''
           }
+
+          await erpConfigService.updateCurrentUserErpConfig(erpCredentials)
+
+          log.info('ERP credentials saved successfully')
         }
 
-        // Step 2: Save other settings (database, paths, extraction, validation, execution) to .env
-        // Filter out ERP fields since they're now in database
-        const nonErpSettings: Partial<SettingsData> = { ...settings }
-        delete nonErpSettings.erp
-
-        // Only save to .env if there are non-ERP settings
-        if (Object.keys(nonErpSettings).length > 0) {
-          log.info('Saving non-ERP settings to .env file', {
-            sections: Object.keys(nonErpSettings)
-          })
-
-          const result = await configManager.savePartialSettings(nonErpSettings)
-
-          if (!result.success) {
-            log.error('Failed to save settings to .env', {
-              error: result.error
-            })
-            return {
-              success: false,
-              error: result.error || '保存配置到文件失败'
-            }
-          }
-        }
-
-        log.info('Settings saved successfully')
         return { success: true }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
-        log.error('Error saving settings', { error: message })
-        return {
-          success: false,
-          error: `保存设置失败：${message}`
-        }
+        log.error('Error saving ERP credentials', { error: message })
+        return { success: false, error: `保存配置失败：${message}` }
       }
     }
   )
@@ -202,8 +105,7 @@ export function registerSettingsHandlers(): void {
       }
 
       log.info('Resetting settings to defaults')
-      configManager.resetToDefaults()
-      const success = await configManager.save()
+      const success = await configManager.resetToDefaults()
       if (success) {
         log.info('Settings reset to defaults successfully')
         return { success: true }
@@ -219,75 +121,18 @@ export function registerSettingsHandlers(): void {
   })
 
   /**
-   * Test ERP connection
-   */
-  ipcMain.handle('settings:testErpConnection', async (): Promise<ConnectionTestResult> => {
-    try {
-      log.info('Testing ERP connection')
-
-      // Get current user's ERP config from database
-      const erpConfigService = UserErpConfigService.getInstance()
-      const userErpConfig = await erpConfigService.getCurrentUserErpConfig()
-
-      if (
-        !userErpConfig ||
-        !userErpConfig.url ||
-        !userErpConfig.username ||
-        !userErpConfig.password
-      ) {
-        log.warn('ERP connection test failed - missing configuration')
-        return {
-          success: false,
-          message: '请先配置 ERP URL、用户名和密码'
-        }
-      }
-
-      // Create ERP auth service and try to login
-      const erpAuthService = new ErpAuthService({
-        url: userErpConfig.url,
-        username: userErpConfig.username,
-        password: userErpConfig.password
-      })
-
-      try {
-        await erpAuthService.login()
-        // Login successful, close browser
-        await erpAuthService.close()
-        log.info('ERP connection test successful')
-        return {
-          success: true,
-          message: 'ERP 连接测试成功！'
-        }
-      } catch (loginError) {
-        const errorMessage = loginError instanceof Error ? loginError.message : '登录失败'
-        log.error('ERP login failed', { error: errorMessage })
-        return {
-          success: false,
-          message: `ERP 连接测试失败：${errorMessage}`
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      log.error('ERP connection test error', { error: message })
-      return {
-        success: false,
-        message: `ERP 连接测试失败：${message}`
-      }
-    }
-  })
-
-  /**
    * Test database connection
    */
   ipcMain.handle('settings:testDbConnection', async (): Promise<ConnectionTestResult> => {
     try {
       log.info('Testing database connection')
-      const settings = configManager.getAllSettings()
-      const dbConfig = settings.database
+      const config = configManager.getConfig()
+      const dbType = config.database.activeType
 
-      if (dbConfig.dbType === 'mysql') {
+      if (dbType === 'mysql') {
         // Test MySQL connection
-        if (!dbConfig.mysqlHost || !dbConfig.database || !dbConfig.username) {
+        const dbConfig = config.database.mysql
+        if (!dbConfig.host || !dbConfig.database || !dbConfig.username) {
           log.warn('MySQL connection test failed - missing configuration')
           return {
             success: false,
@@ -296,8 +141,8 @@ export function registerSettingsHandlers(): void {
         }
 
         const mysqlService = new MySqlService({
-          host: dbConfig.mysqlHost,
-          port: dbConfig.mysqlPort,
+          host: dbConfig.host,
+          port: dbConfig.port,
           user: dbConfig.username,
           password: dbConfig.password,
           database: dbConfig.database
@@ -321,6 +166,7 @@ export function registerSettingsHandlers(): void {
         }
       } else {
         // Test SQL Server connection
+        const dbConfig = config.database.sqlserver
         if (!dbConfig.server || !dbConfig.database || !dbConfig.username) {
           log.warn('SQL Server connection test failed - missing configuration')
           return {
@@ -331,12 +177,12 @@ export function registerSettingsHandlers(): void {
 
         const sqlServerService = new SqlServerService({
           server: dbConfig.server,
-          port: 1433, // Default SQL Server port
+          port: dbConfig.port,
           user: dbConfig.username,
           password: dbConfig.password,
           database: dbConfig.database,
           options: {
-            trustServerCertificate: true
+            trustServerCertificate: dbConfig.trustServerCertificate
           }
         })
 

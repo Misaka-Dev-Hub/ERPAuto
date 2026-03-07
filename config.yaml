@@ -1,0 +1,63 @@
+# ================================
+# ERPAuto 配置文件
+# ================================
+# 注意：ERP 认证用户名和密码存储在数据库 (dbo_BIPUsers) 中，按用户管理
+# ERP URL 是固定的基础设施配置，在此处配置
+# ================================
+
+# ERP 系统配置
+erp:
+  url: 'https://68.11.34.30:8082' # ERP 系统固定地址
+
+# 数据库配置
+# 支持 MySQL 和 SQL Server 双配置，通过 activeType 切换
+database:
+  activeType: mysql # 当前使用的数据库类型：mysql 或 sqlserver
+
+  # MySQL 配置
+  mysql:
+    host: 192.168.31.83
+    port: 3306
+    database: BLD_DB
+    username: remote_user
+    password: 3.1415926Beeke # 密码为空时使用空密码
+    charset: utf8mb4 # 字符集
+
+  # SQL Server 配置
+  sqlserver:
+    server: localhost # SQL Server 地址
+    port: 1433 # 默认端口 1433
+    database: BLD_DB
+    username: peng
+    password: Cqbld123456.
+    driver: 'ODBC Driver 18 for SQL Server' # ODBC 驱动
+    trustServerCertificate: true # 信任服务器证书（开发环境设为 true）
+
+# 路径配置
+paths:
+  dataDir: 'D:/python/playwrite/data/'
+  defaultOutput: '离散备料计划维护_合并.xlsx'
+  validationOutput: '物料状态校验结果.xlsx'
+
+# 数据提取配置
+extraction:
+  batchSize: 100 # 每批处理的记录数
+  verbose: true # 详细日志
+  autoConvert: true # 自动转换为 Excel
+  mergeBatches: true # 合并批次
+  enableDbPersistence: true # 启用数据库持久化
+
+# 物料校验配置
+validation:
+  dataSource: database_full # 数据源：database_full, database_filtered, excel_existing, excel_full
+  batchSize: 2000 # 校验批次大小
+  matchMode: substring # 匹配模式：substring (模糊) 或 exact (精确)
+  enableCrud: false # 启用 CRUD 操作
+  defaultManager: '' # 默认负责人
+
+# 订单号解析配置
+# 用于从数据库表中解析订单号与 productionID 的映射
+orderResolution:
+  tableName: 'productionContractData_26年压力表合同数据'
+  productionIdField: '总排号'
+  orderNumberField: '生产订单号'

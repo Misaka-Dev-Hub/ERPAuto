@@ -5,6 +5,7 @@
  * Supports both MySQL and SQL Server databases.
  */
 
+import { ConfigManager } from '../config/config-manager'
 import { MySqlService } from './mysql'
 import { SqlServerService } from './sql-server'
 import type {
@@ -23,42 +24,43 @@ const log = createLogger('DatabaseFactory')
 const instances: Map<DatabaseType, IDatabaseService> = new Map()
 
 /**
- * Get the current database type from environment
+ * Get the current database type from config manager
  */
 export function getDatabaseType(): DatabaseType {
-  const dbType = process.env.DB_TYPE?.toLowerCase()
-  if (dbType === 'sqlserver' || dbType === 'mssql') {
-    return 'sqlserver'
-  }
-  return 'mysql'
+  const configManager = ConfigManager.getInstance()
+  return configManager.getDatabaseType()
 }
 
 /**
- * Create MySQL configuration from environment variables
+ * Create MySQL configuration from config manager
  */
 export function createMySqlConfig(): MySqlConfig {
+  const configManager = ConfigManager.getInstance()
+  const dbConfig = configManager.getConfig().database.mysql
   return {
-    host: process.env.DB_MYSQL_HOST || 'localhost',
-    port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
-    user: process.env.DB_USERNAME || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || ''
+    host: dbConfig.host,
+    port: dbConfig.port,
+    user: dbConfig.username,
+    password: dbConfig.password,
+    database: dbConfig.database
   }
 }
 
 /**
- * Create SQL Server configuration from environment variables
+ * Create SQL Server configuration from config manager
  */
 export function createSqlServerConfig(): SqlServerConfig {
+  const configManager = ConfigManager.getInstance()
+  const dbConfig = configManager.getConfig().database.sqlserver
   return {
-    server: process.env.DB_SERVER || 'localhost',
-    port: parseInt(process.env.DB_SQLSERVER_PORT || '1433', 10),
-    user: process.env.DB_USERNAME || 'sa',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || '',
+    server: dbConfig.server,
+    port: dbConfig.port,
+    user: dbConfig.username,
+    password: dbConfig.password,
+    database: dbConfig.database,
     options: {
       encrypt: false,
-      trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes'
+      trustServerCertificate: dbConfig.trustServerCertificate
     }
   }
 }
@@ -68,7 +70,7 @@ export function createSqlServerConfig(): SqlServerConfig {
  *
  * Uses singleton pattern - returns cached instance if available.
  *
- * @param type - Optional database type override (defaults to DB_TYPE env var)
+ * @param type - Optional database type override (defaults to config)
  * @returns Database service instance
  */
 export async function create(type?: DatabaseType): Promise<IDatabaseService> {
@@ -105,7 +107,7 @@ export async function create(type?: DatabaseType): Promise<IDatabaseService> {
 /**
  * Get existing database service without creating new one
  *
- * @param type - Optional database type (defaults to DB_TYPE env var)
+ * @param type - Optional database type (defaults to config)
  * @returns Database service instance or undefined
  */
 export function get(type?: DatabaseType): IDatabaseService | undefined {

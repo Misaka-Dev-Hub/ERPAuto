@@ -2,6 +2,9 @@
  * Settings types and interfaces
  *
  * Defines configuration structures for ERPAuto settings management
+ *
+ * Note: ERP configuration is stored in database (dbo_BIPUsers table)
+ * and managed per-user, not in settings.
  */
 
 /**
@@ -27,24 +30,6 @@ export type ValidationDataSource =
   | 'database_filtered'
   | 'excel_existing'
   | 'excel_full'
-
-/**
- * ERP configuration
- */
-export interface ErpConfig {
-  /** ERP system URL */
-  url: string
-  /** ERP username */
-  username: string
-  /** ERP password */
-  password: string
-  /** Headless browser mode */
-  headless: boolean
-  /** Ignore HTTPS certificate errors */
-  ignoreHttpsErrors: boolean
-  /** Auto close browser after operations */
-  autoCloseBrowser: boolean
-}
 
 /**
  * Database configuration
@@ -112,10 +97,9 @@ export interface ValidationConfig {
 
 /**
  * Complete settings data structure
+ * Note: No ERP configuration - it's stored in database per user
  */
 export interface SettingsData {
-  /** ERP configuration */
-  erp: ErpConfig
   /** Database configuration */
   database: DatabaseConfig
   /** Path configuration */
@@ -158,8 +142,6 @@ export interface SettingsAPI {
   saveSettings: (settings: SettingsData) => Promise<SaveSettingsResult>
   /** Reset to defaults (Admin only) */
   resetDefaults: () => Promise<SaveSettingsResult>
-  /** Test ERP connection */
-  testErpConnection: () => Promise<ConnectionTestResult>
   /** Test database connection */
   testDbConnection: () => Promise<ConnectionTestResult>
 }

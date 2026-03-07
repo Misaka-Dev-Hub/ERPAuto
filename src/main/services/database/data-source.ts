@@ -2,21 +2,23 @@
  * TypeORM Data Source Configuration
  *
  * Provides a centralized database connection for TypeORM entities.
- * Supports both MySQL and SQL Server based on DB_TYPE environment variable.
+ * Supports both MySQL and SQL Server based on configuration.
+ *
+ * Note: Configuration is now loaded from config.yaml via ConfigManager,
+ * not from environment variables.
  */
 
 import 'reflect-metadata'
 import { DataSource, DataSourceOptions } from 'typeorm'
+import { ConfigManager } from '../config/config-manager'
 
 /**
- * Get database type from environment
+ * Get database type from config manager
  */
 function getDatabaseType(): 'mysql' | 'mssql' {
-  const dbType = process.env.DB_TYPE?.toLowerCase()
-  if (dbType === 'sqlserver' || dbType === 'mssql') {
-    return 'mssql'
-  }
-  return 'mysql'
+  const configManager = ConfigManager.getInstance()
+  const dbType = configManager.getDatabaseType()
+  return dbType === 'sqlserver' ? 'mssql' : 'mysql'
 }
 
 /**
@@ -24,36 +26,40 @@ function getDatabaseType(): 'mysql' | 'mssql' {
  */
 function buildDataSourceOptions(): DataSourceOptions {
   const type = getDatabaseType()
+  const configManager = ConfigManager.getInstance()
+  const config = configManager.getConfig()
 
   const commonOptions: Partial<DataSourceOptions> = {
     entities: [__dirname + '/entities/*.{ts,js}'],
     synchronize: false, // Never auto-sync in production
-    logging: process.env.NODE_ENV !== 'production'
+    logging: false
   }
 
   if (type === 'mssql') {
+    const dbConfig = config.database.sqlserver
     return {
       type: 'mssql',
-      host: process.env.DB_SERVER || 'localhost',
-      port: parseInt(process.env.DB_SQLSERVER_PORT || '1433', 10),
-      username: process.env.DB_USERNAME || 'sa',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || '',
+      host: dbConfig.server,
+      port: dbConfig.port,
+      username: dbConfig.username,
+      password: dbConfig.password,
+      database: dbConfig.database,
       options: {
         encrypt: false,
-        trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes'
+        trustServerCertificate: dbConfig.trustServerCertificate
       },
       ...commonOptions
     } as DataSourceOptions
   }
 
+  const dbConfig = config.database.mysql
   return {
     type: 'mysql',
-    host: process.env.DB_MYSQL_HOST || 'localhost',
-    port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
-    username: process.env.DB_USERNAME || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || '',
+    host: dbConfig.host,
+    port: dbConfig.port,
+    username: dbConfig.username,
+    password: dbConfig.password,
+    database: dbConfig.database,
     ...commonOptions
   } as DataSourceOptions
 }

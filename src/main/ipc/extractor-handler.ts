@@ -8,6 +8,7 @@ import { withErrorHandling, type IpcResult } from './index'
 import { ErpConnectionError, ValidationError, DatabaseQueryError } from '../types/errors'
 import type { ExtractorInput, ExtractorResult, ExtractionProgress } from '../types/extractor.types'
 import { UserErpConfigService } from '../services/user/user-erp-config-service'
+import { ConfigManager } from '../services/config/config-manager'
 
 const log = createLogger('ExtractorHandler')
 
@@ -39,23 +40,35 @@ function sendLog(windowId: number, level: string, message: string): void {
 
 /**
  * Get ERP configuration for current user
+ * URL is from config.yaml (fixed infrastructure)
+ * Username and password are from user's database config
  */
 async function getErpConfig(): Promise<{
   url: string
   username: string
   password: string
 }> {
-  const erpConfigService = UserErpConfigService.getInstance()
-  const config = await erpConfigService.getCurrentUserErpConfig()
+  // Get ERP URL from config.yaml (fixed for all users)
+  const configManager = ConfigManager.getInstance()
+  const globalConfig = configManager.getConfig()
+  const erpUrl = globalConfig.erp.url
 
-  if (!config || !config.url || !config.username || !config.password) {
+  // Get username and password from user's database config
+  const erpConfigService = UserErpConfigService.getInstance()
+  const userConfig = await erpConfigService.getCurrentUserErpConfig()
+
+  if (!userConfig || !userConfig.username || !userConfig.password) {
     throw new ValidationError(
-      'ERP 配置不完整。请在设置中配置 ERP URL、用户名和密码',
+      'ERP 配置不完整。请在设置中配置 ERP 用户名和密码',
       'VAL_MISSING_REQUIRED'
     )
   }
 
-  return config
+  return {
+    url: erpUrl,
+    username: userConfig.username,
+    password: userConfig.password
+  }
 }
 
 /**
@@ -182,6 +195,14 @@ export function registerExtractorHandlers(): void {
             rowCount: result.recordCount,
             errorCount: result.errors.length
           })
+
+          // Log detailed error information if any errors occurred
+          if (result.errors.length > 0) {
+            log.warn('Extraction errors occurred', { errors: result.errors })
+            result.errors.forEach((err, index) => {
+              log.error(`Error ${index + 1}/${result.errors.length}: ${err}`)
+            })
+          }
 
           return result
         } finally {

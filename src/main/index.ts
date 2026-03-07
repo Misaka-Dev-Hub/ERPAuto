@@ -3,14 +3,12 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerIpcHandlers } from './ipc'
-import * as dotenv from 'dotenv'
+import { ConfigManager } from './services/config/config-manager'
 import { fileURLToPath } from 'url'
-import { dirname, resolve } from 'path'
+import { dirname } from 'path'
 
-// Load environment variables from .env file
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-dotenv.config({ path: resolve(__dirname, '../../.env') })
 
 function createWindow(): void {
   // Create the browser window.
@@ -47,7 +45,17 @@ function createWindow(): void {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Initialize ConfigManager BEFORE registering IPC handlers
+  // This ensures config is loaded before any service tries to use it
+  try {
+    const configManager = ConfigManager.getInstance()
+    await configManager.initialize()
+  } catch (error) {
+    console.error('Failed to initialize ConfigManager:', error)
+    // Continue anyway - default config will be created
+  }
+
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
@@ -58,7 +66,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // Register IPC handlers
+  // Register IPC handlers (after ConfigManager is initialized)
   registerIpcHandlers()
 
   // IPC test

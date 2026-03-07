@@ -1,13 +1,14 @@
 /**
  * User ERP Configuration Service
  *
- * Manages ERP configuration (URL, username, password) stored in the BIPUsers table.
+ * Manages ERP credentials (username, password) stored in the BIPUsers table.
  * Each user can have their own ERP credentials.
+ * ERP URL is fixed and stored in config.yaml.
  *
  * Features:
- * - Get current user's ERP config
- * - Update current user's ERP config
- * - Get ERP config for any user (admin only)
+ * - Get current user's ERP credentials
+ * - Update current user's ERP credentials
+ * - Get ERP credentials for any user (admin only)
  */
 
 import { BIPUsersDAO } from './bip-users-dao'
@@ -17,10 +18,9 @@ import { createLogger } from '../logger'
 const log = createLogger('UserErpConfigService')
 
 /**
- * ERP Configuration object
+ * ERP Credentials object (username and password only)
  */
-export interface ErpConfig {
-  url: string
+export interface ErpCredentials {
   username: string
   password: string
 }
@@ -48,9 +48,9 @@ export class UserErpConfigService {
 
   /**
    * Get ERP configuration for the current authenticated user
-   * @returns ERP configuration or null if not found
+   * @returns ERP credentials or null if not found
    */
-  async getCurrentUserErpConfig(): Promise<ErpConfig | null> {
+  async getCurrentUserErpConfig(): Promise<ErpCredentials | null> {
     try {
       const sessionManager = SessionManager.getInstance()
       const currentUser = sessionManager.getUserInfo()
@@ -60,56 +60,55 @@ export class UserErpConfigService {
         return null
       }
 
-      log.info('Fetching ERP config for user', { username: currentUser.username })
-      const config = await this.dao.getUserErpConfig(currentUser.username)
+      log.info('Fetching ERP credentials for user', { username: currentUser.username })
+      const config = await this.dao.getUserErpCredentials(currentUser.username)
 
       if (!config) {
-        log.warn('No ERP config found for user', { username: currentUser.username })
+        log.warn('No ERP credentials found for user', { username: currentUser.username })
         return null
       }
 
-      log.info('ERP config retrieved successfully', {
+      log.info('ERP credentials retrieved successfully', {
         username: currentUser.username,
-        hasUrl: !!config.url,
         hasUsername: !!config.username,
         hasPassword: !!config.password
       })
 
       return config
     } catch (error) {
-      log.error('Error getting current user ERP config', { error })
+      log.error('Error getting current user ERP credentials', { error })
       return null
     }
   }
 
   /**
-   * Get ERP configuration for a specific user (admin only)
-   * @param username - The username to get ERP config for
-   * @returns ERP configuration or null if not found
+   * Get ERP credentials for a specific user (admin only)
+   * @param username - The username to get ERP credentials for
+   * @returns ERP credentials or null if not found
    */
-  async getUserErpConfig(username: string): Promise<ErpConfig | null> {
+  async getUserErpConfig(username: string): Promise<ErpCredentials | null> {
     try {
-      log.info('Fetching ERP config for user', { username })
-      const config = await this.dao.getUserErpConfig(username)
+      log.info('Fetching ERP credentials for user', { username })
+      const config = await this.dao.getUserErpCredentials(username)
 
       if (!config) {
-        log.warn('No ERP config found for user', { username })
+        log.warn('No ERP credentials found for user', { username })
         return null
       }
 
       return config
     } catch (error) {
-      log.error('Error getting user ERP config', { error })
+      log.error('Error getting user ERP credentials', { error })
       return null
     }
   }
 
   /**
-   * Update ERP configuration for the current authenticated user
-   * @param config - ERP configuration to save
+   * Update ERP credentials for the current authenticated user
+   * @param credentials - ERP credentials to save
    * @returns True if successful
    */
-  async updateCurrentUserErpConfig(config: ErpConfig): Promise<boolean> {
+  async updateCurrentUserErpConfig(credentials: ErpCredentials): Promise<boolean> {
     try {
       const sessionManager = SessionManager.getInstance()
       const currentUser = sessionManager.getUserInfo()
@@ -119,52 +118,50 @@ export class UserErpConfigService {
         return false
       }
 
-      log.info('Updating ERP config for user', { username: currentUser.username })
-      const success = await this.dao.updateUserErpConfig(
+      log.info('Updating ERP credentials for user', { username: currentUser.username })
+      const success = await this.dao.updateUserErpCredentials(
         currentUser.username,
-        config.url,
-        config.username,
-        config.password
+        credentials.username,
+        credentials.password
       )
 
       if (success) {
-        log.info('ERP config updated successfully', { username: currentUser.username })
+        log.info('ERP credentials updated successfully', { username: currentUser.username })
       } else {
-        log.error('Failed to update ERP config', { username: currentUser.username })
+        log.error('Failed to update ERP credentials', { username: currentUser.username })
       }
 
       return success
     } catch (error) {
-      log.error('Error updating current user ERP config', { error })
+      log.error('Error updating current user ERP credentials', { error })
       return false
     }
   }
 
   /**
-   * Update ERP configuration for a specific user (admin only)
-   * @param username - The username to update ERP config for
-   * @param config - ERP configuration to save
+   * Update ERP credentials for a specific user (admin only)
+   * @param username - The username to update ERP credentials for
+   * @param credentials - ERP credentials to save
    * @returns True if successful
    */
-  async updateUserErpConfig(username: string, config: ErpConfig): Promise<boolean> {
+  async updateUserErpConfig(username: string, credentials: ErpCredentials): Promise<boolean> {
     try {
-      log.info('Updating ERP config for user', { username })
-      const success = await this.dao.updateUserErpConfig(
+      log.info('Updating ERP credentials for user', { username })
+      const success = await this.dao.updateUserErpCredentials(
         username,
-        config.url,
-        config.username,
-        config.password
+        credentials.username,
+        credentials.password
       )
 
       if (success) {
-        log.info('ERP config updated successfully', { username })
+        log.info('ERP credentials updated successfully', { username })
       } else {
-        log.error('Failed to update ERP config', { username })
+        log.error('Failed to update ERP credentials', { username })
       }
 
       return success
     } catch (error) {
-      log.error('Error updating user ERP config', { error })
+      log.error('Error updating user ERP credentials', { error })
       return false
     }
   }

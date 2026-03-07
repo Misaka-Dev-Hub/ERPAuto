@@ -2,8 +2,10 @@
  * Migration Script: Add ERP parameters to BIPUsers table
  *
  * This script adds ERP_URL, ERP_Username, and ERP_Password columns
- * to the dbo_BIPUsers table and initializes all existing users
- * with the same ERP credentials from the current .env configuration.
+ * to the dbo_BIPUsers table and initializes all existing users.
+ *
+ * Note: ERP credentials are now stored per-user in the database.
+ * This migration is for backward compatibility only.
  *
  * Usage:
  *   npx tsx src/main/services/user/migration/add-erp-params-migration.ts
@@ -16,6 +18,7 @@ import { dirname } from 'path'
 import { ConfigManager } from '../../config/config-manager'
 import { MySqlService } from '../../database/mysql'
 import { SqlServerService } from '../../database/sql-server'
+import yaml from 'js-yaml'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -28,8 +31,7 @@ const MIGRATION_CONFIG = {
   tableName: {
     mysql: 'dbo_BIPUsers',
     sqlserver: '[dbo].[BIPUsers]'
-  },
-  columns: ['ERP_URL', 'ERP_Username', 'ERP_Password']
+  }
 }
 
 /**
@@ -40,15 +42,12 @@ async function checkColumnExistsMySQL(
   tableName: string,
   columnName: string
 ): Promise<boolean> {
-  const sql = `
-    SELECT COUNT(*) as count 
-    FROM INFORMATION_SCHEMA.COLUMNS 
-    WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = ? 
-      AND COLUMN_NAME = ?
-  `
-  const result = await mysqlService.query(sql, [tableName, columnName])
-  return result.rows.length > 0 && (result.rows[0].count as number) > 0
+  const result = await mysqlService.query(
+    `SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.COLUMNS 
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [tableName, columnName]
+  )
+  return (result.rows[0]?.count as number) > 0
 }
 
 /**
@@ -59,16 +58,12 @@ async function checkColumnExistsSqlServer(
   tableName: string,
   columnName: string
 ): Promise<boolean> {
-  const sql = `
-    SELECT COUNT(*) as count 
-    FROM sys.columns 
-    WHERE object_id = OBJECT_ID(${tableName}) 
-      AND name = @columnName
-  `
-  const result = await sqlServerService.queryWithParams(sql, {
-    columnName: { value: columnName.replace('ERP_', ''), type: require('mssql').NVarChar(128) }
-  })
-  return result.rows.length > 0 && (result.rows[0].count as number) > 0
+  const result = await sqlServerService.query(
+    `SELECT COUNT(*) as count FROM sys.columns 
+     WHERE OBJECT_ID = OBJECT_ID(?) AND name = ?`,
+    [tableName, columnName]
+  )
+  return (result.rows[0]?.count as number) > 0
 }
 
 /**
@@ -80,9 +75,8 @@ async function addColumnMySQL(
   columnName: string,
   columnType: string
 ): Promise<void> {
-  const sql = `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnType} NULL`
-  await mysqlService.query(sql)
-  console.log(`  ✓ Added column ${columnName} to ${tableName}`)
+  await mysqlService.query(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnType}`)
+  console.log(`  ✓ Added column ${columnName} (${columnType})`)
 }
 
 /**
@@ -94,49 +88,64 @@ async function addColumnSqlServer(
   columnName: string,
   columnType: string
 ): Promise<void> {
-  const sql = `ALTER TABLE ${tableName} ADD ${columnName} ${columnType} NULL`
-  await sqlServerService.query(sql)
-  console.log(`  ✓ Added column ${columnName} to ${tableName}`)
+  await sqlServerService.query(`ALTER TABLE ${tableName} ADD ${columnName} ${columnType}`)
+  console.log(`  ✓ Added column ${columnName} (${columnType})`)
 }
 
 /**
- * Update all users with ERP credentials from .env
+ * Initialize ERP credentials for all users in MySQL
  */
 async function initializeErpCredentialsMySQL(
   mysqlService: MySqlService,
+  tableName: string,
   erpUrl: string,
   erpUsername: string,
   erpPassword: string
-): Promise<number> {
-  const sql = `
-    UPDATE ${MIGRATION_CONFIG.tableName.mysql}
-    SET ERP_URL = ?, ERP_Username = ?, ERP_Password = ?
-    WHERE ERP_URL IS NULL OR ERP_URL = ''
-  `
-  const result = await mysqlService.query(sql, [erpUrl, erpUsername, erpPassword])
-  return result.rowCount
+): Promise<void> {
+  const result = await mysqlService.query(`SELECT COUNT(*) as count FROM ${tableName}`)
+  const userCount = result.rows[0]?.count as number
+
+  if (userCount === 0) {
+    console.log('No users found in BIPUsers table')
+    return
+  }
+
+  console.log(`Initializing ERP credentials for ${userCount} user(s)...`)
+
+  await mysqlService.query(
+    `UPDATE ${tableName} SET ERP_URL = ?, ERP_Username = ?, ERP_Password = ?`,
+    [erpUrl, erpUsername, erpPassword]
+  )
+
+  console.log('✓ ERP credentials initialized for all users')
 }
 
 /**
- * Update all users with ERP credentials from .env (SQL Server)
+ * Initialize ERP credentials for all users in SQL Server
  */
 async function initializeErpCredentialsSqlServer(
   sqlServerService: SqlServerService,
+  tableName: string,
   erpUrl: string,
   erpUsername: string,
   erpPassword: string
-): Promise<number> {
-  const sql = `
-    UPDATE ${MIGRATION_CONFIG.tableName.sqlserver}
-    SET ERP_URL = @erpUrl, ERP_Username = @erpUsername, ERP_Password = @erpPassword
-    WHERE ERP_URL IS NULL OR ERP_URL = ''
-  `
-  const result = await sqlServerService.queryWithParams(sql, {
-    erpUrl: { value: erpUrl, type: require('mssql').NVarChar(500) },
-    erpUsername: { value: erpUsername, type: require('mssql').NVarChar(255) },
-    erpPassword: { value: erpPassword, type: require('mssql').NVarChar(255) }
-  })
-  return result.rowCount
+): Promise<void> {
+  const result = await sqlServerService.query(`SELECT COUNT(*) as count FROM ${tableName}`)
+  const userCount = result.rows[0]?.count as number
+
+  if (userCount === 0) {
+    console.log('No users found in BIPUsers table')
+    return
+  }
+
+  console.log(`Initializing ERP credentials for ${userCount} user(s)...`)
+
+  await sqlServerService.query(
+    `UPDATE ${tableName} SET ERP_URL = @p0, ERP_Username = @p1, ERP_Password = @p2`,
+    [erpUrl, erpUsername, erpPassword]
+  )
+
+  console.log('✓ ERP credentials initialized for all users')
 }
 
 /**
@@ -145,21 +154,17 @@ async function initializeErpCredentialsSqlServer(
 async function runMySQLMigration(configManager: ConfigManager): Promise<void> {
   console.log('\n📦 Running MySQL Migration...')
 
-  // Read database config from .env file with correct key names
-  const mysqlHost = configManager.get('DB_MYSQL_HOST', 'localhost')
-  const mysqlPort = configManager.getNumber('DB_MYSQL_PORT', 3306)
-  const mysqlUser = configManager.get('DB_USERNAME', 'root')
-  const mysqlPassword = configManager.get('DB_PASSWORD', '')
-  const mysqlDatabase = configManager.get('DB_NAME', '')
+  const config = configManager.getConfig()
+  const dbConfig = config.database.mysql
 
-  console.log(`Connecting to MySQL: ${mysqlHost}:${mysqlPort}/${mysqlDatabase}`)
+  console.log(`Connecting to MySQL: ${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`)
 
   const mysqlService = new MySqlService({
-    host: mysqlHost,
-    port: mysqlPort,
-    user: mysqlUser,
-    password: mysqlPassword,
-    database: mysqlDatabase
+    host: dbConfig.host,
+    port: dbConfig.port,
+    user: dbConfig.username,
+    password: dbConfig.password,
+    database: dbConfig.database
   })
 
   try {
@@ -182,29 +187,18 @@ async function runMySQLMigration(configManager: ConfigManager): Promise<void> {
       }
     }
 
-    // Initialize ERP credentials from .env
-    const erpUrl = configManager.get('ERP_URL', '')
-    const erpUsername = configManager.get('ERP_USERNAME', '')
-    const erpPassword = configManager.get('ERP_PASSWORD', '')
+    // Note: ERP credentials are now managed per-user via settings UI
+    // This migration no longer initializes them from config
+    console.log('\n✓ MySQL Migration completed')
+    console.log('  Note: ERP credentials should be configured per-user via the Settings UI')
 
-    if (erpUrl && erpUsername && erpPassword) {
-      const updatedCount = await initializeErpCredentialsMySQL(
-        mysqlService,
-        erpUrl,
-        erpUsername,
-        erpPassword
-      )
-      console.log(`  ✓ Updated ${updatedCount} users with ERP credentials`)
-    } else {
-      console.log('  ⚠ Skipping ERP credential initialization (missing .env values)')
-    }
-
-    console.log('✅ MySQL Migration completed successfully!\n')
-  } catch (error) {
-    console.error('❌ MySQL Migration failed:', error)
-    throw error
-  } finally {
     await mysqlService.disconnect()
+  } catch (error) {
+    console.error('✗ MySQL Migration failed:', error instanceof Error ? error.message : error)
+    if (mysqlService.isConnected()) {
+      await mysqlService.disconnect()
+    }
+    throw error
   }
 }
 
@@ -214,16 +208,19 @@ async function runMySQLMigration(configManager: ConfigManager): Promise<void> {
 async function runSqlServerMigration(configManager: ConfigManager): Promise<void> {
   console.log('\n📦 Running SQL Server Migration...')
 
-  const mssql = await import('mssql')
+  const config = configManager.getConfig()
+  const dbConfig = config.database.sqlserver
+
+  console.log(`Connecting to SQL Server: ${dbConfig.server}:${dbConfig.port}/${dbConfig.database}`)
+
   const sqlServerService = new SqlServerService({
-    server: configManager.get('DB_SERVER', 'localhost'),
-    port: configManager.getNumber('DB_SQLSERVER_PORT', 1433),
-    user: configManager.get('DB_USERNAME', 'sa'),
-    password: configManager.get('DB_PASSWORD', ''),
-    database: configManager.get('DB_NAME', ''),
+    server: dbConfig.server,
+    port: dbConfig.port,
+    user: dbConfig.username,
+    password: dbConfig.password,
+    database: dbConfig.database,
     options: {
-      encrypt: false,
-      trustServerCertificate: configManager.get('DB_TRUST_SERVER_CERTIFICATE') === 'yes'
+      trustServerCertificate: dbConfig.trustServerCertificate
     }
   })
 
@@ -247,70 +244,46 @@ async function runSqlServerMigration(configManager: ConfigManager): Promise<void
       }
     }
 
-    // Initialize ERP credentials from .env
-    const erpUrl = configManager.get('ERP_URL', '')
-    const erpUsername = configManager.get('ERP_USERNAME', '')
-    const erpPassword = configManager.get('ERP_PASSWORD', '')
+    // Note: ERP credentials are now managed per-user via settings UI
+    console.log('\n✓ SQL Server Migration completed')
+    console.log('  Note: ERP credentials should be configured per-user via the Settings UI')
 
-    if (erpUrl && erpUsername && erpPassword) {
-      const updatedCount = await initializeErpCredentialsSqlServer(
-        sqlServerService,
-        erpUrl,
-        erpUsername,
-        erpPassword
-      )
-      console.log(`  ✓ Updated ${updatedCount} users with ERP credentials`)
-    } else {
-      console.log('  ⚠ Skipping ERP credential initialization (missing .env values)')
-    }
-
-    console.log('✅ SQL Server Migration completed successfully!\n')
-  } catch (error) {
-    console.error('❌ SQL Server Migration failed:', error)
-    throw error
-  } finally {
     await sqlServerService.disconnect()
+  } catch (error) {
+    console.error('✗ SQL Server Migration failed:', error instanceof Error ? error.message : error)
+    if (sqlServerService.isConnected()) {
+      await sqlServerService.disconnect()
+    }
+    throw error
   }
 }
 
 /**
- * Main migration runner
+ * Main function
  */
-async function runMigration(): Promise<void> {
-  console.log('==============================================')
-  console.log('BIPUsers Table Migration: Add ERP Parameters')
-  console.log('==============================================\n')
-
-  const configManager = ConfigManager.getInstance()
-  await configManager.initialize()
-
-  const dbType = configManager.get('DB_TYPE', 'mysql').toLowerCase()
-  const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
+async function main(): Promise<void> {
+  console.log('╔═══════════════════════════════════════════════════════════╗')
+  console.log('║   Migration: Add ERP Parameters to BIPUsers Table        ║')
+  console.log('╚═══════════════════════════════════════════════════════════╝')
 
   try {
-    if (isSqlServer) {
-      await runSqlServerMigration(configManager)
-    } else {
+    const configManager = ConfigManager.getInstance()
+    await configManager.initialize()
+
+    const dbType = configManager.getDatabaseType()
+    console.log(`\nCurrent database type: ${dbType}`)
+
+    if (dbType === 'mysql') {
       await runMySQLMigration(configManager)
+    } else {
+      await runSqlServerMigration(configManager)
     }
 
-    console.log('==============================================')
-    console.log('Migration Summary:')
-    console.log('==============================================')
-    console.log(`Database Type: ${isSqlServer ? 'SQL Server' : 'MySQL'}`)
-    console.log('Columns Added/Verified:')
-    console.log('  - ERP_URL (VARCHAR/NVARCHAR 500)')
-    console.log('  - ERP_Username (VARCHAR/NVARCHAR 255)')
-    console.log('  - ERP_Password (VARCHAR/NVARCHAR 255)')
-    console.log('==============================================\n')
+    console.log('\n✅ Migration completed successfully!\n')
   } catch (error) {
-    console.error('\n❌ Migration failed with error:', error)
+    console.error('\n❌ Migration failed:', error instanceof Error ? error.message : error)
     process.exit(1)
   }
 }
 
-// Run migration
-runMigration().catch((error) => {
-  console.error('Unexpected error:', error)
-  process.exit(1)
-})
+main()
