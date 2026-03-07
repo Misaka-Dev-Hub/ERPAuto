@@ -10,11 +10,17 @@ files:
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - 'package.json'
+  # Include build output
+  - 'out/**/*'
   # Include config.template.yaml in the build for reference
   - 'config.template.yaml'
+  # Exclude Playwright browser downloads (manual install for company environment)
+  - '!**/node_modules/playwright-core/.local-browsers/**'
 asarUnpack:
   - resources/**
+  # Unpack playwright for native modules
   - '**/node_modules/playwright/**'
+  - '**/node_modules/playwright-core/**'
 win:
   executableName: erpauto
   target:

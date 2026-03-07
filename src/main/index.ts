@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -6,6 +6,10 @@ import { registerIpcHandlers } from './ipc'
 import { ConfigManager } from './services/config/config-manager'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
+import fs from 'fs'
+
+// Set Playwright browsers path BEFORE any playwright import
+process.env.PLAYWRIGHT_BROWSERS_PATH = join(app.getPath('userData'), 'ms-playwright')
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -46,6 +50,59 @@ function createWindow(): void {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
+  // Validate Playwright browser path
+  const browsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH!
+
+  // Create directory if it doesn't exist
+  try {
+    fs.mkdirSync(browsersPath, { recursive: true })
+  } catch (error) {
+    console.error('Failed to create browsers directory:', error)
+  }
+
+  // Check if chromium browser exists (supports both old and new Playwright directory structures)
+  // New format (v1.48+): chromium-1208/chrome-win64/chrome.exe
+  // Old format: chromium-win32/chrome.exe
+  const newChromiumPath = join(browsersPath, 'chromium-1208', 'chrome-win64', 'chrome.exe')
+  const oldChromiumPath = join(browsersPath, 'chromium-win32', 'chrome.exe')
+  const chromiumPath = fs.existsSync(newChromiumPath) ? newChromiumPath : oldChromiumPath
+
+  if (!fs.existsSync(chromiumPath)) {
+    // Try to find any chromium revision
+    let foundRevision = false
+    try {
+      const entries = fs.readdirSync(browsersPath)
+      for (const entry of entries) {
+        if (entry.startsWith('chromium-') && !entry.includes('headless')) {
+          const revisionPath = join(browsersPath, entry, 'chrome-win64', 'chrome.exe')
+          if (fs.existsSync(revisionPath)) {
+            console.log('Found Chromium revision:', entry)
+            foundRevision = true
+            break
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+
+    if (!foundRevision) {
+      dialog.showErrorBox(
+        '浏览器文件未找到',
+        `Playwright 浏览器文件不存在。\n\n` +
+          `期望路径：${newChromiumPath}\n` +
+          `或：${oldChromiumPath}\n\n` +
+          `当前目录内容：${fs.existsSync(browsersPath) ? fs.readdirSync(browsersPath).join(', ') : '目录不存在'}\n\n` +
+          `请运行以下命令安装浏览器：\n` +
+          `npx playwright install chromium`
+      )
+      console.warn(
+        'Playwright browser not found. Available:',
+        fs.existsSync(browsersPath) ? fs.readdirSync(browsersPath) : 'none'
+      )
+    }
+  }
+
   // Initialize ConfigManager BEFORE registering IPC handlers
   // This ensures config is loaded before any service tries to use it
   try {

@@ -4,13 +4,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  main: {
-    build: {
-      rollupOptions: {
-        external: ['playwright', 'playwright-core']
-      }
-    }
-  },
+  main: {},
   preload: {},
   renderer: {
     resolve: {
