@@ -12,6 +12,7 @@ import { MySqlService } from '../services/database/mysql'
 import { SqlServerService } from '../services/database/sql-server'
 import { MaterialsToBeDeletedDAO } from '../services/database/materials-to-be-deleted-dao'
 import { DiscreteMaterialPlanDAO } from '../services/database/discrete-material-plan-dao'
+import { ConfigManager } from '../services/config/config-manager'
 import { createLogger } from '../services/logger'
 import type {
   ValidationRequest,
@@ -57,29 +58,33 @@ export function clearSharedProductionIds(): void {
  * Get database service for validation operations (MySQL or SQL Server)
  */
 async function getValidationDatabaseService(): Promise<MySqlService | SqlServerService> {
-  const dbType = process.env.DB_TYPE?.toLowerCase()
+  const configManager = ConfigManager.getInstance()
+  const config = configManager.getConfig()
+  const dbType = configManager.getDatabaseType()
 
-  if (dbType === 'sqlserver' || dbType === 'mssql') {
+  if (dbType === 'sqlserver') {
+    const dbConfig = config.database.sqlserver
     const sqlServerService = new SqlServerService({
-      server: process.env.DB_SERVER || 'localhost',
-      port: parseInt(process.env.DB_SQLSERVER_PORT || '1433', 10),
-      user: process.env.DB_USERNAME || 'sa',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || '',
+      server: dbConfig.server,
+      port: dbConfig.port,
+      user: dbConfig.username,
+      password: dbConfig.password,
+      database: dbConfig.database,
       options: {
         encrypt: false,
-        trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'yes'
+        trustServerCertificate: dbConfig.trustServerCertificate
       }
     })
     await sqlServerService.connect()
     return sqlServerService
   } else {
+    const dbConfig = config.database.mysql
     const mysqlService = new MySqlService({
-      host: process.env.DB_MYSQL_HOST || 'localhost',
-      port: parseInt(process.env.DB_MYSQL_PORT || '3306', 10),
-      user: process.env.DB_USERNAME || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || ''
+      host: dbConfig.host,
+      port: dbConfig.port,
+      user: dbConfig.username,
+      password: dbConfig.password,
+      database: dbConfig.database
     })
     await mysqlService.connect()
     return mysqlService
@@ -93,8 +98,10 @@ async function getValidationDatabaseService(): Promise<MySqlService | SqlServerS
  *      dbo_MaterialsToBeDeleted -> [dbo].[MaterialsToBeDeleted]
  */
 function getTableName(mysqlTableName: string): string {
-  const dbType = process.env.DB_TYPE?.toLowerCase()
-  if (dbType === 'sqlserver' || dbType === 'mssql') {
+  const configManager = ConfigManager.getInstance()
+  const dbType = configManager.getDatabaseType()
+
+  if (dbType === 'sqlserver') {
     // Find the FIRST underscore to split schema and table name
     // This handles patterns like: schema_tablename
     const firstUnderscoreIndex = mysqlTableName.indexOf('_')
@@ -145,8 +152,9 @@ async function getSourceNumbersFromInputs(
 ): Promise<string[]> {
   const productionIds: string[] = []
   const orderNumbers: string[] = []
-  const dbType = process.env.DB_TYPE?.toLowerCase()
-  const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
+  const configManager = ConfigManager.getInstance()
+  const dbType = configManager.getDatabaseType()
+  const isSqlServer = dbType === 'sqlserver'
 
   for (const item of inputs) {
     const type = identifyInputType(item)
@@ -255,8 +263,9 @@ export function registerValidationHandlers(): void {
 
         // Connect to database
         dbService = await getValidationDatabaseService()
-        const dbType = process.env.DB_TYPE?.toLowerCase()
-        const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
+        const configManager = ConfigManager.getInstance()
+        const dbType = configManager.getDatabaseType()
+        const isSqlServer = dbType === 'sqlserver'
 
         let sourceNumbers: string[] | null = null
 
@@ -534,8 +543,9 @@ export function registerValidationHandlers(): void {
 
       try {
         dbService = await getValidationDatabaseService()
-        const dbType = process.env.DB_TYPE?.toLowerCase()
-        const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
+        const configManager = ConfigManager.getInstance()
+        const dbType = configManager.getDatabaseType()
+        const isSqlServer = dbType === 'sqlserver'
 
         const dao = new MaterialsToBeDeletedDAO()
         const materials = await dao.getMaterialsByManager(managerName)
@@ -612,8 +622,9 @@ export function registerValidationHandlers(): void {
 
       try {
         dbService = await getValidationDatabaseService()
-        const dbType = process.env.DB_TYPE?.toLowerCase()
-        const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
+        const configManager = ConfigManager.getInstance()
+        const dbType = configManager.getDatabaseType()
+        const isSqlServer = dbType === 'sqlserver'
 
         const dao = new MaterialsToBeDeletedDAO()
         const materials = await dao.getAllRecords()
@@ -745,8 +756,9 @@ export function registerValidationHandlers(): void {
 
         const isAdmin = userInfo.userType === 'Admin'
         const username = userInfo.username
-        const dbType = process.env.DB_TYPE?.toLowerCase()
-        const isSqlServer = dbType === 'sqlserver' || dbType === 'mssql'
+        const configManager = ConfigManager.getInstance()
+        const dbType = configManager.getDatabaseType()
+        const isSqlServer = dbType === 'sqlserver'
 
         log.info(`User: ${username}, isAdmin: ${isAdmin}`)
 
