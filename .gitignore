@@ -26,3 +26,10 @@ compare_*.js
 
 # logs
 logs
+
+# oh my opencode
+.sisyphus
+
+# Runtime config files
+*.yaml
+*.yaml.backup
