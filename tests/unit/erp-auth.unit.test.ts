@@ -56,4 +56,38 @@ describe('ERP Authentication Service (Unit)', () => {
       await expect(service.close()).resolves.toBeUndefined()
     })
   })
+
+  describe('Class Structure', () => {
+    let service: ErpAuthService
+
+    beforeEach(() => {
+      const config: ErpConfig = {
+        url: 'https://test.example.com',
+        username: 'testuser',
+        password: 'testpass'
+      }
+      service = new ErpAuthService(config)
+    })
+
+    it('should have login method that returns a Promise', () => {
+      expect(service.login).toBeDefined()
+      expect(typeof service.login).toBe('function')
+      expect(service.login()).toBeInstanceOf(Promise)
+    })
+
+    it('should have close method', () => {
+      expect(service.close).toBeDefined()
+      expect(typeof service.close).toBe('function')
+    })
+
+    it('should have getSession method', () => {
+      expect(service.getSession).toBeDefined()
+      expect(typeof service.getSession).toBe('function')
+    })
+
+    it('should have isActive method', () => {
+      expect(service.isActive).toBeDefined()
+      expect(typeof service.isActive).toBe('function')
+    })
+  })
 })

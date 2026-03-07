@@ -4,6 +4,11 @@ import { createLogger } from '../logger'
 
 const log = createLogger('ErpAuthService')
 
+// Timeout constants
+const PAGE_LOAD_TIMEOUT = 10000
+const LOGIN_RESULT_TIMEOUT = 15000
+const FORCE_LOGIN_TIMEOUT = 5000
+
 /**
  * ERP Authentication Service
  * Manages login session and browser lifecycle
@@ -51,10 +56,13 @@ export class ErpAuthService {
     await page.goto(loginUrl)
 
     // Wait for page to load
-    await page.waitForLoadState('domcontentloaded', { timeout: 10000 })
+    await page.waitForLoadState('domcontentloaded', { timeout: PAGE_LOAD_TIMEOUT })
 
     // Wait for iframe to be present
-    await page.waitForSelector('#forwardFrame', { state: 'attached', timeout: 15000 })
+    await page.waitForSelector('#forwardFrame', {
+      state: 'attached',
+      timeout: LOGIN_RESULT_TIMEOUT
+    })
 
     // Extract forwardFrame (Python: main_frame = page.locator("#forwardFrame").content_frame)
     // This is the main working frame for all subsequent operations
@@ -89,7 +97,7 @@ export class ErpAuthService {
       throw new Error(`Failed to click login button: ${e}`)
     }
 
-    await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {
+    await page.waitForLoadState('domcontentloaded', { timeout: PAGE_LOAD_TIMEOUT }).catch(() => {
       log.warn('Page load state check timed out, continuing')
     })
 
@@ -118,13 +126,15 @@ export class ErpAuthService {
 
     try {
       await Promise.race([
-        successLocator.waitFor({ state: 'visible', timeout: 15000 }),
-        errorLocator.waitFor({ state: 'visible', timeout: 15000 }),
-        forceLoginButton.waitFor({ state: 'visible', timeout: 5000 }).then(async () => {
-          log.info('Force login dialog detected, clicking confirm')
-          await forceLoginButton.click()
-          await this.waitForLoginResult(mainFrame)
-        })
+        successLocator.waitFor({ state: 'visible', timeout: LOGIN_RESULT_TIMEOUT }),
+        errorLocator.waitFor({ state: 'visible', timeout: LOGIN_RESULT_TIMEOUT }),
+        forceLoginButton
+          .waitFor({ state: 'visible', timeout: FORCE_LOGIN_TIMEOUT })
+          .then(async () => {
+            log.info('Force login dialog detected, clicking confirm')
+            await forceLoginButton.click()
+            await this.waitForLoginResult(mainFrame)
+          })
       ])
 
       const hasError = await errorLocator.isVisible()

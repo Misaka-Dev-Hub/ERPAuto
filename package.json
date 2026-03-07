@@ -61,6 +61,7 @@
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.27",
+    "dotenv": "^17.3.1",
     "electron": "^39.2.6",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
@@ -74,9 +75,9 @@
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "tailwindcss": "^4.2.1",
+    "tsx": "^4.19.3",
     "typescript": "^5.9.3",
     "vite": "^7.2.6",
-    "vitest": "^4.0.18",
-    "tsx": "^4.19.3"
+    "vitest": "^4.0.18"
   }
 }
