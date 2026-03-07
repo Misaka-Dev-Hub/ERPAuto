@@ -1,4 +1,4 @@
-import { chromium, type BrowserContext, type Page } from 'playwright'
+import { chromium } from 'playwright'
 import type { ErpConfig, ErpSession } from '../../types/erp.types'
 import { createLogger } from '../logger'
 
@@ -89,29 +89,11 @@ export class ErpAuthService {
       throw new Error(`Failed to click login button: ${e}`)
     }
 
-    // Wait for navigation after login
-    // The login will redirect to the main page which has a different structure
-    try {
-      await page.waitForLoadState('domcontentloaded', { timeout: 10000 })
-    } catch (e) {
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {
       log.warn('Page load state check timed out, continuing')
-    }
+    })
 
-    // Handle force login confirmation dialog if present (Python: get_by_role("button", name="确定"))
-    try {
-      const confirmBtn = mainFrame.getByRole('button', { name: '确定' })
-      const count = await confirmBtn.count()
-      if (count > 0) {
-        log.info('Force login detected, clicking confirm button')
-        await confirmBtn.first().click()
-        await page.waitForTimeout(2000)
-      } else {
-        log.debug('Normal login, no confirmation dialog')
-      }
-    } catch {
-      // No force login dialog, continue
-      log.debug('Normal login, no confirmation dialog')
-    }
+    await this.waitForLoginResult(mainFrame as unknown as import('playwright').Frame)
 
     // Create session with mainFrame (Python returns main_frame as part of login result)
     this.session = {
@@ -124,6 +106,45 @@ export class ErpAuthService {
     }
 
     return this.session
+  }
+
+  /**
+   * Wait for login result: success, failure, or force login confirmation
+   */
+  private async waitForLoginResult(mainFrame: import('playwright').Frame): Promise<void> {
+    const successLocator = mainFrame.locator('.nc-workbench-icon')
+    const errorLocator = mainFrame.getByText('名称或密码错误')
+    const forceLoginButton = mainFrame.getByRole('button', { name: '确定' })
+
+    try {
+      await Promise.race([
+        successLocator.waitFor({ state: 'visible', timeout: 15000 }),
+        errorLocator.waitFor({ state: 'visible', timeout: 15000 }),
+        forceLoginButton.waitFor({ state: 'visible', timeout: 5000 }).then(async () => {
+          log.info('Force login dialog detected, clicking confirm')
+          await forceLoginButton.click()
+          await this.waitForLoginResult(mainFrame)
+        })
+      ])
+
+      const hasError = await errorLocator.isVisible()
+      if (hasError) {
+        throw new Error('ERP 登录失败：名称或密码错误')
+      }
+
+      log.info('Login successful')
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('名称或密码错误')) {
+        throw error
+      }
+
+      const hasError = await errorLocator.isVisible().catch(() => false)
+      if (hasError) {
+        throw new Error('ERP 登录失败：名称或密码错误')
+      }
+
+      log.info('Login successful')
+    }
   }
 
   /**
