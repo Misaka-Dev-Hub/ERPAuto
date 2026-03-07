@@ -315,8 +315,17 @@ export function useCleaner() {
     }
 
     setIsRunning(true)
+    // Initialize progress state BEFORE opening dialog to ensure progress view shows first
+    setProgress({
+      message: '正在初始化...',
+      progress: 0,
+      currentOrderIndex: 0,
+      totalOrders: 0,
+      currentMaterialIndex: 0,
+      totalMaterialsInOrder: 0,
+      phase: 'login'
+    })
     setIsExecuting(true)
-    setProgress(null)
     setStartTime(Date.now())
     setIsReportDialogOpen(true)
 
