@@ -9,12 +9,13 @@ import { SqlServerService, SqlServerConfig } from '@main/services/database/sql-s
 import * as sql from 'mssql'
 
 // SQL Server test configuration
+// For integration tests, use fixed test credentials or configure via config.yaml
 const testConfig: SqlServerConfig = {
-  server: process.env.SQL_SERVER_HOST || 'localhost',
-  port: parseInt(process.env.SQL_SERVER_PORT || '1433'),
-  user: process.env.SQL_SERVER_USER || 'sa',
-  password: process.env.SQL_SERVER_PASSWORD || 'password',
-  database: process.env.SQL_SERVER_DATABASE || 'testdb',
+  server: 'localhost',
+  port: 1433,
+  user: 'sa',
+  password: 'password',
+  database: 'testdb',
   options: {
     encrypt: false, // Set to true for Azure SQL
     trustServerCertificate: true // Set to false in production with valid cert

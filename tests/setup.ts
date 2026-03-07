@@ -1,5 +1,4 @@
 import { beforeAll, afterAll, vi } from 'vitest'
-import dotenv from 'dotenv'
 import path from 'path'
 
 // Mock electron app module for unit tests
@@ -11,9 +10,6 @@ vi.mock('electron', () => ({
     on: vi.fn()
   }
 }))
-
-// Load environment variables from project root
-dotenv.config({ path: path.resolve(process.cwd(), '.env') })
 
 beforeAll(async () => {
   // Global test setup

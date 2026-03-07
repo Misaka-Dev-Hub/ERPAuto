@@ -6,10 +6,11 @@ import fs from 'fs/promises'
 import path from 'path'
 
 describe('Extractor Service (Integration)', () => {
+  // For integration tests, use fixed test credentials or configure via config.yaml
   const config: ErpConfig = {
-    url: process.env.ERP_URL || '',
-    username: process.env.ERP_USERNAME || '',
-    password: process.env.ERP_PASSWORD || ''
+    url: '',
+    username: '',
+    password: ''
   }
 
   const testOrderNumber = 'SC70202602120085' // From references/demo/productionID.txt

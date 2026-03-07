@@ -33,3 +33,5 @@ logs
 # Runtime config files
 *.yaml
 *.yaml.backup
+# But keep config.template.yaml
+!config.template.yaml

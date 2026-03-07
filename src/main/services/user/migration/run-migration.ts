@@ -13,38 +13,41 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
+import yaml from 'js-yaml'
+import { z } from 'zod'
 
 const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
 
 /**
- * Load .env file manually
+ * MySQL configuration schema
  */
-function loadEnv(filePath: string): Map<string, string> {
-  const envMap = new Map<string, string>()
+const mysqlConfigSchema = z.object({
+  host: z.string(),
+  port: z.number(),
+  database: z.string(),
+  username: z.string(),
+  password: z.string()
+})
 
+/**
+ * Load config.yaml file
+ */
+function loadConfig(filePath: string): {
+  host: string
+  port: number
+  database: string
+  username: string
+  password: string
+} {
   if (!fs.existsSync(filePath)) {
-    console.warn(`.env file not found: ${filePath}`)
-    return envMap
+    throw new Error(`Config file not found: ${filePath}`)
   }
 
   const content = fs.readFileSync(filePath, 'utf-8')
-  const lines = content.split('\n')
+  const parsed = yaml.load(content) as Record<string, unknown>
 
-  for (const line of lines) {
-    const trimmedLine = line.trim()
-    if (!trimmedLine || trimmedLine.startsWith('#')) {
-      continue
-    }
-
-    const [key, ...valueParts] = trimmedLine.split('=')
-    if (key && valueParts.length > 0) {
-      const value = valueParts.join('=').trim()
-      envMap.set(key.trim(), value)
-    }
-  }
-
-  return envMap
+  const result = mysqlConfigSchema.parse(parsed?.database?.mysql)
+  return result
 }
 
 /**
@@ -89,17 +92,29 @@ async function runMigration(): Promise<void> {
   console.log('BIPUsers Table Migration: Add ERP Parameters')
   console.log('==============================================\n')
 
-  // Load .env file from project root
-  const envPath = path.resolve(process.cwd(), '.env')
-  console.log(`Loading .env from: ${envPath}`)
-  const env = loadEnv(envPath)
+  // Load config.yaml from project root or user data directory
+  const isDev = !process.execPath.includes('Resources\\app')
+  const configPath = isDev
+    ? path.resolve(process.cwd(), 'config.yaml')
+    : path.join(process.env.APPDATA || '', 'erpauto', 'config.yaml')
 
-  // Get database configuration
-  const dbHost = env.get('DB_MYSQL_HOST') || 'localhost'
-  const dbPort = parseInt(env.get('DB_MYSQL_PORT') || '3306', 10)
-  const dbUser = env.get('DB_USERNAME') || 'root'
-  const dbPassword = env.get('DB_PASSWORD') || ''
-  const dbName = env.get('DB_NAME') || ''
+  console.log(`Loading config from: ${configPath}`)
+
+  let dbConfig: { host: string; port: number; database: string; username: string; password: string }
+
+  try {
+    dbConfig = loadConfig(configPath)
+  } catch (error) {
+    console.error('Failed to load config.yaml:', error instanceof Error ? error.message : error)
+    console.error('Please ensure config.yaml exists and contains valid MySQL configuration.')
+    process.exit(1)
+  }
+
+  const dbHost = dbConfig.host || 'localhost'
+  const dbPort = dbConfig.port || 3306
+  const dbUser = dbConfig.username || 'root'
+  const dbPassword = dbConfig.password || ''
+  const dbName = dbConfig.database || ''
 
   console.log(`Database: ${dbHost}:${dbPort}/${dbName}`)
   console.log(`Username: ${dbUser}`)
@@ -160,7 +175,7 @@ async function runMigration(): Promise<void> {
     console.error(error)
     console.error('\nTroubleshooting:')
     console.error('1. Check if MySQL server is running')
-    console.error('2. Verify database credentials in .env file')
+    console.error('2. Verify database credentials in config.yaml file')
     console.error('3. Ensure database "' + dbName + '" exists')
     console.error('4. Check network connectivity to ' + dbHost + ':' + dbPort)
     process.exit(1)
@@ -170,7 +185,7 @@ async function runMigration(): Promise<void> {
       try {
         await connection.end()
         console.log('Disconnected from MySQL')
-      } catch (e) {
+      } catch {
         // Ignore disconnect errors
       }
     }

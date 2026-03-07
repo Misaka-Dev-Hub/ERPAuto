@@ -30,28 +30,42 @@ npm install
 
 ### 配置
 
-在项目根目录创建 `.env` 文件：
+在项目根目录创建 `config.yaml` 文件（可参考 `config.template.yaml`）：
 
-```bash
-# ERP 配置
-ERP_URL=https://your-erp-server.com
-ERP_USERNAME=your_username
-ERP_PASSWORD=your_password
+```yaml
+# ERP 配置（固定基础设施）
+erp:
+  url: https://your-erp-server.com
 
-# MySQL 配置（可选）
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=password
-MYSQL_DATABASE=erpauto
+# 数据库配置
+database:
+  activeType: mysql # 或 sqlserver
 
-# SQL Server 配置（可选）
-SQL_SERVER_HOST=localhost
-SQL_SERVER_PORT=1433
-SQL_SERVER_USER=sa
-SQL_SERVER_PASSWORD=password
-SQL_SERVER_DATABASE=erpauto
+  mysql:
+    host: localhost
+    port: 3306
+    database: erpauto
+    username: root
+    password: your_password
+    charset: utf8mb4
+
+  sqlserver:
+    server: localhost
+    port: 1433
+    database: erpauto
+    username: sa
+    password: your_password
+    driver: 'ODBC Driver 18 for SQL Server'
+    trustServerCertificate: true
+
+# 路径配置
+paths:
+  dataDir: './data/'
+  defaultOutput: 'output.xlsx'
+  validationOutput: 'validation-result.xlsx'
 ```
+
+**注意**：ERP 用户名和密码在应用的设置界面中配置，存储在数据库中（按用户管理）。
 
 ### 运行开发环境
 
@@ -136,9 +150,10 @@ ERPAuto/
 
 ### 无法连接 ERP 系统
 
-1. 检查 `.env` 文件中的 ERP_URL 是否正确
+1. 检查 `config.yaml` 中的 ERP URL 是否正确
 2. 确认网络连接正常
 3. 检查 ERP 系统是否可访问
+4. 在设置界面中确认 ERP 用户名和密码已配置
 
 ### 提取失败
 
@@ -149,7 +164,7 @@ ERPAuto/
 ### 数据库连接失败
 
 1. 确认数据库服务已启动
-2. 检查 `.env` 中的数据库配置
+2. 检查 `config.yaml` 中的数据库配置
 3. 确认防火墙允许数据库端口访问
 
 ## 开发
