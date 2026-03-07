@@ -147,13 +147,16 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
       },
       state: 'new'
     }
-    setRows((prev) => [...prev, newRow])
-    // Start editing the material name cell
-    const newIndex = rows.length
-    setTimeout(() => {
-      setEditingCell({ rowIndex: newIndex, field: 'materialName' })
-      setEditValue('')
-    }, 0)
+
+    // 在 setRows 回调中计算索引并设置编辑状态
+    setRows((prev) => {
+      const newIndex = prev.length
+      setTimeout(() => {
+        setEditingCell({ rowIndex: newIndex, field: 'materialName' })
+        setEditValue('')
+      }, 0)
+      return [...prev, newRow]
+    })
   }
 
   // Delete row
