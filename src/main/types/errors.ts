@@ -167,3 +167,22 @@ export function getErrorCode(error: unknown): string {
   }
   return 'UNKNOWN_ERROR'
 }
+
+/**
+ * Error-like interface for non-Error objects that have error properties
+ */
+export interface ErrorLike {
+  name: string
+  message: string
+  stack?: string
+  cause?: unknown
+}
+
+/**
+ * Serialized error object for logging
+ * Can contain additional properties from Error subclasses
+ */
+export interface SerializedError extends ErrorLike {
+  cause?: SerializedError | string
+  [key: string]: unknown
+}

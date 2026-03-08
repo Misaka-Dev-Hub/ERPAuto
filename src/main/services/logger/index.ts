@@ -1,6 +1,11 @@
 /**
  * Unified logging system using Winston
  * Console + File transports with daily rotation
+ *
+ * Features:
+ * - Full error serialization with stack traces
+ * - Development/Production environment differentiation
+ * - Structured logging with context
  */
 
 import winston from 'winston'
@@ -8,6 +13,7 @@ import DailyRotateFile from 'winston-daily-rotate-file'
 import path from 'path'
 import { app } from 'electron'
 import fs from 'fs'
+import { serializeError, sanitizeError } from './error-utils'
 
 // Get log directory - use app.getPath('logs') in production, or local logs dir in development
 function getLogDir(): string {
@@ -22,20 +28,54 @@ function getLogDir(): string {
   return devLogDir
 }
 
-// Custom format for console output
+// Check if running in production
+const isProduction = app?.isPackaged ?? process.env.NODE_ENV === 'production'
+
+// Custom format for console output - includes full error details
 const consoleFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.colorize(),
-  winston.format.printf(({ timestamp, level, message, context, ...meta }) => {
+  winston.format.printf(({ timestamp, level, message, context, error, ...meta }) => {
     const contextStr = context ? `[${context}]` : ''
-    const metaStr = Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta)}` : ''
-    return `${timestamp} [${level}]${contextStr} ${message}${metaStr}`
+
+    // Format error with full stack trace
+    let errorStr = ''
+    if (error) {
+      const serialized = isProduction ? sanitizeError(serializeError(error)) : serializeError(error)
+      if (serialized.stack) {
+        errorStr = `\n${serialized.stack}`
+      } else {
+        errorStr = ` ${serialized.message}`
+      }
+    }
+
+    const metaStr = Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta, null, 2)}` : ''
+    return `${timestamp} [${level}]${contextStr} ${message}${errorStr}${metaStr}`
   })
 )
 
-// Custom format for file output
+// Custom format for file output - JSON with full error details
 const fileFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format((info) => {
+    // Serialize errors in metadata
+    if (info.error) {
+      info.error = isProduction
+        ? sanitizeError(serializeError(info.error))
+        : serializeError(info.error)
+    }
+
+    // Serialize any error in meta fields
+    for (const key of Object.keys(info)) {
+      if (key !== 'error' && info[key] instanceof Error) {
+        info[key] = isProduction
+          ? sanitizeError(serializeError(info[key]))
+          : serializeError(info[key])
+      }
+    }
+
+    return info
+  })(),
   winston.format.json()
 )
 
@@ -96,6 +136,24 @@ if (app.isPackaged) {
  */
 export function createLogger(context: string): winston.Logger {
   return logger.child({ context })
+}
+
+/**
+ * Log an error with full context and stack trace
+ * This is the recommended way to log errors in the application
+ *
+ * @param log - Logger instance
+ * @param message - Error message
+ * @param error - The error object (Error, BaseError, or any)
+ * @param meta - Additional metadata to include
+ */
+export function logError(
+  log: winston.Logger,
+  message: string,
+  error: unknown,
+  meta?: Record<string, unknown>
+): void {
+  log.error(message, { error, ...meta })
 }
 
 // Export the main logger for direct use

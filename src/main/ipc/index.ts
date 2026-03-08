@@ -14,7 +14,8 @@ import { registerSettingsHandlers } from './settings-handler'
 import { registerMaterialTypeHandlers } from './material-type-handler'
 import { registerUserErpConfigHandlers } from './user-erp-config-handler'
 import { registerLoggerHandlers } from './logger-handler'
-import { createLogger } from '../services/logger'
+import { createLogger, logError } from '../services/logger'
+import { serializeError, sanitizeError } from '../services/logger/error-utils'
 import { getErrorMessage, getErrorCode, isBaseError } from '../types/errors'
 
 const log = createLogger('IPC')
@@ -39,6 +40,7 @@ export function fail<T = unknown>(error: string, code?: string): IpcResult<T> {
 
 /**
  * Higher-order function to wrap IPC handlers with consistent error handling
+ * Enhanced to capture full error context including stack traces
  * @param handler - The async handler function to wrap
  * @param context - The context name for logging
  * @returns A wrapped handler that returns IpcResult
@@ -56,15 +58,27 @@ export function withErrorHandling<T>(
       const message = getErrorMessage(error)
       const code = getErrorCode(error)
 
+      // Serialize error with full details
+      const serializedError = serializeError(error)
+      const errorToLog =
+        process.env.NODE_ENV === 'production' ? sanitizeError(serializedError) : serializedError
+
       if (isBaseError(error)) {
-        log.error(`[${context}] ${error.name}: ${message}`, { code, cause: error.cause?.message })
+        logError(log, `[${context}] ${error.name}`, error, {
+          code,
+          cause: (error as any).cause?.message,
+          handler: context
+        })
       } else {
-        log.error(`[${context}] Error: ${message}`, { code })
+        logError(log, `[${context}] Error`, error, {
+          code,
+          handler: context
+        })
       }
 
       // Include stack trace in development
       if (process.env.NODE_ENV !== 'production' && error instanceof Error) {
-        log.debug(`[${context}] Stack trace:`, { stack: error.stack })
+        log.debug(`[${context}] Stack trace: ${error.stack}`)
       }
 
       return fail<T>(message, code)

@@ -13,7 +13,8 @@ import { SqlServerService } from '../database/sql-server'
 import { ConfigManager } from '../config/config-manager'
 import sql from 'mssql'
 import type { UserInfo } from '../../types/user.types'
-import { createLogger } from '../logger'
+import { createLogger, logError } from '../logger'
+import { serializeError } from '../logger/error-utils'
 
 const log = createLogger('BipUsersDao')
 
@@ -163,7 +164,11 @@ export class BIPUsersDAO {
         return null
       }
     } catch (error) {
-      log.error('Authenticate error:', error)
+      logError(log, 'Authenticate failed', error, {
+        operation: 'authenticate',
+        username,
+        dbType: this.dbType
+      })
       return null
     }
   }
@@ -218,7 +223,11 @@ export class BIPUsersDAO {
         return null
       }
     } catch (error) {
-      log.error('Authenticate by computer name error:', error)
+      logError(log, 'Silent login failed', error, {
+        operation: 'authenticateByComputerName',
+        computerName,
+        dbType: this.dbType
+      })
       return null
     }
   }
@@ -250,7 +259,10 @@ export class BIPUsersDAO {
         createTime: row.CreateTime as Date | undefined
       }))
     } catch (error) {
-      log.error('Get all users error:', error)
+      logError(log, 'Get all users failed', error, {
+        operation: 'getAllUsers',
+        dbType: this.dbType
+      })
       return []
     }
   }
@@ -334,7 +346,12 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      log.error('Create user error:', error)
+      logError(log, 'Create user failed', error, {
+        operation: 'createUser',
+        username,
+        userType,
+        dbType: this.dbType
+      })
       return false
     }
   }
@@ -373,7 +390,12 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      log.error('Update user type error:', error)
+      logError(log, 'Update user type failed', error, {
+        operation: 'updateUserType',
+        username,
+        userType,
+        dbType: this.dbType
+      })
       return false
     }
   }
@@ -412,7 +434,11 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      log.error('Update password error:', error)
+      logError(log, 'Update password failed', error, {
+        operation: 'updatePassword',
+        username,
+        dbType: this.dbType
+      })
       return false
     }
   }
@@ -447,7 +473,11 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      log.error('Delete user error:', error)
+      logError(log, 'Delete user failed', error, {
+        operation: 'deleteUser',
+        username,
+        dbType: this.dbType
+      })
       return false
     }
   }
@@ -484,7 +514,11 @@ export class BIPUsersDAO {
         return result.rows.length > 0 && (result.rows[0].count as number) > 0
       }
     } catch (error) {
-      log.error('User exists error:', error)
+      logError(log, 'Check user exists failed', error, {
+        operation: 'userExists',
+        username,
+        dbType: this.dbType
+      })
       return false
     }
   }
@@ -541,7 +575,11 @@ export class BIPUsersDAO {
         return null
       }
     } catch (error) {
-      log.error('Get user ERP credentials error:', error)
+      logError(log, 'Get user ERP credentials failed', error, {
+        operation: 'getUserErpCredentials',
+        username,
+        dbType: this.dbType
+      })
       return null
     }
   }
@@ -589,7 +627,11 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      log.error('Update user ERP credentials error:', error)
+      logError(log, 'Update user ERP credentials failed', error, {
+        operation: 'updateUserErpCredentials',
+        username,
+        dbType: this.dbType
+      })
       return false
     }
   }
@@ -627,7 +669,10 @@ export class BIPUsersDAO {
         erpUsername: (row[cols.ERP_USERNAME] as string) || ''
       }))
     } catch (error) {
-      log.error('Get all users ERP config error:', error)
+      logError(log, 'Get all users ERP config failed', error, {
+        operation: 'getAllUsersErpConfig',
+        dbType: this.dbType
+      })
       return []
     }
   }
