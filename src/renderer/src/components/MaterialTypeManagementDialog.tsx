@@ -9,6 +9,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Trash2, Save, RotateCcw, Users } from 'lucide-react'
 import { Modal } from './ui/Modal'
+import { showSuccess, showError, showInfo } from '../stores/useAppStore'
+import { useConfirmDialog } from './ui/ConfirmDialog'
+import { ConfirmDialog } from './ui/ConfirmDialog'
 
 interface MaterialTypeRecord {
   id?: number
@@ -48,6 +51,9 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
 
   const tableRef = useRef<HTMLTableElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Confirmation dialog hook
+  const { confirm, dialog: confirmDialog } = useConfirmDialog()
 
   // Calculate pending changes count
   const pendingCount = rows.filter(
@@ -239,7 +245,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
     }
 
     if (toInsert.length === 0 && toUpdate.length === 0 && toDelete.length === 0) {
-      alert('没有需要保存的更改')
+      showInfo('没有需要保存的更改')
       return
     }
 
@@ -248,7 +254,12 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
     if (toUpdate.length > 0) confirmParts.push(`更新 ${toUpdate.length} 条记录`)
     if (toDelete.length > 0) confirmParts.push(`删除 ${toDelete.length} 条记录`)
 
-    if (!window.confirm(`确认以下操作？\n\n${confirmParts.join('\n')}`)) return
+    const confirmed = await confirm({
+      title: '确认操作',
+      message: `确认以下操作？\n\n${confirmParts.join('\n')}`,
+      variant: 'warning'
+    })
+    if (!confirmed) return
 
     setSaving(true)
     try {
@@ -262,31 +273,42 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
         : undefined
 
       if (result.success) {
-        alert(
+        showSuccess(
           `保存完成！\n成功：${payload?.stats?.success || 0} 条\n失败：${payload?.stats?.failed || 0} 条`
         )
         await loadData()
       } else {
-        alert(`保存失败：${result.error || '未知错误'}`)
+        showError(`保存失败：${result.error || '未知错误'}`)
       }
     } catch (error) {
-      alert(`保存失败：${error instanceof Error ? error.message : '未知错误'}`)
+      showError(`保存失败：${error instanceof Error ? error.message : '未知错误'}`)
     } finally {
       setSaving(false)
     }
   }
 
   // Reset changes
-  const handleReset = () => {
+  const handleReset = async () => {
     if (pendingCount === 0) return
-    if (!window.confirm('确定要放弃所有未保存的更改吗？')) return
-    loadData()
+    const confirmed = await confirm({
+      title: '确认重置',
+      message: '确定要放弃所有未保存的更改吗？',
+      variant: 'warning'
+    })
+    if (confirmed) {
+      loadData()
+    }
   }
 
   // Handle close with unsaved changes warning
-  const handleClose = () => {
+  const handleClose = async () => {
     if (pendingCount > 0) {
-      if (!window.confirm('有未保存的更改，确定要关闭吗？')) return
+      const confirmed = await confirm({
+        title: '确认关闭',
+        message: '有未保存的更改，确定要关闭吗？',
+        variant: 'warning'
+      })
+      if (!confirmed) return
     }
     onClose()
   }
@@ -533,6 +555,9 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
           <span>共 {filteredRows.filter((r) => r.state !== 'deleted').length} 条记录</span>
         </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
     </Modal>
   )
 }

@@ -112,4 +112,17 @@ export const selectToasts = (state: AppState) => state.toasts
 export const selectSidebarCollapsed = (state: AppState) => state.sidebarCollapsed
 export const selectCurrentPage = (state: AppState) => state.currentPage
 
+/**
+ * Format a list of items into a multi-line message with truncation
+ * @param items - Array of strings to format
+ * @param maxItems - Maximum number of items to show before truncating (default: 10)
+ * @returns Formatted multi-line string
+ */
+export function formatListMessage(items: string[], maxItems: number = 10): string {
+  if (items.length <= maxItems) {
+    return items.join('\n')
+  }
+  return `${items.slice(0, maxItems).join('\n')}\n...及其他 ${items.length - maxItems} 项`
+}
+
 export default useAppStore

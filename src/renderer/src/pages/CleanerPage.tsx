@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import MaterialTypeManagementDialog from '../components/MaterialTypeManagementDialog'
 import ExecutionReportDialog from '../components/ExecutionReportDialog'
+import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { useCleaner } from '../hooks/useCleaner'
 
 const CleanerPage: React.FC = () => {
@@ -65,7 +66,8 @@ const CleanerPage: React.FC = () => {
     handleCheckboxToggle,
     handleConfirmDeletion,
     handleExecuteDeletion,
-    handleExportResults
+    handleExportResults,
+    confirmDialog
   } = useCleaner()
 
   return (
@@ -495,6 +497,9 @@ const CleanerPage: React.FC = () => {
         startTime={startTime}
         triggerRef={executeButtonRef}
       />
+
+      {/* Confirmation Dialog */}
+      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
     </div>
   )
 }

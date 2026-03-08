@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { showSuccess, showError, showWarning, formatListMessage } from '../stores/useAppStore'
+import { ConfirmDialogProps } from '../components/ui/ConfirmDialog'
 
 export interface ValidationResult {
   materialName: string
@@ -80,6 +82,32 @@ export function useCleaner() {
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; field: string } | null>(null)
   const [editValue, setEditValue] = useState('')
   const inputRef = useRef<HTMLInputElement | HTMLSelectElement>(null)
+
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogProps | null>(null)
+
+  /**
+   * Show a confirmation dialog and return user's choice
+   */
+  const showConfirmDialog = useCallback(
+    (options: Omit<ConfirmDialogProps, 'isOpen' | 'onConfirm' | 'onCancel'>): Promise<boolean> => {
+      return new Promise<boolean>((resolve) => {
+        setConfirmDialog({
+          ...options,
+          isOpen: true,
+          onConfirm: () => {
+            setConfirmDialog(null)
+            resolve(true)
+          },
+          onCancel: () => {
+            setConfirmDialog(null)
+            resolve(false)
+          }
+        })
+      })
+    },
+    []
+  )
 
   // Check admin status and get shared Production IDs on mount
   useEffect(() => {
@@ -188,11 +216,12 @@ export function useCleaner() {
           setManagers(Array.from(uniqueManagers))
           setSelectedManagers(uniqueManagers)
         }
+        showSuccess('校验完成')
       } else {
-        alert(response.error || validationData?.error || '校验失败')
+        showError(response.error || validationData?.error || '校验失败')
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : '校验过程中发生未知错误')
+      showError(err instanceof Error ? err.message : '校验过程中发生未知错误')
     } finally {
       setIsValidationRunning(false)
     }
@@ -260,7 +289,10 @@ export function useCleaner() {
   const handleConfirmDeletion = async () => {
     const resultsToProcess = isAdmin ? validationResults : filteredResults
 
-    if (resultsToProcess.length === 0) return alert('没有可处理的数据')
+    if (resultsToProcess.length === 0) {
+      showWarning('没有可处理的数据')
+      return
+    }
 
     const materialsToUpsert: { materialCode: string; managerName: string }[] = []
     const materialsToDelete: string[] = []
@@ -279,21 +311,28 @@ export function useCleaner() {
     }
 
     if (missingManager.length > 0) {
-      alert(
-        `以下已勾选的记录缺少负责人信息，无法保存：\n\n${missingManager.slice(0, 10).join('\n')}`
+      showError(
+        `以下已勾选的记录缺少负责人信息，无法保存：\n\n${formatListMessage(missingManager, 10)}`
       )
       return
     }
 
-    if (materialsToUpsert.length === 0 && materialsToDelete.length === 0)
-      return alert('没有需要处理的记录')
+    if (materialsToUpsert.length === 0 && materialsToDelete.length === 0) {
+      showWarning('没有需要处理的记录')
+      return
+    }
 
     const confirmParts: string[] = []
     if (materialsToUpsert.length > 0)
       confirmParts.push(`写入/更新 ${materialsToUpsert.length} 条记录`)
     if (materialsToDelete.length > 0) confirmParts.push(`删除 ${materialsToDelete.length} 条记录`)
 
-    if (!window.confirm(`确认以下操作吗？\n\n${confirmParts.join('\n')}`)) return
+    const confirmed = await showConfirmDialog({
+      title: '确认操作',
+      message: `确认以下操作吗？\n\n${confirmParts.join('\n')}`,
+      variant: 'warning'
+    })
+    if (!confirmed) return
 
     try {
       setIsRunning(true)
@@ -315,7 +354,7 @@ export function useCleaner() {
         msgParts.push(`删除成功：${payload?.count || 0} 条`)
       }
 
-      alert(`操作完成！\n\n${msgParts.join('\n')}`)
+      showSuccess(`操作完成！\n\n${msgParts.join('\n')}`)
 
       // Reload managers if admin
       if (isAdmin) {
@@ -326,7 +365,7 @@ export function useCleaner() {
         setManagers(payload?.managers ?? [])
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : '操作失败')
+      showError(err instanceof Error ? err.message : '操作失败')
     } finally {
       setIsRunning(false)
     }
@@ -334,7 +373,14 @@ export function useCleaner() {
 
   const handleExecuteDeletion = async () => {
     if (!dryRun) {
-      if (!window.confirm('警告：正式执行将删除 ERP 系统中的物料数据，是否继续？')) return
+      const confirmed = await showConfirmDialog({
+        title: '警告',
+        message: '正式执行将删除 ERP 系统中的物料数据，是否继续？',
+        variant: 'danger',
+        confirmText: '继续',
+        cancelText: '取消'
+      })
+      if (!confirmed) return
     }
 
     setIsRunning(true)
@@ -386,7 +432,7 @@ export function useCleaner() {
         throw new Error(response.error || '清理失败')
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : '发生未知错误')
+      showError(err instanceof Error ? err.message : '发生未知错误')
     } finally {
       setIsRunning(false)
       setIsExecuting(false)
@@ -397,7 +443,7 @@ export function useCleaner() {
 
   const handleExportResults = async () => {
     if (filteredResults.length === 0) {
-      alert('没有数据可导出')
+      showWarning('没有数据可导出')
       return
     }
 
@@ -418,12 +464,12 @@ export function useCleaner() {
       const exportData = response.success ? (response.data as any) : null
 
       if (response.success && exportData?.success !== false) {
-        alert(`导出成功！\n文件已保存到：${exportData?.filePath ?? ''}`)
+        showSuccess(`导出成功！\n文件已保存到：${exportData?.filePath ?? ''}`)
       } else {
         throw new Error(response.error || exportData?.error || '导出失败')
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : '导出过程中发生错误')
+      showError(err instanceof Error ? err.message : '导出过程中发生错误')
     } finally {
       setIsExporting(false)
     }
@@ -473,6 +519,7 @@ export function useCleaner() {
     handleCheckboxToggle,
     handleConfirmDeletion,
     handleExecuteDeletion,
-    handleExportResults
+    handleExportResults,
+    confirmDialog
   }
 }

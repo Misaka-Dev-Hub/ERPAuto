@@ -15,6 +15,7 @@ import LoginDialog from './components/LoginDialog'
 import UserSelectionDialog, {
   type UserInfo as SelectedUserInfo
 } from './components/UserSelectionDialog'
+import { Toast } from './components/ui/Toast'
 import ExtractorPage from './pages/ExtractorPage'
 import CleanerPage from './pages/CleanerPage'
 import SettingsPage from './pages/SettingsPage'
@@ -409,6 +410,9 @@ function App(): React.JSX.Element {
           {currentPage === 'settings' && <SettingsPage />}
         </main>
       </div>
+
+      {/* Toast Notifications */}
+      <Toast />
     </div>
   )
 }
