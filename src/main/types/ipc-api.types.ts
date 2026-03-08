@@ -11,6 +11,7 @@ import type {
   ExportResultItem,
   ExportResultResponse
 } from './cleaner.types'
+import type { IpcResult } from '../ipc'
 
 /**
  * MySQL connection configuration
@@ -60,11 +61,11 @@ export interface SqlServerQueryResult {
  * File operation APIs
  */
 export interface FileAPI {
-  readFile: (filePath: string) => Promise<string>
-  writeFile: (filePath: string, content: string) => Promise<void>
-  fileExists: (filePath: string) => Promise<boolean>
-  listFiles: (dirPath: string) => Promise<string[]>
-  openPath: (filePath: string) => Promise<void>
+  readFile: (filePath: string) => Promise<IpcResult<string>>
+  writeFile: (filePath: string, content: string) => Promise<IpcResult<void>>
+  fileExists: (filePath: string) => Promise<IpcResult<boolean>>
+  listFiles: (dirPath: string) => Promise<IpcResult<string[]>>
+  openPath: (filePath: string) => Promise<IpcResult<void>>
 }
 
 /**
@@ -77,7 +78,7 @@ export interface ExtractorAPI {
    */
   runExtractor: (
     input: ExtractorInput
-  ) => Promise<{ success: boolean; data?: ExtractorResult; error?: string }>
+  ) => Promise<IpcResult<ExtractorResult>>
   /**
    * Subscribe to progress updates
    * @param callback - Callback function receiving progress data
@@ -102,13 +103,13 @@ export interface CleanerAPI {
    */
   runCleaner: (
     input: CleanerInput
-  ) => Promise<{ success: boolean; data?: CleanerResult; error?: string }>
+  ) => Promise<IpcResult<CleanerResult>>
 
   /**
    * Export validation results to Excel
    * @param items - Validation result items to export
    */
-  exportResults: (items: ExportResultItem[]) => Promise<ExportResultResponse>
+  exportResults: (items: ExportResultItem[]) => Promise<IpcResult<ExportResultResponse>>
 
   /**
    * Subscribe to progress updates
@@ -126,45 +127,48 @@ export interface DatabaseAPI {
    * Connect to MySQL database
    * @param config - MySQL connection config
    */
-  connectMySql: (config: MySqlConfig) => Promise<void>
+  connectMySql: (config: MySqlConfig) => Promise<IpcResult<void>>
 
   /**
    * Disconnect from MySQL database
    */
-  disconnectMySql: () => Promise<void>
+  disconnectMySql: () => Promise<IpcResult<void>>
 
   /**
    * Check if MySQL is connected
    */
-  isMySqlConnected: () => Promise<boolean>
+  isMySqlConnected: () => Promise<IpcResult<boolean>>
 
   /**
    * Execute MySQL query
    * @param sql - SQL query
    * @param params - Query parameters
    */
-  queryMySql: (sql: string, params?: unknown[]) => Promise<MySqlQueryResult>
+  queryMySql: (sql: string, params?: unknown[]) => Promise<IpcResult<MySqlQueryResult>>
 
   /**
    * Connect to SQL Server database
    * @param config - SQL Server connection config
    */
-  connectSqlServer: (config: SqlServerConfig) => Promise<void>
+  connectSqlServer: (config: SqlServerConfig) => Promise<IpcResult<void>>
 
   /**
    * Disconnect from SQL Server database
    */
-  disconnectSqlServer: () => Promise<void>
+  disconnectSqlServer: () => Promise<IpcResult<void>>
 
   /**
    * Check if SQL Server is connected
    */
-  isSqlServerConnected: () => Promise<boolean>
+  isSqlServerConnected: () => Promise<IpcResult<boolean>>
 
   /**
    * Execute SQL Server query
    * @param sql - SQL query
    * @param params - Query parameters
    */
-  querySqlServer: (sql: string, params?: Record<string, unknown>) => Promise<SqlServerQueryResult>
+  querySqlServer: (
+    sql: string,
+    params?: Record<string, unknown>
+  ) => Promise<IpcResult<SqlServerQueryResult>>
 }

@@ -1,13 +1,5 @@
-/**
- * IPC Hook for Validation operations
- *
- * Provides a React-friendly interface for validation IPC calls
- * with loading state, error handling, and data management.
- */
-
 import { useState, useCallback } from 'react'
 
-// Types based on validation types
 interface ValidationRequest {
   mode: 'database_full' | 'database_filtered'
   productionIdFile?: string
@@ -52,9 +44,6 @@ interface UseValidationReturn extends UseValidationState {
   reset: () => void
 }
 
-/**
- * Hook for validation operations
- */
 export function useValidation(): UseValidationReturn {
   const [state, setState] = useState<UseValidationState>({
     loading: false,
@@ -63,81 +52,61 @@ export function useValidation(): UseValidationReturn {
     error: null
   })
 
-  const validate = useCallback(
-    async (request: ValidationRequest): Promise<ValidationResponse | null> => {
-      setState((prev) => ({ ...prev, loading: true, error: null }))
+  const validate = useCallback(async (request: ValidationRequest): Promise<ValidationResponse | null> => {
+    setState((prev) => ({ ...prev, loading: true, error: null }))
+    const response = await window.electron.validation.validate(request)
+    if (!response.success || !response.data) {
+      setState((prev) => ({ ...prev, loading: false, error: response.error || 'Validation failed' }))
+      return response.success ? null : { success: false, error: response.error }
+    }
 
-      try {
-        const result = (await window.electron.ipcRenderer.invoke(
-          'validation:validate',
-          request
-        )) as ValidationResponse
+    const result = response.data as ValidationResponse
+    if (!result.success) {
+      setState((prev) => ({ ...prev, loading: false, error: result.error || 'Validation failed' }))
+      return result
+    }
 
-        if (result.success) {
-          const results = result.results || null
-          const stats = result.stats || null
-          setState({
-            loading: false,
-            data: results,
-            stats: stats,
-            error: null
-          })
-          return result
-        } else {
-          setState((prev) => ({
-            ...prev,
-            loading: false,
-            error: result.error || 'Validation failed'
-          }))
-          return result
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        setState((prev) => ({ ...prev, loading: false, error: message }))
-        return null
-      }
-    },
-    []
-  )
+    setState({
+      loading: false,
+      data: result.results || null,
+      stats: result.stats || null,
+      error: null
+    })
+    return result
+  }, [])
 
   const setSharedProductionIds = useCallback(async (ids: string[]): Promise<void> => {
-    try {
-      await window.electron.ipcRenderer.invoke('validation:setSharedProductionIds', ids)
-    } catch (error) {
-      console.error('Failed to set shared production IDs:', error)
-    }
+    await window.electron.validation.setSharedProductionIds(ids)
   }, [])
 
   const getSharedProductionIds = useCallback(async (): Promise<string[]> => {
-    try {
-      const result = (await window.electron.ipcRenderer.invoke(
-        'validation:getSharedProductionIds'
-      )) as { productionIds?: string[] }
-      return result?.productionIds || []
-    } catch {
+    const result = await window.electron.validation.getSharedProductionIds()
+    if (!result.success || !result.data) {
       return []
     }
+    const payload = result.data as { productionIds?: string[] }
+    return payload.productionIds || []
   }, [])
 
-  const getCleanerData = useCallback(async (): Promise<{
-    orderNumbers: string[]
-    materialCodes: string[]
-  } | null> => {
-    try {
-      const result = (await window.electron.ipcRenderer.invoke('validation:getCleanerData')) as {
-        success: boolean
-        orderNumbers?: string[]
-        materialCodes?: string[]
-      }
-      if (result.success) {
-        return {
-          orderNumbers: result.orderNumbers || [],
-          materialCodes: result.materialCodes || []
-        }
-      }
+  const getCleanerData = useCallback(async (): Promise<{ orderNumbers: string[]; materialCodes: string[] } | null> => {
+    const result = await window.electron.validation.getCleanerData()
+    if (!result.success || !result.data) {
       return null
-    } catch {
+    }
+
+    const payload = result.data as {
+      success?: boolean
+      orderNumbers?: string[]
+      materialCodes?: string[]
+    }
+
+    if (payload.success === false) {
       return null
+    }
+
+    return {
+      orderNumbers: payload.orderNumbers || [],
+      materialCodes: payload.materialCodes || []
     }
   }, [])
 

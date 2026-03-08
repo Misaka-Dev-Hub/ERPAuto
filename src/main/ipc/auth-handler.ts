@@ -14,6 +14,9 @@ import { ipcMain } from 'electron'
 import { SessionManager } from '../services/user/session-manager'
 import { createLogger } from '../services/logger'
 import type { UserInfo } from '../types/user.types'
+import { IPC_CHANNELS } from '../../shared/ipc-channels'
+import { ValidationError } from '../types/errors'
+import { withErrorHandling, type IpcResult } from './index'
 
 const log = createLogger('AuthHandler')
 
@@ -70,16 +73,18 @@ export function registerAuthHandlers(): void {
   /**
    * Get computer name
    */
-  ipcMain.handle('auth:getComputerName', async (): Promise<string> => {
-    const os = await import('os')
-    return os.hostname()
+  ipcMain.handle(IPC_CHANNELS.AUTH_GET_COMPUTER_NAME, async (): Promise<IpcResult<string>> => {
+    return withErrorHandling(async () => {
+      const os = await import('os')
+      return os.hostname()
+    }, 'auth:getComputerName')
   })
 
   /**
    * Silent login by computer name
    */
-  ipcMain.handle('auth:silentLogin', async (): Promise<SilentLoginResponse> => {
-    try {
+  ipcMain.handle(IPC_CHANNELS.AUTH_SILENT_LOGIN, async (): Promise<IpcResult<SilentLoginResponse>> => {
+    return withErrorHandling(async () => {
       log.info('Attempting silent login')
       const success = await sessionManager.loginByComputerName()
       const userInfo = sessionManager.getUserInfo()
@@ -101,34 +106,22 @@ export function registerAuthHandlers(): void {
         }
       }
 
-      log.warn('Silent login failed - no matching user')
-      return {
-        success: false,
-        requiresUserSelection: false
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      log.error('Silent login error', { error: message })
-      return {
-        success: false,
-        error: `无感登录失败：${message}`
-      }
-    }
+      throw new ValidationError('无感登录失败：未找到匹配用户', 'VAL_INVALID_INPUT')
+    }, 'auth:silentLogin')
   })
 
   /**
    * Login with username and password
    */
-  ipcMain.handle('auth:login', async (_event, request: LoginRequest): Promise<LoginResponse> => {
-    try {
+  ipcMain.handle(
+    IPC_CHANNELS.AUTH_LOGIN,
+    async (_event, request: LoginRequest): Promise<IpcResult<LoginResponse>> => {
+      return withErrorHandling(async () => {
       const { username, password } = request
 
       if (!username || !password) {
         log.warn('Login attempt with missing credentials')
-        return {
-          success: false,
-          error: '请输入用户名和密码'
-        }
+        throw new ValidationError('请输入用户名和密码', 'VAL_MISSING_REQUIRED')
       }
 
       log.info('Login attempt', { username })
@@ -144,57 +137,53 @@ export function registerAuthHandlers(): void {
       }
 
       log.warn('Login failed - invalid credentials', { username })
-      return {
-        success: false,
-        error: '用户名或密码错误'
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      log.error('Login error', { error: message })
-      return {
-        success: false,
-        error: `登录失败：${message}`
-      }
+      throw new ValidationError('用户名或密码错误', 'VAL_INVALID_INPUT')
+      }, 'auth:login')
     }
-  })
+  )
 
   /**
    * Logout
    */
-  ipcMain.handle('auth:logout', async (): Promise<void> => {
-    const userInfo = sessionManager.getUserInfo()
-    log.info('User logout', { username: userInfo?.username })
-    sessionManager.logout()
+  ipcMain.handle(IPC_CHANNELS.AUTH_LOGOUT, async (): Promise<IpcResult<void>> => {
+    return withErrorHandling(async () => {
+      const userInfo = sessionManager.getUserInfo()
+      log.info('User logout', { username: userInfo?.username })
+      sessionManager.logout()
+    }, 'auth:logout')
   })
 
   /**
    * Get current user
    */
-  ipcMain.handle('auth:getCurrentUser', async (): Promise<CurrentUserResponse> => {
-    const isAuthenticated = sessionManager.isAuthenticated()
-    const userInfo = sessionManager.getUserInfo()
-
-    return {
-      isAuthenticated,
-      userInfo: userInfo ?? undefined
-    }
+  ipcMain.handle(IPC_CHANNELS.AUTH_GET_CURRENT_USER, async (): Promise<IpcResult<CurrentUserResponse>> => {
+    return withErrorHandling(async () => {
+      const isAuthenticated = sessionManager.isAuthenticated()
+      const userInfo = sessionManager.getUserInfo()
+      return {
+        isAuthenticated,
+        userInfo: userInfo ?? undefined
+      }
+    }, 'auth:getCurrentUser')
   })
 
   /**
    * Get all users (for admin user selection)
    */
-  ipcMain.handle('auth:getAllUsers', async (): Promise<UserInfo[]> => {
-    log.debug('Fetching all users for admin selection')
-    return await sessionManager.getAllUsers()
+  ipcMain.handle(IPC_CHANNELS.AUTH_GET_ALL_USERS, async (): Promise<IpcResult<UserInfo[]>> => {
+    return withErrorHandling(async () => {
+      log.debug('Fetching all users for admin selection')
+      return await sessionManager.getAllUsers()
+    }, 'auth:getAllUsers')
   })
 
   /**
    * Switch user (admin only)
    */
   ipcMain.handle(
-    'auth:switchUser',
-    async (_event, userInfo: UserInfo): Promise<UserSelectionResponse> => {
-      try {
+    IPC_CHANNELS.AUTH_SWITCH_USER,
+    async (_event, userInfo: UserInfo): Promise<IpcResult<UserSelectionResponse>> => {
+      return withErrorHandling(async () => {
         log.info('User switch attempt', { targetUser: userInfo.username })
         const success = sessionManager.switchUser(userInfo)
 
@@ -208,25 +197,16 @@ export function registerAuthHandlers(): void {
         }
 
         log.warn('User switch failed')
-        return {
-          success: false,
-          error: '用户切换失败'
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        log.error('User switch error', { error: message })
-        return {
-          success: false,
-          error: `用户切换失败：${message}`
-        }
-      }
+        throw new ValidationError('用户切换失败', 'VAL_INVALID_INPUT')
+      }, 'auth:switchUser')
     }
   )
 
   /**
    * Check if current user is admin
    */
-  ipcMain.handle('auth:isAdmin', async (): Promise<boolean> => {
-    return sessionManager.isAdmin()
+  ipcMain.handle(IPC_CHANNELS.AUTH_IS_ADMIN, async (): Promise<IpcResult<boolean>> => {
+    return withErrorHandling(async () => sessionManager.isAdmin(), 'auth:isAdmin')
   })
 }
+

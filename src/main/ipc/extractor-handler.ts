@@ -1,4 +1,4 @@
-import { ipcMain, webContents } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
 import { ErpAuthService } from '../services/erp/erp-auth'
 import { ExtractorService } from '../services/erp/extractor'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
@@ -9,30 +9,27 @@ import { ErpConnectionError, ValidationError, DatabaseQueryError } from '../type
 import type { ExtractorInput, ExtractorResult, ExtractionProgress } from '../types/extractor.types'
 import { UserErpConfigService } from '../services/user/user-erp-config-service'
 import { ConfigManager } from '../services/config/config-manager'
+import { IPC_CHANNELS } from '../../shared/ipc-channels'
 
 const log = createLogger('ExtractorHandler')
 
 function sendProgress(
-  windowId: number,
+  sender: WebContents,
   message: string,
   progress: number,
   extra?: Partial<ExtractionProgress>
 ): void {
   try {
     const progressData = { message, progress, ...extra }
-    webContents.getAllWebContents().forEach((wc) => {
-      wc.send('extractor:progress', progressData)
-    })
+    sender.send(IPC_CHANNELS.EXTRACTOR_PROGRESS, progressData)
   } catch (error) {
     log.warn('Failed to send progress event', { error })
   }
 }
 
-function sendLog(windowId: number, level: string, message: string): void {
+function sendLog(sender: WebContents, level: string, message: string): void {
   try {
-    webContents.getAllWebContents().forEach((wc) => {
-      wc.send('extractor:log', { level, message })
-    })
+    sender.send(IPC_CHANNELS.EXTRACTOR_LOG, { level, message })
   } catch (error) {
     log.warn('Failed to send log event', { error })
   }
@@ -76,14 +73,13 @@ async function getErpConfig(): Promise<{
  */
 export function registerExtractorHandlers(): void {
   ipcMain.handle(
-    'extractor:run',
+    IPC_CHANNELS.EXTRACTOR_RUN,
     async (event, input: ExtractorInput): Promise<IpcResult<ExtractorResult>> => {
-      const windowId = event.sender.id
+      const sender = event.sender
 
       return withErrorHandling(async () => {
         let authService: ErpAuthService | null = null
         let dbService: IDatabaseService | null = null
-        let erpConfigService: UserErpConfigService | null = null
 
         try {
           // Get ERP configuration from database for current user
@@ -97,11 +93,11 @@ export function registerExtractorHandlers(): void {
 
           // Create database service using factory
           log.info('Connecting to database for order resolution...')
-          sendProgress(windowId, '连接数据库...', 3.33, {
+          sendProgress(sender, '连接数据库...', 3.33, {
             phase: 'login',
             subProgress: { step: '连接数据库', current: 1, total: 3 }
           })
-          sendLog(windowId, 'system', '正在连接数据库...')
+          sendLog(sender, 'system', '正在连接数据库...')
 
           try {
             dbService = await create()
@@ -114,11 +110,11 @@ export function registerExtractorHandlers(): void {
           }
 
           // Resolve order numbers (convert productionIDs to 生产订单号)
-          sendProgress(windowId, '解析订单号...', 6.67, {
+          sendProgress(sender, '解析订单号...', 6.67, {
             phase: 'login',
             subProgress: { step: '解析订单号', current: 2, total: 3 }
           })
-          sendLog(windowId, 'info', '正在解析订单号...')
+          sendLog(sender, 'info', '正在解析订单号...')
 
           const resolver = new OrderNumberResolver(dbService)
           const mappings = await resolver.resolve(input.orderNumbers)
@@ -139,7 +135,7 @@ export function registerExtractorHandlers(): void {
           }
 
           log.info('Resolved order numbers', { count: validOrderNumbers.length })
-          sendLog(windowId, 'info', `已解析 ${validOrderNumbers.length} 个有效订单号`)
+          sendLog(sender, 'info', `已解析 ${validOrderNumbers.length} 个有效订单号`)
 
           // Create auth service and login
           authService = new ErpAuthService({
@@ -149,18 +145,18 @@ export function registerExtractorHandlers(): void {
             headless: true
           })
 
-          sendProgress(windowId, '登录 ERP 系统...', 9.99, {
+          sendProgress(sender, '登录 ERP 系统...', 9.99, {
             phase: 'login',
             subProgress: { step: '登录 ERP 系统', current: 3, total: 3 }
           })
-          sendLog(windowId, 'system', '正在登录 ERP 系统...')
+          sendLog(sender, 'system', '正在登录 ERP 系统...')
 
           log.info('Logging in to ERP...')
           try {
             await authService.login()
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : '未知错误'
-            sendLog(windowId, 'error', `ERP 登录失败：${errorMsg}`)
+            sendLog(sender, 'error', `ERP 登录失败：${errorMsg}`)
             throw new ErpConnectionError(
               'ERP 登录失败',
               'ERP_LOGIN_FAILED',
@@ -168,7 +164,7 @@ export function registerExtractorHandlers(): void {
             )
           }
           log.info('Login successful')
-          sendLog(windowId, 'success', 'ERP 登录成功')
+          sendLog(sender, 'success', 'ERP 登录成功')
 
           // Create extractor service and run extraction with resolved order numbers
           const extractor = new ExtractorService(authService)
@@ -178,11 +174,11 @@ export function registerExtractorHandlers(): void {
             ...input,
             orderNumbers: validOrderNumbers,
             onProgress: (message, progress, extra) => {
-              sendProgress(windowId, message, progress, extra)
-              sendLog(windowId, 'info', message)
+              sendProgress(sender, message, progress, extra)
+              sendLog(sender, 'info', message)
             },
             onLog: (level, message) => {
-              sendLog(windowId, level, message)
+              sendLog(sender, level, message)
             }
           }
 

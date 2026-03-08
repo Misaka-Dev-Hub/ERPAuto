@@ -26,14 +26,17 @@ const SettingsPage: React.FC = () => {
     try {
       setIsLoading(true)
       // ERP credentials are loaded from database (current user's config)
-      const config = await window.electron.settings.getSettings()
+      const response = await window.electron.settings.getSettings()
+      const config = response.success ? (response.data as { erp?: ErpCredentials } | undefined) : undefined
 
       // Extract ERP credentials from the config
-      if (config && (config as any).erp) {
+      if (config?.erp) {
         setCredentials({
-          username: (config as any).erp.username || '',
-          password: (config as any).erp.password || ''
+          username: config.erp.username || '',
+          password: config.erp.password || ''
         })
+      } else if (!response.success) {
+        showMessage('error', response.error || '加载 ERP 配置失败')
       }
       setIsModified(false)
     } catch (error) {
@@ -56,13 +59,14 @@ const SettingsPage: React.FC = () => {
           username: credentials.username,
           password: credentials.password
         }
-      } as any)
+      })
+      const saveData = result.success ? (result.data as { success?: boolean; error?: string } | undefined) : undefined
 
-      if (result.success) {
+      if (result.success && saveData?.success !== false) {
         setIsModified(false)
         showMessage('success', 'ERP 账号密码保存成功')
       } else {
-        showMessage('error', result.error || '保存失败')
+        showMessage('error', result.error || saveData?.error || '保存失败')
       }
     } catch (error) {
       showMessage('error', '保存配置时发生错误')

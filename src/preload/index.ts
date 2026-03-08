@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
 import type { MySqlConfig, SqlServerConfig } from '../main/types/ipc-api.types'
 import type { ExtractorInput, ExtractionProgress } from '../main/types/extractor.types'
 import type { CleanerInput, CleanerProgress, ExportResultItem } from '../main/types/cleaner.types'
@@ -11,158 +10,202 @@ import type {
   MaterialTypeRecord,
   MaterialTypeBatchRequest
 } from '../main/types/validation.types'
-import type { SettingsData } from '../main/types/settings.types'
+import type { IpcResult } from '../main/ipc'
+import { IPC_CHANNELS } from '../shared/ipc-channels'
 
-// Custom APIs for renderer
+type ErpSettingsPayload = {
+  erp?: {
+    username?: string
+    password?: string
+  }
+}
+
+const processApi = {
+  versions: {
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    node: process.versions.node
+  }
+}
+
+function invokeIpc<T = unknown>(channel: string, ...args: unknown[]): Promise<IpcResult<T>> {
+  return ipcRenderer.invoke(channel, ...args).then((result: unknown) => {
+    if (result && typeof result === 'object' && 'success' in (result as Record<string, unknown>)) {
+      const typed = result as Record<string, unknown>
+      const hasIpcShape = 'data' in typed || 'code' in typed || 'error' in typed
+
+      if (hasIpcShape) {
+        return typed as unknown as IpcResult<T>
+      }
+
+      if (typed.success === true) {
+        return { success: true, data: result as T }
+      }
+
+      return {
+        success: false,
+        error: typeof typed.error === 'string' ? typed.error : 'IPC operation failed'
+      }
+    }
+
+    return { success: true, data: result as T }
+  })
+}
+
 const api = {
-  // File operations
+  process: processApi,
+
   file: {
-    readFile: (filePath: string) => ipcRenderer.invoke('file:read', filePath),
+    readFile: (filePath: string) => invokeIpc(IPC_CHANNELS.FILE_READ, filePath),
     writeFile: (filePath: string, content: string) =>
-      ipcRenderer.invoke('file:write', filePath, content),
-    fileExists: (filePath: string) => ipcRenderer.invoke('file:exists', filePath),
-    listFiles: (dirPath: string) => ipcRenderer.invoke('file:list', dirPath),
-    openPath: (filePath: string) => ipcRenderer.invoke('file:openPath', filePath)
+      invokeIpc(IPC_CHANNELS.FILE_WRITE, filePath, content),
+    fileExists: (filePath: string) => invokeIpc(IPC_CHANNELS.FILE_EXISTS, filePath),
+    listFiles: (dirPath: string) => invokeIpc(IPC_CHANNELS.FILE_LIST, dirPath),
+    openPath: (filePath: string) => invokeIpc(IPC_CHANNELS.FILE_OPEN_PATH, filePath)
   },
 
-  // Extractor service
   extractor: {
-    runExtractor: (input: ExtractorInput) => ipcRenderer.invoke('extractor:run', input),
+    runExtractor: (input: ExtractorInput): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.EXTRACTOR_RUN, input),
     onProgress: (callback: (data: ExtractionProgress) => void) => {
       const subscription = (_event: Electron.IpcRendererEvent, data: ExtractionProgress) =>
         callback(data)
-      ipcRenderer.on('extractor:progress', subscription)
-      return () => ipcRenderer.removeListener('extractor:progress', subscription)
+      ipcRenderer.on(IPC_CHANNELS.EXTRACTOR_PROGRESS, subscription)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.EXTRACTOR_PROGRESS, subscription)
     },
     onLog: (callback: (data: { level: string; message: string }) => void) => {
       const subscription = (
         _event: Electron.IpcRendererEvent,
         data: { level: string; message: string }
       ) => callback(data)
-      ipcRenderer.on('extractor:log', subscription)
-      return () => ipcRenderer.removeListener('extractor:log', subscription)
+      ipcRenderer.on(IPC_CHANNELS.EXTRACTOR_LOG, subscription)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.EXTRACTOR_LOG, subscription)
     }
   },
 
-  // Cleaner service
   cleaner: {
-    runCleaner: (input: CleanerInput) => ipcRenderer.invoke('cleaner:run', input),
-    exportResults: (items: ExportResultItem[]) =>
-      ipcRenderer.invoke('cleaner:exportResults', items),
+    runCleaner: (input: CleanerInput): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.CLEANER_RUN, input),
+    exportResults: (items: ExportResultItem[]): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.CLEANER_EXPORT_RESULTS, items),
     onProgress: (callback: (data: CleanerProgress) => void) => {
       const subscription = (_event: Electron.IpcRendererEvent, data: CleanerProgress) =>
         callback(data)
-      ipcRenderer.on('cleaner:progress', subscription)
-      return () => ipcRenderer.removeListener('cleaner:progress', subscription)
+      ipcRenderer.on(IPC_CHANNELS.CLEANER_PROGRESS, subscription)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.CLEANER_PROGRESS, subscription)
     }
   },
 
-  // Order number resolver
   resolver: {
-    resolve: (input: ResolverInput) => ipcRenderer.invoke('resolver:resolve', input),
-    validateFormat: (inputs: string[]) => ipcRenderer.invoke('resolver:validateFormat', inputs)
+    resolve: (input: ResolverInput): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.RESOLVER_RESOLVE, input),
+    validateFormat: (inputs: string[]): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.RESOLVER_VALIDATE_FORMAT, inputs)
   },
 
-  // Authentication service
   auth: {
-    getComputerName: () => ipcRenderer.invoke('auth:getComputerName'),
-    silentLogin: () => ipcRenderer.invoke('auth:silentLogin'),
-    login: (request: LoginRequest) => ipcRenderer.invoke('auth:login', request),
-    logout: () => ipcRenderer.invoke('auth:logout'),
-    getCurrentUser: () => ipcRenderer.invoke('auth:getCurrentUser'),
-    getAllUsers: () => ipcRenderer.invoke('auth:getAllUsers'),
-    switchUser: (userInfo: UserInfo) => ipcRenderer.invoke('auth:switchUser', userInfo),
-    isAdmin: () => ipcRenderer.invoke('auth:isAdmin')
+    getComputerName: (): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.AUTH_GET_COMPUTER_NAME),
+    silentLogin: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.AUTH_SILENT_LOGIN),
+    login: (request: LoginRequest): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.AUTH_LOGIN, request),
+    logout: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.AUTH_LOGOUT),
+    getCurrentUser: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.AUTH_GET_CURRENT_USER),
+    getAllUsers: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.AUTH_GET_ALL_USERS),
+    switchUser: (userInfo: UserInfo): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.AUTH_SWITCH_USER, userInfo),
+    isAdmin: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.AUTH_IS_ADMIN)
   },
 
-  // Database service
   database: {
-    connectMySql: (config: MySqlConfig) => ipcRenderer.invoke('database:mysql:connect', config),
-    disconnectMySql: () => ipcRenderer.invoke('database:mysql:disconnect'),
-    isMySqlConnected: () => ipcRenderer.invoke('database:mysql:isConnected'),
-    queryMySql: (sql: string, params?: any[]) =>
-      ipcRenderer.invoke('database:mysql:query', sql, params),
-
-    // SQL Server
-    connectSqlServer: (config: SqlServerConfig) =>
-      ipcRenderer.invoke('database:sqlserver:connect', config),
-    disconnectSqlServer: () => ipcRenderer.invoke('database:sqlserver:disconnect'),
-    isSqlServerConnected: () => ipcRenderer.invoke('database:sqlserver:isConnected'),
-    querySqlServer: (sql: string, params?: Record<string, unknown>) =>
-      ipcRenderer.invoke('database:sqlserver:query', sql, params)
+    connectMySql: (config: MySqlConfig): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.DATABASE_MYSQL_CONNECT, config),
+    disconnectMySql: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.DATABASE_MYSQL_DISCONNECT),
+    isMySqlConnected: (): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.DATABASE_MYSQL_IS_CONNECTED),
+    queryMySql: (sql: string, params?: any[]): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.DATABASE_MYSQL_QUERY, sql, params),
+    connectSqlServer: (config: SqlServerConfig): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.DATABASE_SQLSERVER_CONNECT, config),
+    disconnectSqlServer: (): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.DATABASE_SQLSERVER_DISCONNECT),
+    isSqlServerConnected: (): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.DATABASE_SQLSERVER_IS_CONNECTED),
+    querySqlServer: (sql: string, params?: Record<string, unknown>): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.DATABASE_SQLSERVER_QUERY, sql, params)
   },
 
-  // Validation service
   validation: {
-    validate: (request: ValidationRequest) => ipcRenderer.invoke('validation:validate', request),
-    setSharedProductionIds: (productionIds: string[]) =>
-      ipcRenderer.invoke('validation:setSharedProductionIds', productionIds),
-    getSharedProductionIds: () => ipcRenderer.invoke('validation:getSharedProductionIds'),
-    getCleanerData: () => ipcRenderer.invoke('validation:getCleanerData')
+    validate: (request: ValidationRequest): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.VALIDATION_VALIDATE, request),
+    setSharedProductionIds: (productionIds: string[]): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.VALIDATION_SET_SHARED_PRODUCTION_IDS, productionIds),
+    getSharedProductionIds: (): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.VALIDATION_GET_SHARED_PRODUCTION_IDS),
+    getCleanerData: (): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.VALIDATION_GET_CLEANER_DATA)
   },
 
-  // Materials service
   materials: {
-    upsertBatch: (materials: { materialCode: string; managerName: string }[]) =>
-      ipcRenderer.invoke('materials:upsertBatch', { materials }),
-    delete: (materialCodes: string[]) => ipcRenderer.invoke('materials:delete', { materialCodes }),
-    getManagers: () => ipcRenderer.invoke('materials:getManagers'),
-    getByManager: (managerName: string) =>
-      ipcRenderer.invoke('materials:getByManager', managerName),
-    getAll: () => ipcRenderer.invoke('materials:getAll'),
-    getStatistics: () => ipcRenderer.invoke('materials:getStatistics'),
-    updateManager: (materialCode: string, managerName: string) =>
-      ipcRenderer.invoke('materials:updateManager', { materialCode, managerName })
+    upsertBatch: (materials: { materialCode: string; managerName: string }[]): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.MATERIALS_UPSERT_BATCH, { materials }),
+    delete: (materialCodes: string[]): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.MATERIALS_DELETE, { materialCodes }),
+    getManagers: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.MATERIALS_GET_MANAGERS),
+    getByManager: (managerName: string): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.MATERIALS_GET_BY_MANAGER, managerName),
+    getAll: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.MATERIALS_GET_ALL),
+    getStatistics: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.MATERIALS_GET_STATISTICS),
+    updateManager: (materialCode: string, managerName: string): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.MATERIALS_UPDATE_MANAGER, { materialCode, managerName })
   },
 
-  // Settings service
   settings: {
-    getUserType: () => ipcRenderer.invoke('settings:getUserType'),
-    getSettings: () => ipcRenderer.invoke('settings:getSettings'),
-    saveSettings: (settings: SettingsData) => ipcRenderer.invoke('settings:saveSettings', settings),
-    resetDefaults: () => ipcRenderer.invoke('settings:resetDefaults'),
-    testErpConnection: () => ipcRenderer.invoke('settings:testErpConnection'),
-    testDbConnection: () => ipcRenderer.invoke('settings:testDbConnection')
+    getUserType: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.SETTINGS_GET_USER_TYPE),
+    getSettings: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.SETTINGS_GET_SETTINGS),
+    saveSettings: (settings: ErpSettingsPayload): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.SETTINGS_SAVE_SETTINGS, settings),
+    resetDefaults: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.SETTINGS_RESET_DEFAULTS),
+    testDbConnection: (): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.SETTINGS_TEST_DB_CONNECTION)
   },
 
-  // Material Type service
   materialType: {
-    getAll: () => ipcRenderer.invoke('materialType:getAll'),
-    getByManager: (managerName: string) =>
-      ipcRenderer.invoke('materialType:getByManager', managerName),
-    getManagers: () => ipcRenderer.invoke('materialType:getManagers'),
-    upsert: (materialName: string, managerName: string) =>
-      ipcRenderer.invoke('materialType:upsert', { materialName, managerName }),
-    delete: (materialName: string, managerName: string) =>
-      ipcRenderer.invoke('materialType:delete', { materialName, managerName }),
-    upsertBatch: (request: MaterialTypeBatchRequest) =>
-      ipcRenderer.invoke('materialType:upsertBatch', request)
+    getAll: (): Promise<IpcResult<MaterialTypeRecord[]>> =>
+      invokeIpc(IPC_CHANNELS.MATERIAL_TYPE_GET_ALL),
+    getByManager: (managerName: string): Promise<IpcResult<MaterialTypeRecord[]>> =>
+      invokeIpc(IPC_CHANNELS.MATERIAL_TYPE_GET_BY_MANAGER, managerName),
+    getManagers: (): Promise<IpcResult<string[]>> =>
+      invokeIpc(IPC_CHANNELS.MATERIAL_TYPE_GET_MANAGERS),
+    upsert: (materialName: string, managerName: string): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.MATERIAL_TYPE_UPSERT, { materialName, managerName }),
+    delete: (materialName: string, managerName: string): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.MATERIAL_TYPE_DELETE, { materialName, managerName }),
+    upsertBatch: (request: MaterialTypeBatchRequest): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.MATERIAL_TYPE_UPSERT_BATCH, request)
   },
 
-  // User ERP Configuration service
   userErpConfig: {
-    getCurrent: () => ipcRenderer.invoke('user-erp-config:getCurrent'),
-    update: (config: { url: string; username: string; password: string }) =>
-      ipcRenderer.invoke('user-erp-config:update', config),
-    testConnection: (config: { url: string; username: string; password: string }) =>
-      ipcRenderer.invoke('user-erp-config:testConnection', config),
-    getAll: () => ipcRenderer.invoke('user-erp-config:getAll')
+    getCurrent: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.USER_ERP_CONFIG_GET_CURRENT),
+    update: (config: { url: string; username: string; password: string }): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.USER_ERP_CONFIG_UPDATE, config),
+    testConnection: (config: { url: string; username: string; password: string }): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.USER_ERP_CONFIG_TEST_CONNECTION, config),
+    getAll: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.USER_ERP_CONFIG_GET_ALL)
   }
 } as const
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', { ...electronAPI, ...api })
+    contextBridge.exposeInMainWorld('electron', api)
     contextBridge.exposeInMainWorld('api', api)
   } catch (error) {
     console.error(error)
   }
 } else {
   // @ts-ignore (define in dts)
-  window.electron = { ...electronAPI, ...api }
+  window.electron = api
   // @ts-ignore (define in dts)
   window.api = api
 }
+

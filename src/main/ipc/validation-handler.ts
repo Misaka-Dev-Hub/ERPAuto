@@ -23,6 +23,7 @@ import type {
   ValidationResult,
   MaterialRecordSummary
 } from '../types/validation.types'
+import { IPC_CHANNELS } from '../../shared/ipc-channels'
 
 const log = createLogger('ValidationHandler')
 
@@ -30,28 +31,28 @@ const log = createLogger('ValidationHandler')
  * Shared state for Production IDs from extractor page
  * This is a simple in-memory store for sharing Production IDs between pages
  */
-const sharedProductionIds = new Set<string>()
+const sharedProductionIdsBySender = new Map<number, Set<string>>()
 
 /**
  * Set shared Production IDs
  */
-export function setSharedProductionIds(ids: string[]): void {
-  sharedProductionIds.clear()
-  ids.forEach((id) => sharedProductionIds.add(id))
+export function setSharedProductionIds(senderId: number, ids: string[]): void {
+  sharedProductionIdsBySender.set(senderId, new Set(ids))
 }
 
 /**
  * Get shared Production IDs
  */
-export function getSharedProductionIds(): string[] {
-  return [...sharedProductionIds]
+export function getSharedProductionIds(senderId: number): string[] {
+  const senderSet = sharedProductionIdsBySender.get(senderId)
+  return senderSet ? [...senderSet] : []
 }
 
 /**
  * Clear shared Production IDs
  */
-export function clearSharedProductionIds(): void {
-  sharedProductionIds.clear()
+export function clearSharedProductionIds(senderId: number): void {
+  sharedProductionIdsBySender.delete(senderId)
 }
 
 /**
@@ -233,8 +234,8 @@ export function registerValidationHandlers(): void {
    * Run material validation from database
    */
   ipcMain.handle(
-    'validation:validate',
-    async (_event, request: ValidationRequest): Promise<ValidationResponse> => {
+    IPC_CHANNELS.VALIDATION_VALIDATE,
+    async (event, request: ValidationRequest): Promise<ValidationResponse> => {
       let dbService: MySqlService | SqlServerService | null = null
 
       try {
@@ -273,7 +274,7 @@ export function registerValidationHandlers(): void {
         if (request.mode === 'database_filtered') {
           if (request.useSharedProductionIds) {
             // Use shared Production IDs from extractor page
-            const sharedIds = getSharedProductionIds()
+            const sharedIds = getSharedProductionIds(event.sender.id)
             log.info(`Using ${sharedIds.length} shared Production IDs`)
 
             if (sharedIds.length === 0) {
@@ -445,7 +446,7 @@ export function registerValidationHandlers(): void {
    * Upsert batch materials to MaterialsToBeDeleted
    */
   ipcMain.handle(
-    'materials:upsertBatch',
+    IPC_CHANNELS.MATERIALS_UPSERT_BATCH,
     async (_event, request: MaterialUpsertBatchRequest): Promise<MaterialOperationResponse> => {
       try {
         const dao = new MaterialsToBeDeletedDAO()
@@ -472,7 +473,7 @@ export function registerValidationHandlers(): void {
    * Delete materials by material codes
    */
   ipcMain.handle(
-    'materials:delete',
+    IPC_CHANNELS.MATERIALS_DELETE,
     async (_event, request: MaterialDeleteRequest): Promise<MaterialOperationResponse> => {
       try {
         const dao = new MaterialsToBeDeletedDAO()
@@ -496,7 +497,7 @@ export function registerValidationHandlers(): void {
   /**
    * Get unique manager names
    */
-  ipcMain.handle('materials:getManagers', async (_event): Promise<{ managers: string[] }> => {
+  ipcMain.handle(IPC_CHANNELS.MATERIALS_GET_MANAGERS, async (_event): Promise<{ managers: string[] }> => {
     try {
       const dao = new MaterialsToBeDeletedDAO()
       const managers = await dao.getManagers()
@@ -513,7 +514,7 @@ export function registerValidationHandlers(): void {
    * Update manager for a single material
    */
   ipcMain.handle(
-    'materials:updateManager',
+    IPC_CHANNELS.MATERIALS_UPDATE_MANAGER,
     async (
       _event,
       request: { materialCode: string; managerName: string }
@@ -537,7 +538,7 @@ export function registerValidationHandlers(): void {
    * Get materials by manager
    */
   ipcMain.handle(
-    'materials:getByManager',
+    IPC_CHANNELS.MATERIALS_GET_BY_MANAGER,
     async (_event, managerName: string): Promise<{ materials: MaterialRecordSummary[] }> => {
       let dbService: MySqlService | SqlServerService | null = null
 
@@ -616,7 +617,7 @@ export function registerValidationHandlers(): void {
    * Get all material records
    */
   ipcMain.handle(
-    'materials:getAll',
+    IPC_CHANNELS.MATERIALS_GET_ALL,
     async (_event): Promise<{ materials: MaterialRecordSummary[] }> => {
       let dbService: MySqlService | SqlServerService | null = null
 
@@ -691,7 +692,7 @@ export function registerValidationHandlers(): void {
   /**
    * Get statistics
    */
-  ipcMain.handle('materials:getStatistics', async (_event): Promise<{ stats: any }> => {
+  ipcMain.handle(IPC_CHANNELS.MATERIALS_GET_STATISTICS, async (_event): Promise<{ stats: any }> => {
     try {
       const dao = new MaterialsToBeDeletedDAO()
       const stats = await dao.getStatistics()
@@ -708,10 +709,10 @@ export function registerValidationHandlers(): void {
    * Set shared Production IDs from extractor page
    */
   ipcMain.handle(
-    'validation:setSharedProductionIds',
-    async (_event, productionIds: string[]): Promise<void> => {
+    IPC_CHANNELS.VALIDATION_SET_SHARED_PRODUCTION_IDS,
+    async (event, productionIds: string[]): Promise<void> => {
       log.info(`Received ${productionIds.length} shared Production IDs`)
-      setSharedProductionIds(productionIds)
+      setSharedProductionIds(event.sender.id, productionIds)
     }
   )
 
@@ -719,9 +720,9 @@ export function registerValidationHandlers(): void {
    * Get shared Production IDs
    */
   ipcMain.handle(
-    'validation:getSharedProductionIds',
-    async (): Promise<{ productionIds: string[] }> => {
-      return { productionIds: getSharedProductionIds() }
+    IPC_CHANNELS.VALIDATION_GET_SHARED_PRODUCTION_IDS,
+    async (event): Promise<{ productionIds: string[] }> => {
+      return { productionIds: getSharedProductionIds(event.sender.id) }
     }
   )
 
@@ -730,7 +731,7 @@ export function registerValidationHandlers(): void {
    * Filters materials by current user (admin sees all, regular users see only their own)
    */
   ipcMain.handle(
-    'validation:getCleanerData',
+    IPC_CHANNELS.VALIDATION_GET_CLEANER_DATA,
     async (
       _event
     ): Promise<{
@@ -766,7 +767,7 @@ export function registerValidationHandlers(): void {
         dbService = await getValidationDatabaseService()
 
         // 1. Get order numbers from shared Production IDs
-        const sharedIds = getSharedProductionIds()
+        const sharedIds = getSharedProductionIds(_event.sender.id)
         let orderNumbers: string[] = []
 
         if (sharedIds.length > 0) {

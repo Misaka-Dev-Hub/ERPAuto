@@ -1,4 +1,4 @@
-import { ipcMain, webContents } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
 import { ErpAuthService } from '../services/erp/erp-auth'
 import { CleanerService } from '../services/erp/cleaner'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
@@ -19,11 +19,12 @@ import type {
   ExportResultResponse
 } from '../types/cleaner.types'
 import { UserErpConfigService } from '../services/user/user-erp-config-service'
+import { IPC_CHANNELS } from '../../shared/ipc-channels'
 
 const log = createLogger('CleanerHandler')
 
 function sendProgress(
-  windowId: number,
+  sender: WebContents,
   message: string,
   progress: number,
   extra?: Partial<CleanerProgress>
@@ -39,9 +40,7 @@ function sendProgress(
       currentOrderNumber: extra?.currentOrderNumber,
       phase: extra?.phase ?? 'processing'
     }
-    webContents.getAllWebContents().forEach((wc) => {
-      wc.send('cleaner:progress', progressData)
-    })
+    sender.send(IPC_CHANNELS.CLEANER_PROGRESS, progressData)
   } catch (error) {
     log.warn('Failed to send progress event', { error })
   }
@@ -116,9 +115,9 @@ async function getErpConfig(): Promise<{
 
 export function registerCleanerHandlers(): void {
   ipcMain.handle(
-    'cleaner:run',
+    IPC_CHANNELS.CLEANER_RUN,
     async (event, input: CleanerInput): Promise<IpcResult<CleanerResult>> => {
-      const windowId = event.sender.id
+      const sender = event.sender
       const startTime = Date.now()
 
       return withErrorHandling(async () => {
@@ -192,7 +191,7 @@ export function registerCleanerHandlers(): void {
           // Send login complete progress
           const totalOrders = validOrderNumbers.length
           const loginProgress = (1 / (1 + totalOrders)) * 100
-          sendProgress(windowId, 'ERP 登录成功', loginProgress, {
+          sendProgress(sender, 'ERP 登录成功', loginProgress, {
             phase: 'login',
             currentOrderIndex: 0,
             totalOrders,
@@ -206,7 +205,7 @@ export function registerCleanerHandlers(): void {
             ...input,
             orderNumbers: validOrderNumbers,
             onProgress: (message, progress, extra) => {
-              sendProgress(windowId, message, progress ?? 0, extra)
+              sendProgress(sender, message, progress ?? 0, extra)
             }
           }
 
@@ -218,7 +217,7 @@ export function registerCleanerHandlers(): void {
           }
 
           // Send completion progress
-          sendProgress(windowId, '清理完成', 100, {
+          sendProgress(sender, '清理完成', 100, {
             phase: 'complete',
             currentOrderIndex: totalOrders,
             totalOrders,
@@ -280,30 +279,16 @@ export function registerCleanerHandlers(): void {
   )
 
   ipcMain.handle(
-    'cleaner:exportResults',
-    async (_event, items: ExportResultItem[]): Promise<ExportResultResponse> => {
-      try {
+    IPC_CHANNELS.CLEANER_EXPORT_RESULTS,
+    async (_event, items: ExportResultItem[]): Promise<IpcResult<ExportResultResponse>> => {
+      return withErrorHandling(async () => {
         log.info('Exporting validation results', { count: items.length })
-
         if (!items || items.length === 0) {
-          return {
-            success: false,
-            error: '没有数据可导出'
-          }
+          throw new ValidationError('没有数据可导出', 'VAL_INVALID_INPUT')
         }
-
         const exporter = new ResultExporter()
-        const result = await exporter.exportValidationResults(items)
-
-        return result
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        log.error('Export handler failed', { error: errorMessage })
-        return {
-          success: false,
-          error: errorMessage
-        }
-      }
+        return await exporter.exportValidationResults(items)
+      }, 'cleaner:exportResults')
     }
   )
 }

@@ -85,8 +85,10 @@ export function useCleaner() {
   useEffect(() => {
     const initializePage = async () => {
       try {
-        const admin = await window.electron.auth.isAdmin()
-        const user = await window.electron.auth.getCurrentUser()
+        const adminResult = await window.electron.auth.isAdmin()
+        const userResult = await window.electron.auth.getCurrentUser()
+        const admin = adminResult.success && Boolean(adminResult.data)
+        const user = userResult.success ? userResult.data : undefined
         setIsAdmin(admin)
         if (user && user.userInfo) {
           setCurrentUsername(user.userInfo.username)
@@ -98,13 +100,16 @@ export function useCleaner() {
         // Load managers
         if (admin) {
           const resp = await window.electron.materials.getManagers()
-          setManagers(resp.managers)
-          setSelectedManagers(new Set(resp.managers))
+          const managersPayload = resp.success ? (resp.data as { managers: string[] } | undefined) : undefined
+          const managerList = managersPayload?.managers ?? []
+          setManagers(managerList)
+          setSelectedManagers(new Set(managerList))
         }
 
         // Get shared Production IDs
         const result = await window.electron.validation.getSharedProductionIds()
-        setSharedProductionIdsCount(result.productionIds.length)
+        const idsPayload = result.success ? (result.data as { productionIds?: string[] } | undefined) : undefined
+        setSharedProductionIdsCount(idsPayload?.productionIds?.length ?? 0)
       } catch (err) {
         console.error('Initialization failed:', err)
       }
@@ -159,21 +164,28 @@ export function useCleaner() {
         mode: valMode === 'full' ? 'database_full' : 'database_filtered',
         useSharedProductionIds: valMode === 'filtered'
       })
+      const validationData = response.success ? (response.data as any) : null
 
-      if (response.success && response.results) {
-        setValidationResults(response.results)
-        const markedCodes = new Set(
-          response.results.filter((r) => r.isMarkedForDeletion).map((r) => r.materialCode)
+      if (response.success && validationData?.success && validationData.results) {
+        setValidationResults(validationData.results)
+        const markedCodes = new Set<string>(
+          validationData.results
+            .filter((r: ValidationResult) => r.isMarkedForDeletion)
+            .map((r: ValidationResult) => r.materialCode)
         )
         setSelectedItems(markedCodes)
 
         if (isAdmin) {
-          const uniqueManagers = new Set(response.results.map((r) => r.managerName).filter(Boolean))
-          setManagers([...uniqueManagers])
+          const uniqueManagers = new Set<string>(
+            validationData.results
+              .map((r: ValidationResult) => r.managerName)
+              .filter((name: string) => Boolean(name))
+          )
+          setManagers(Array.from(uniqueManagers))
           setSelectedManagers(uniqueManagers)
         }
       } else {
-        alert(response.error || '校验失败')
+        alert(response.error || validationData?.error || '校验失败')
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : '校验过程中发生未知错误')
@@ -285,14 +297,16 @@ export function useCleaner() {
 
       if (materialsToUpsert.length > 0) {
         const res = await window.electron.materials.upsertBatch(materialsToUpsert)
+        const payload = res.success ? (res.data as { stats?: { success?: number } } | undefined) : undefined
         if (!res.success) throw new Error(res.error || '写入物料失败')
-        msgParts.push(`写入/更新成功：${res.stats?.success || 0} 条`)
+        msgParts.push(`写入/更新成功：${payload?.stats?.success || 0} 条`)
       }
 
       if (materialsToDelete.length > 0) {
         const res = await window.electron.materials.delete(materialsToDelete)
+        const payload = res.success ? (res.data as { count?: number } | undefined) : undefined
         if (!res.success) throw new Error(res.error || '删除物料失败')
-        msgParts.push(`删除成功：${res.count || 0} 条`)
+        msgParts.push(`删除成功：${payload?.count || 0} 条`)
       }
 
       alert(`操作完成！\n\n${msgParts.join('\n')}`)
@@ -300,7 +314,8 @@ export function useCleaner() {
       // Reload managers if admin
       if (isAdmin) {
         const resp = await window.electron.materials.getManagers()
-        setManagers(resp.managers)
+        const payload = resp.success ? (resp.data as { managers?: string[] } | undefined) : undefined
+        setManagers(payload?.managers ?? [])
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : '操作失败')
@@ -331,12 +346,13 @@ export function useCleaner() {
 
     try {
       const cleanerDataResult = await window.electron.validation.getCleanerData()
-      if (!cleanerDataResult.success) {
+      const cleanerData = cleanerDataResult.success ? (cleanerDataResult.data as any) : null
+      if (!cleanerDataResult.success || cleanerData?.success === false) {
         throw new Error(cleanerDataResult.error || '获取清理数据失败')
       }
 
-      const orderNumberList = cleanerDataResult.orderNumbers || []
-      const materialCodeList = cleanerDataResult.materialCodes || []
+      const orderNumberList = cleanerData?.orderNumbers || []
+      const materialCodeList = cleanerData?.materialCodes || []
 
       if (orderNumberList.length === 0)
         throw new Error('没有订单号数据。请先到数据提取页面输入 Production ID。')
@@ -349,13 +365,14 @@ export function useCleaner() {
         dryRun,
         headless
       })
+      const cleanerRunData = response.success ? (response.data as any) : null
 
-      if (response.success && response.data) {
+      if (response.success && cleanerRunData) {
         setReportData({
-          ordersProcessed: response.data.ordersProcessed,
-          materialsDeleted: response.data.materialsDeleted,
-          materialsSkipped: response.data.materialsSkipped,
-          errors: response.data.errors
+          ordersProcessed: cleanerRunData.ordersProcessed,
+          materialsDeleted: cleanerRunData.materialsDeleted,
+          materialsSkipped: cleanerRunData.materialsSkipped,
+          errors: cleanerRunData.errors
         })
       } else {
         throw new Error(response.error || '清理失败')
@@ -390,11 +407,12 @@ export function useCleaner() {
       }))
 
       const response = await window.electron.cleaner.exportResults(exportItems)
+      const exportData = response.success ? (response.data as any) : null
 
-      if (response.success) {
-        alert(`导出成功！\n文件已保存到：${response.filePath}`)
+      if (response.success && exportData?.success !== false) {
+        alert(`导出成功！\n文件已保存到：${exportData?.filePath ?? ''}`)
       } else {
-        throw new Error(response.error || '导出失败')
+        throw new Error(response.error || exportData?.error || '导出失败')
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : '导出过程中发生错误')

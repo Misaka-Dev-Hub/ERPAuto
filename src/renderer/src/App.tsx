@@ -61,16 +61,18 @@ function App(): React.JSX.Element {
     try {
       // Get computer name
       console.log('Getting computer name...')
-      const name = await window.electron.auth.getComputerName()
+      const computerNameResult = await window.electron.auth.getComputerName()
+      const name = computerNameResult.success && computerNameResult.data ? computerNameResult.data : ''
       console.log('Computer name:', name)
       setComputerName(name)
 
       // Try silent login
       console.log('Trying silent login...')
-      const result = await window.electron.auth.silentLogin()
+      const silentLoginResult = await window.electron.auth.silentLogin()
+      const result = silentLoginResult.data
       console.log('Silent login result:', result)
 
-      if (result.success && result.userInfo) {
+      if (silentLoginResult.success && result?.success && result.userInfo) {
         console.log('Silent login success:', result.userInfo)
         setCurrentUser({
           username: result.userInfo.username,
@@ -81,8 +83,8 @@ function App(): React.JSX.Element {
         if (result.requiresUserSelection) {
           console.log('Admin user needs to select user')
           // Load all users for selection
-          const users = await window.electron.auth.getAllUsers()
-          setAllUsers(users)
+          const usersResult = await window.electron.auth.getAllUsers()
+          setAllUsers(usersResult.success && usersResult.data ? usersResult.data : [])
           setShowUserSelection(true)
         } else {
           console.log('Setting authenticated to true')
@@ -107,19 +109,20 @@ function App(): React.JSX.Element {
   const handleLogin = async (username: string, password: string): Promise<boolean> => {
     try {
       const result = await window.electron.auth.login({ username, password })
+      const loginData = result.success ? result.data : undefined
 
-      if (result.success && result.userInfo) {
+      if (result.success && loginData?.userInfo) {
         setCurrentUser({
-          username: result.userInfo.username,
-          userType: result.userInfo.userType
+          username: loginData.userInfo.username,
+          userType: loginData.userInfo.userType
         })
 
         // Check if admin needs user selection
-        if (result.userInfo.userType === 'Admin') {
+        if (loginData.userInfo.userType === 'Admin') {
           setShowLoginDialog(false)
           // Load all users for selection
-          const users = await window.electron.auth.getAllUsers()
-          setAllUsers(users)
+          const usersResult = await window.electron.auth.getAllUsers()
+          setAllUsers(usersResult.success && usersResult.data ? usersResult.data : [])
           setShowUserSelection(true)
         } else {
           setIsAuthenticated(true)
@@ -144,10 +147,11 @@ function App(): React.JSX.Element {
   const handleUserSelect = async (user: SelectedUserInfo) => {
     try {
       const result = await window.electron.auth.switchUser(user)
-      if (result.success) {
+      const switchData = result.success ? result.data : undefined
+      if (result.success && switchData) {
         setCurrentUser({
-          username: result.userInfo?.username || user.username,
-          userType: result.userInfo?.userType || user.userType
+          username: switchData.userInfo?.username || user.username,
+          userType: switchData.userInfo?.userType || user.userType
         })
         setIsAuthenticated(true)
         setShowUserSelection(false)

@@ -1,13 +1,5 @@
-/**
- * IPC Hook for Authentication operations
- *
- * Provides a React-friendly interface for auth IPC calls
- * with loading state, error handling, and user data management.
- */
-
 import { useState, useCallback } from 'react'
 
-// Types based on the user types
 interface UserInfo {
   id: number
   username: string
@@ -38,9 +30,6 @@ interface UseAuthReturn extends UseAuthState {
   reset: () => void
 }
 
-/**
- * Hook for authentication operations
- */
 export function useAuth(): UseAuthReturn {
   const [state, setState] = useState<UseAuthState>({
     loading: false,
@@ -51,156 +40,94 @@ export function useAuth(): UseAuthReturn {
 
   const login = useCallback(async (credentials: LoginCredentials): Promise<boolean> => {
     setState((prev) => ({ ...prev, loading: true, error: null }))
+    const result = await window.electron.auth.login(credentials)
 
-    try {
-      const result = (await window.electron.ipcRenderer.invoke('auth:login', credentials)) as {
-        success: boolean
-        userInfo?: UserInfo
-        error?: string
-      }
-
-      if (result.success && result.userInfo) {
-        setState({
-          loading: false,
-          user: result.userInfo,
-          error: null,
-          isAuthenticated: true
-        })
-        return true
-      } else {
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: result.error || 'Login failed'
-        }))
-        return false
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      setState((prev) => ({ ...prev, loading: false, error: message }))
+    if (!result.success || !result.data?.userInfo) {
+      setState((prev) => ({ ...prev, loading: false, error: result.error ?? 'Login failed' }))
       return false
     }
+
+    setState({
+      loading: false,
+      user: result.data.userInfo,
+      error: null,
+      isAuthenticated: true
+    })
+    return true
   }, [])
 
-  const silentLogin = useCallback(async (): Promise<{
-    success: boolean
-    requiresUserSelection?: boolean
-  }> => {
+  const silentLogin = useCallback(async (): Promise<{ success: boolean; requiresUserSelection?: boolean }> => {
     setState((prev) => ({ ...prev, loading: true, error: null }))
+    const result = await window.electron.auth.silentLogin()
 
-    try {
-      const result = (await window.electron.ipcRenderer.invoke('auth:silentLogin')) as {
-        success: boolean
-        userInfo?: UserInfo
-        error?: string
-        requiresUserSelection?: boolean
-      }
-
-      if (result.success && result.userInfo) {
-        setState({
-          loading: false,
-          user: result.userInfo,
-          error: null,
-          isAuthenticated: true
-        })
-        return { success: true, requiresUserSelection: result.requiresUserSelection }
-      } else {
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: result.error || null
-        }))
-        return { success: false }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      setState((prev) => ({ ...prev, loading: false, error: message }))
+    if (!result.success || !result.data?.userInfo) {
+      setState((prev) => ({ ...prev, loading: false, error: result.error || null }))
       return { success: false }
     }
+
+    setState({
+      loading: false,
+      user: result.data.userInfo,
+      error: null,
+      isAuthenticated: true
+    })
+    return { success: true, requiresUserSelection: result.data.requiresUserSelection }
   }, [])
 
   const logout = useCallback(async (): Promise<void> => {
-    try {
-      await window.electron.ipcRenderer.invoke('auth:logout')
-      setState({
-        loading: false,
-        user: null,
-        error: null,
-        isAuthenticated: false
-      })
-    } catch (error) {
-      console.error('Logout error:', error)
-    }
+    await window.electron.auth.logout()
+    setState({
+      loading: false,
+      user: null,
+      error: null,
+      isAuthenticated: false
+    })
   }, [])
 
   const getCurrentUser = useCallback(async (): Promise<UserInfo | null> => {
-    try {
-      const result = (await window.electron.ipcRenderer.invoke('auth:getCurrentUser')) as {
-        isAuthenticated: boolean
-        userInfo?: UserInfo
-      }
-      if (result.isAuthenticated && result.userInfo) {
-        const userInfo = result.userInfo
-        setState((prev) => ({
-          ...prev,
-          user: userInfo,
-          isAuthenticated: true
-        }))
-        return userInfo
-      }
-      return null
-    } catch {
+    const result = await window.electron.auth.getCurrentUser()
+    if (!result.success || !result.data?.isAuthenticated || !result.data.userInfo) {
       return null
     }
+
+    setState((prev) => ({
+      ...prev,
+      user: result.data!.userInfo!,
+      isAuthenticated: true
+    }))
+    return result.data.userInfo
   }, [])
 
   const getAllUsers = useCallback(async (): Promise<UserInfo[]> => {
-    try {
-      return (await window.electron.ipcRenderer.invoke('auth:getAllUsers')) as UserInfo[]
-    } catch {
-      return []
-    }
+    const result = await window.electron.auth.getAllUsers()
+    return result.success && result.data ? result.data : []
   }, [])
 
   const switchUser = useCallback(async (userInfo: UserInfo): Promise<boolean> => {
     setState((prev) => ({ ...prev, loading: true, error: null }))
+    const result = await window.electron.auth.switchUser(userInfo)
 
-    try {
-      const result = (await window.electron.ipcRenderer.invoke('auth:switchUser', userInfo)) as {
-        success: boolean
-        userInfo?: UserInfo
-        error?: string
-      }
-
-      if (result.success && result.userInfo) {
-        setState({
-          loading: false,
-          user: result.userInfo,
-          error: null,
-          isAuthenticated: true
-        })
-        return true
-      } else {
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: result.error || 'Switch user failed'
-        }))
-        return false
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      setState((prev) => ({ ...prev, loading: false, error: message }))
+    if (!result.success || !result.data?.userInfo) {
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        error: result.error || 'Switch user failed'
+      }))
       return false
     }
+
+    setState({
+      loading: false,
+      user: result.data.userInfo,
+      error: null,
+      isAuthenticated: true
+    })
+    return true
   }, [])
 
   const isAdmin = useCallback(async (): Promise<boolean> => {
-    try {
-      return (await window.electron.ipcRenderer.invoke('auth:isAdmin')) as boolean
-    } catch {
-      return false
-    }
+    const result = await window.electron.auth.isAdmin()
+    return result.success && Boolean(result.data)
   }, [])
 
   const reset = useCallback(() => {

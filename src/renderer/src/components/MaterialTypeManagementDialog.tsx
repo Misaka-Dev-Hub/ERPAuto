@@ -252,10 +252,11 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
         toUpdate,
         toDelete
       })
+      const payload = result.success ? (result.data as { stats?: { success?: number; failed?: number } } | undefined) : undefined
 
       if (result.success) {
         alert(
-          `保存完成！\n成功：${result.stats?.success || 0} 条\n失败：${result.stats?.failed || 0} 条`
+          `保存完成！\n成功：${payload?.stats?.success || 0} 条\n失败：${payload?.stats?.failed || 0} 条`
         )
         await loadData()
       } else {

@@ -2,13 +2,15 @@ import { ipcMain } from 'electron'
 import { MySqlService } from '../services/database/mysql'
 import { SqlServerService } from '../services/database/sql-server'
 import { createLogger } from '../services/logger'
-import { DatabaseQueryError, ValidationError } from '../types/errors'
+import { ValidationError } from '../types/errors'
 import type {
   MySqlConfig,
   MySqlQueryResult,
   SqlServerConfig,
   SqlServerQueryResult
 } from '../types/ipc-api.types'
+import { IPC_CHANNELS } from '../../shared/ipc-channels'
+import { withErrorHandling, type IpcResult } from './index'
 
 const log = createLogger('DatabaseHandler')
 
@@ -17,6 +19,34 @@ const mysqlServices = new Map<string, MySqlService>()
 
 // Store SQL Server service instances per window/connection
 const sqlServerServices = new Map<string, SqlServerService>()
+const cleanupBoundWindows = new Set<string>()
+
+function bindWindowCleanup(windowId: string, sender: { once: (event: string, listener: () => void) => void }): void {
+  if (cleanupBoundWindows.has(windowId)) {
+    return
+  }
+
+  sender.once('destroyed', () => {
+    const mysql = getMySqlService(windowId)
+    const sqlServer = getSqlServerService(windowId)
+
+    if (mysql) {
+      mysql.disconnect().catch((error) => log.warn('MySQL disconnect on window destroy failed', { error }))
+      deleteMySqlService(windowId)
+    }
+
+    if (sqlServer) {
+      sqlServer
+        .disconnect()
+        .catch((error) => log.warn('SQL Server disconnect on window destroy failed', { error }))
+      deleteSqlServerService(windowId)
+    }
+
+    cleanupBoundWindows.delete(windowId)
+  })
+
+  cleanupBoundWindows.add(windowId)
+}
 
 /**
  * Get or create MySQL service for a connection ID
@@ -65,29 +95,25 @@ function deleteSqlServerService(connectionId: string): void {
  */
 export function registerDatabaseHandlers(): void {
   // Connect to MySQL
-  ipcMain.handle('database:mysql:connect', async (event, config: MySqlConfig): Promise<void> => {
-    try {
+  ipcMain.handle(
+    IPC_CHANNELS.DATABASE_MYSQL_CONNECT,
+    async (event, config: MySqlConfig): Promise<IpcResult<void>> => {
+      return withErrorHandling(async () => {
       // Use window ID as connection identifier
       const windowId = (event.sender as { id: number }).id.toString()
+      bindWindowCleanup(windowId, event.sender as { once: (event: string, listener: () => void) => void })
       log.info('Connecting to MySQL', { windowId })
       const service = new MySqlService(config)
       await service.connect()
       setMySqlService(windowId, service)
       log.info('MySQL connected', { windowId })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to connect to MySQL'
-      log.error('MySQL connection failed', { error: message })
-      throw new DatabaseQueryError(
-        message,
-        'DB_CONNECTION_FAILED',
-        error instanceof Error ? error : undefined
-      )
+      }, 'database:mysql:connect')
     }
-  })
+  )
 
   // Disconnect from MySQL
-  ipcMain.handle('database:mysql:disconnect', async (event): Promise<void> => {
-    try {
+  ipcMain.handle(IPC_CHANNELS.DATABASE_MYSQL_DISCONNECT, async (event): Promise<IpcResult<void>> => {
+    return withErrorHandling(async () => {
       const windowId = (event.sender as { id: number }).id.toString()
       const service = getMySqlService(windowId)
       if (service) {
@@ -95,29 +121,23 @@ export function registerDatabaseHandlers(): void {
         deleteMySqlService(windowId)
         log.info('MySQL disconnected', { windowId })
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to disconnect from MySQL'
-      log.error('MySQL disconnect failed', { error: message })
-      throw new DatabaseQueryError(
-        message,
-        'DB_CONNECTION_FAILED',
-        error instanceof Error ? error : undefined
-      )
-    }
+    }, 'database:mysql:disconnect')
   })
 
   // Check if MySQL is connected
-  ipcMain.handle('database:mysql:isConnected', async (event): Promise<boolean> => {
-    const windowId = (event.sender as { id: number }).id.toString()
-    const service = getMySqlService(windowId)
-    return service ? service.isConnected() : false
+  ipcMain.handle(IPC_CHANNELS.DATABASE_MYSQL_IS_CONNECTED, async (event): Promise<IpcResult<boolean>> => {
+    return withErrorHandling(async () => {
+      const windowId = (event.sender as { id: number }).id.toString()
+      const service = getMySqlService(windowId)
+      return service ? service.isConnected() : false
+    }, 'database:mysql:isConnected')
   })
 
   // Execute MySQL query
   ipcMain.handle(
-    'database:mysql:query',
-    async (event, sql: string, params?: unknown[]): Promise<MySqlQueryResult> => {
-      try {
+    IPC_CHANNELS.DATABASE_MYSQL_QUERY,
+    async (event, sql: string, params?: unknown[]): Promise<IpcResult<MySqlQueryResult>> => {
+      return withErrorHandling(async () => {
         const windowId = (event.sender as { id: number }).id.toString()
         const service = getMySqlService(windowId)
 
@@ -130,44 +150,29 @@ export function registerDatabaseHandlers(): void {
 
         log.debug('Executing MySQL query', { windowId, sql: sql.substring(0, 100) })
         return await service.query(sql, params)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'MySQL query failed'
-        log.error('MySQL query failed', { error: message })
-        throw new DatabaseQueryError(
-          message,
-          'DB_QUERY_FAILED',
-          error instanceof Error ? error : undefined
-        )
-      }
+      }, 'database:mysql:query')
     }
   )
 
   // Connect to SQL Server
   ipcMain.handle(
-    'database:sqlserver:connect',
-    async (event, config: SqlServerConfig): Promise<void> => {
-      try {
+    IPC_CHANNELS.DATABASE_SQLSERVER_CONNECT,
+    async (event, config: SqlServerConfig): Promise<IpcResult<void>> => {
+      return withErrorHandling(async () => {
         const windowId = (event.sender as { id: number }).id.toString()
+        bindWindowCleanup(windowId, event.sender as { once: (event: string, listener: () => void) => void })
         log.info('Connecting to SQL Server', { windowId })
         const service = new SqlServerService(config)
         await service.connect()
         setSqlServerService(windowId, service)
         log.info('SQL Server connected', { windowId })
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to connect to SQL Server'
-        log.error('SQL Server connection failed', { error: message })
-        throw new DatabaseQueryError(
-          message,
-          'DB_CONNECTION_FAILED',
-          error instanceof Error ? error : undefined
-        )
-      }
+      }, 'database:sqlserver:connect')
     }
   )
 
   // Disconnect from SQL Server
-  ipcMain.handle('database:sqlserver:disconnect', async (event): Promise<void> => {
-    try {
+  ipcMain.handle(IPC_CHANNELS.DATABASE_SQLSERVER_DISCONNECT, async (event): Promise<IpcResult<void>> => {
+    return withErrorHandling(async () => {
       const windowId = (event.sender as { id: number }).id.toString()
       const service = getSqlServerService(windowId)
       if (service) {
@@ -175,34 +180,27 @@ export function registerDatabaseHandlers(): void {
         deleteSqlServerService(windowId)
         log.info('SQL Server disconnected', { windowId })
       }
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to disconnect from SQL Server'
-      log.error('SQL Server disconnect failed', { error: message })
-      throw new DatabaseQueryError(
-        message,
-        'DB_CONNECTION_FAILED',
-        error instanceof Error ? error : undefined
-      )
-    }
+    }, 'database:sqlserver:disconnect')
   })
 
   // Check if SQL Server is connected
-  ipcMain.handle('database:sqlserver:isConnected', async (event): Promise<boolean> => {
-    const windowId = (event.sender as { id: number }).id.toString()
-    const service = getSqlServerService(windowId)
-    return service ? service.isConnected() : false
+  ipcMain.handle(IPC_CHANNELS.DATABASE_SQLSERVER_IS_CONNECTED, async (event): Promise<IpcResult<boolean>> => {
+    return withErrorHandling(async () => {
+      const windowId = (event.sender as { id: number }).id.toString()
+      const service = getSqlServerService(windowId)
+      return service ? service.isConnected() : false
+    }, 'database:sqlserver:isConnected')
   })
 
   // Execute SQL Server query
   ipcMain.handle(
-    'database:sqlserver:query',
+    IPC_CHANNELS.DATABASE_SQLSERVER_QUERY,
     async (
       event,
       sqlString: string,
       params?: Record<string, unknown>
-    ): Promise<SqlServerQueryResult> => {
-      try {
+    ): Promise<IpcResult<SqlServerQueryResult>> => {
+      return withErrorHandling(async () => {
         const windowId = (event.sender as { id: number }).id.toString()
         const service = getSqlServerService(windowId)
 
@@ -226,15 +224,7 @@ export function registerDatabaseHandlers(): void {
         } else {
           return await service.query(sqlString)
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'SQL Server query failed'
-        log.error('SQL Server query failed', { error: message })
-        throw new DatabaseQueryError(
-          message,
-          'DB_QUERY_FAILED',
-          error instanceof Error ? error : undefined
-        )
-      }
+      }, 'database:sqlserver:query')
     }
   )
 }

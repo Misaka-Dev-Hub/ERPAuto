@@ -1,32 +1,20 @@
-/**
- * IPC handlers for User ERP Configuration
- *
- * Provides APIs for the renderer process to:
- * - Get current user's ERP credentials
- * - Update current user's ERP credentials
- * - Test ERP connection with provided credentials
- */
-
 import { ipcMain } from 'electron'
-import { UserErpConfigService, type ErpCredentials } from '../services/user/user-erp-config-service'
+import { UserErpConfigService } from '../services/user/user-erp-config-service'
 import { ErpAuthService } from '../services/erp/erp-auth'
 import { ConfigManager } from '../services/config/config-manager'
 import { createLogger } from '../services/logger'
-import type { UserInfo } from '../types/user.types'
+import { SessionManager } from '../services/user/session-manager'
+import { IPC_CHANNELS } from '../../shared/ipc-channels'
+import { ValidationError } from '../types/errors'
+import { withErrorHandling, type IpcResult } from './index'
 
 const log = createLogger('UserErpConfigHandler')
 
-/**
- * ERP Credentials request (username and password only, URL is from config.yaml)
- */
 export interface ErpCredentialsRequest {
   username: string
   password: string
 }
 
-/**
- * ERP Configuration response (includes URL from config.yaml)
- */
 export interface ErpConfigResponse {
   success: boolean
   config?: {
@@ -37,127 +25,80 @@ export interface ErpConfigResponse {
   error?: string
 }
 
-/**
- * Connection test result
- */
 export interface ConnectionTestResult {
   success: boolean
   message?: string
 }
 
-/**
- * Register IPC handlers for user ERP configuration
- */
 export function registerUserErpConfigHandlers(): void {
   const erpConfigService = UserErpConfigService.getInstance()
+  const sessionManager = SessionManager.getInstance()
 
-  /**
-   * Get current user's ERP credentials
-   */
-  ipcMain.handle('user-erp-config:getCurrent', async (): Promise<ErpConfigResponse> => {
-    try {
-      log.info('Fetching current user ERP credentials')
-      const credentials = await erpConfigService.getCurrentUserErpConfig()
-
-      if (!credentials) {
-        return {
-          success: false,
-          error: '未找到 ERP 配置。请先配置 ERP 账号和密码。'
-        }
-      }
-
-      // Get ERP URL from config.yaml (fixed for all users)
-      const configManager = ConfigManager.getInstance()
-      const globalConfig = configManager.getConfig()
-      const erpUrl = globalConfig.erp.url
-
-      return {
-        success: true,
-        config: {
-          url: erpUrl,
-          username: credentials.username,
-          password: credentials.password
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      log.error('Get current user ERP credentials failed', { error: message })
-      return {
-        success: false,
-        error: `获取 ERP 配置失败：${message}`
-      }
-    }
-  })
-
-  /**
-   * Update current user's ERP credentials
-   */
   ipcMain.handle(
-    'user-erp-config:update',
-    async (_event, credentials: ErpCredentialsRequest): Promise<ErpConfigResponse> => {
-      try {
-        log.info('Updating current user ERP credentials', {
-          username: credentials.username
-        })
+    IPC_CHANNELS.USER_ERP_CONFIG_GET_CURRENT,
+    async (): Promise<IpcResult<ErpConfigResponse>> => {
+      return withErrorHandling(async () => {
+        log.info('Fetching current user ERP credentials')
+        const credentials = await erpConfigService.getCurrentUserErpConfig()
 
-        const success = await erpConfigService.updateCurrentUserErpConfig(credentials)
-
-        if (success) {
-          log.info('ERP credentials updated successfully')
-          // Get ERP URL from config.yaml to return full config
-          const configManager = ConfigManager.getInstance()
-          const globalConfig = configManager.getConfig()
-          const erpUrl = globalConfig.erp.url
-
-          return {
-            success: true,
-            config: {
-              url: erpUrl,
-              username: credentials.username,
-              password: credentials.password
-            }
-          }
-        } else {
-          log.error('Failed to update ERP credentials')
-          return {
-            success: false,
-            error: '更新 ERP 配置失败'
-          }
+        if (!credentials) {
+          throw new ValidationError('未找到 ERP 配置。请先配置 ERP 账号和密码。', 'VAL_INVALID_INPUT')
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        log.error('Update ERP credentials failed', { error: message })
+
+        const configManager = ConfigManager.getInstance()
+        const globalConfig = configManager.getConfig()
+
         return {
-          success: false,
-          error: `更新 ERP 配置失败：${message}`
+          success: true,
+          config: {
+            url: globalConfig.erp.url,
+            username: credentials.username,
+            password: credentials.password
+          }
         }
-      }
+      }, 'user-erp-config:getCurrent')
     }
   )
 
-  /**
-   * Test ERP connection with provided credentials
-   */
   ipcMain.handle(
-    'user-erp-config:testConnection',
-    async (_event, credentials: ErpCredentialsRequest): Promise<ConnectionTestResult> => {
-      try {
-        log.info('Testing ERP connection', { username: credentials.username })
-
-        if (!credentials.username || !credentials.password) {
-          return {
-            success: false,
-            message: 'ERP 配置不完整，请确保用户名和密码都已填写'
-          }
+    IPC_CHANNELS.USER_ERP_CONFIG_UPDATE,
+    async (_event, credentials: ErpCredentialsRequest): Promise<IpcResult<ErpConfigResponse>> => {
+      return withErrorHandling(async () => {
+        const updated = await erpConfigService.updateCurrentUserErpConfig(credentials)
+        if (!updated) {
+          throw new ValidationError('更新 ERP 配置失败', 'VAL_INVALID_INPUT')
         }
 
-        // Get ERP URL from config.yaml (fixed for all users)
         const configManager = ConfigManager.getInstance()
         const globalConfig = configManager.getConfig()
-        const erpUrl = globalConfig.erp.url
 
+        return {
+          success: true,
+          config: {
+            url: globalConfig.erp.url,
+            username: credentials.username,
+            password: credentials.password
+          }
+        }
+      }, 'user-erp-config:update')
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.USER_ERP_CONFIG_TEST_CONNECTION,
+    async (_event, credentials: ErpCredentialsRequest): Promise<IpcResult<ConnectionTestResult>> => {
+      return withErrorHandling(async () => {
+        if (!credentials.username || !credentials.password) {
+          throw new ValidationError(
+            'ERP 配置不完整，请确保用户名和密码都已填写',
+            'VAL_MISSING_REQUIRED'
+          )
+        }
+
+        const configManager = ConfigManager.getInstance()
+        const globalConfig = configManager.getConfig()
         const authService = new ErpAuthService({
-          url: erpUrl,
+          url: globalConfig.erp.url,
           username: credentials.username,
           password: credentials.password,
           headless: true
@@ -165,49 +106,37 @@ export function registerUserErpConfigHandlers(): void {
 
         try {
           await authService.login()
-          await authService.close()
-
-          log.info('ERP connection test successful')
           return {
             success: true,
             message: 'ERP 连接测试成功'
           }
-        } catch (error) {
+        } finally {
           await authService.close().catch(() => {})
-          throw error
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        log.error('ERP connection test failed', { error: message })
-        return {
-          success: false,
-          message: `ERP 连接测试失败：${message}`
-        }
-      }
+      }, 'user-erp-config:testConnection')
     }
   )
 
-  /**
-   * Get all users' ERP configurations (admin only)
-   */
   ipcMain.handle(
-    'user-erp-config:getAll',
+    IPC_CHANNELS.USER_ERP_CONFIG_GET_ALL,
     async (): Promise<
-      Array<{
-        username: string
-        erpUrl: string
-        erpUsername: string
-      }>
+      IpcResult<
+        Array<{
+          username: string
+          erpUrl: string
+          erpUsername: string
+        }>
+      >
     > => {
-      try {
-        log.info('Fetching all users ERP config')
+      return withErrorHandling(async () => {
+        if (!sessionManager.isAdmin()) {
+          throw new ValidationError('只有管理员可以查看全部用户 ERP 配置', 'VAL_INVALID_INPUT')
+        }
+
         const configs = await erpConfigService.getAllUsersErpConfig()
-        log.info('Retrieved ERP configs for all users', { count: configs.length })
         return configs
-      } catch (error) {
-        log.error('Get all users ERP config failed', { error })
-        return []
-      }
+      }, 'user-erp-config:getAll')
     }
   )
 }
+

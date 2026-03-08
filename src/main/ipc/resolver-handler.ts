@@ -11,6 +11,8 @@ import { create, type IDatabaseService } from '../services/database'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
 import { createLogger } from '../services/logger'
 import type { OrderMapping, ResolutionStats } from '../services/erp/order-resolver'
+import { IPC_CHANNELS } from '../../shared/ipc-channels'
+import { withErrorHandling, type IpcResult } from './index'
 
 const log = createLogger('ResolverHandler')
 
@@ -49,11 +51,11 @@ export function registerResolverHandlers(): void {
    * Converts productionIDs and 生产订单号 to production order numbers
    */
   ipcMain.handle(
-    'resolver:resolve',
-    async (_event, input: ResolverInput): Promise<ResolverResponse> => {
+    IPC_CHANNELS.RESOLVER_RESOLVE,
+    async (_event, input: ResolverInput): Promise<IpcResult<ResolverResponse>> => {
       let dbService: IDatabaseService | null = null
 
-      try {
+      return withErrorHandling(async () => {
         // Create database service using factory
         log.info('Connecting to database for resolution', { inputCount: input.inputs.length })
         dbService = await create()
@@ -80,14 +82,7 @@ export function registerResolverHandlers(): void {
           warnings,
           stats
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        log.error('Resolution failed', { error: message })
-        return {
-          success: false,
-          error: `解析失败：${message}`
-        }
-      } finally {
+      }, 'resolver:resolve').finally(async () => {
         // Clean up database connection
         if (dbService) {
           try {
@@ -99,7 +94,7 @@ export function registerResolverHandlers(): void {
             })
           }
         }
-      }
+      })
     }
   )
 
@@ -107,16 +102,12 @@ export function registerResolverHandlers(): void {
    * Validate input format only (without database lookup)
    */
   ipcMain.handle(
-    'resolver:validateFormat',
+    IPC_CHANNELS.RESOLVER_VALIDATE_FORMAT,
     async (
       _event,
       inputs: string[]
-    ): Promise<{
-      success: boolean
-      results?: Array<{ input: string; type: 'productionId' | 'orderNumber' | 'unknown' }>
-      error?: string
-    }> => {
-      try {
+    ): Promise<IpcResult<Array<{ input: string; type: 'productionId' | 'orderNumber' | 'unknown' }>>> => {
+      return withErrorHandling(async () => {
         // Create a mock resolver without database connection
         const resolver = new OrderNumberResolver({
           isConnected: () => false,
@@ -130,15 +121,8 @@ export function registerResolverHandlers(): void {
 
         log.debug('Format validation completed', { inputCount: inputs.length })
 
-        return { success: true, results }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        log.error('Format validation failed', { error: message })
-        return {
-          success: false,
-          error: `验证失败：${message}`
-        }
-      }
+        return results
+      }, 'resolver:validateFormat')
     }
   )
 }

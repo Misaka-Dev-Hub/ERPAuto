@@ -28,6 +28,14 @@ export interface IpcResult<T = unknown> {
   code?: string
 }
 
+export function ok<T>(data: T): IpcResult<T> {
+  return { success: true, data }
+}
+
+export function fail<T = unknown>(error: string, code?: string): IpcResult<T> {
+  return { success: false, error, code }
+}
+
 /**
  * Higher-order function to wrap IPC handlers with consistent error handling
  * @param handler - The async handler function to wrap
@@ -39,9 +47,9 @@ export function withErrorHandling<T>(
   context: string
 ): Promise<IpcResult<T>> {
   return handler()
-    .then((data) => {
+    .then((data): IpcResult<T> => {
       log.debug(`[${context}] Handler completed successfully`)
-      return { success: true, data }
+      return ok(data)
     })
     .catch((error: unknown) => {
       const message = getErrorMessage(error)
@@ -58,7 +66,7 @@ export function withErrorHandling<T>(
         log.debug(`[${context}] Stack trace:`, { stack: error.stack })
       }
 
-      return { success: false, error: message, code }
+      return fail<T>(message, code)
     })
 }
 
