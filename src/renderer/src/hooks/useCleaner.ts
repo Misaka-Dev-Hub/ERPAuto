@@ -297,7 +297,7 @@ export function useCleaner() {
 
     try {
       setIsRunning(true)
-      let msgParts: string[] = []
+      const msgParts: string[] = []
 
       if (materialsToUpsert.length > 0) {
         const res = await window.electron.materials.upsertBatch(materialsToUpsert)
