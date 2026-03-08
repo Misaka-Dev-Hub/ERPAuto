@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { LayoutDashboard, Download, Trash2, Settings, Database, User, LogOut } from 'lucide-react'
+import { Layout, Menu, Typography, ConfigProvider, theme, Spin, message as antdMessage } from 'antd'
 import { useLogger } from './hooks/useLogger'
 import LoginDialog from './components/LoginDialog'
 import UserSelectionDialog, {
@@ -41,7 +42,6 @@ function App(): React.JSX.Element {
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [showUserSelection, setShowUserSelection] = useState(false)
   const [allUsers, setAllUsers] = useState<SelectedUserInfo[]>([])
-  const [errorMessage, setErrorMessage] = useState('')
 
   // Track if current session is switched by Admin
   const [isSwitchedByAdmin, setIsSwitchedByAdmin] = useState(false)
@@ -49,13 +49,16 @@ function App(): React.JSX.Element {
   // Ref for logout button (for focus restoration)
   const logoutButtonRef = React.useRef<HTMLButtonElement>(null)
 
+  const { Header, Content } = Layout;
+  const { Title, Text } = Typography;
+
   // Navigation state
   const [currentPage, setCurrentPage] = useState<Page>('extractor') // Default to extractor for the new layout
+  const [messageApi, contextHolder] = antdMessage.useMessage();
 
   // Load error message from sessionStorage
   const showError = (message: string) => {
-    setErrorMessage(message)
-    setTimeout(() => setErrorMessage(''), 3000)
+    messageApi.error(message)
   }
 
   // Initialize authentication on mount
@@ -202,35 +205,10 @@ function App(): React.JSX.Element {
   // Show loading state during authentication
   if (isAuthenticating) {
     return (
-      <div className="loading-container">
-        <div className="loading-content">
-          <div className="loading-spinner"></div>
-          <p>认证中...</p>
-        </div>
-        <style>{`
-          .loading-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            background: #f5f7fa;
-          }
-          .loading-content {
-            text-align: center;
-          }
-          .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #e8e8e8;
-            border-top-color: #1890ff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 16px;
-          }
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f5f7fa' }}>
+        <Spin size="large" tip="认证中...">
+          <div style={{ padding: '50px' }} />
+        </Spin>
       </div>
     )
   }
@@ -239,13 +217,14 @@ function App(): React.JSX.Element {
   if (!isAuthenticated) {
     logger.debug('Render: not authenticated', { showLoginDialog, computerName })
     return (
-      <>
+      <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm }}>
+        {contextHolder}
         <LoginDialog
           isOpen={showLoginDialog}
           computerName={computerName}
           onLogin={handleLogin}
           onCancel={handleLoginCancel}
-          onError={showError}
+          onError={(msg) => messageApi.error(msg)}
         />
 
         {/* User Selection Dialog for Admin */}
@@ -257,8 +236,6 @@ function App(): React.JSX.Element {
           onCancel={handleUserSelectionCancel}
           triggerRef={logoutButtonRef}
         />
-
-        {errorMessage && <div className="error-toast">{errorMessage}</div>}
 
         {/* If showLoginDialog is false but not authenticated, show a message */}
         {!showLoginDialog && !showUserSelection && (
@@ -287,24 +264,7 @@ function App(): React.JSX.Element {
             </div>
           </div>
         )}
-
-        <style>{`
-          .error-toast {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #fff1f0;
-            border: 1px solid #ffa39e;
-            padding: 12px 24px;
-            border-radius: 6px;
-            color: #ff4d4f;
-            font-size: 14px;
-            z-index: 10000;
-            animation: slideDown 0.3s ease-out;
-          }
-        `}</style>
-      </>
+      </ConfigProvider>
     )
   }
 
@@ -312,108 +272,100 @@ function App(): React.JSX.Element {
   logger.debug('Render: authenticated', { currentUser, currentPage })
 
   const navItems = [
-    { id: 'extractor', label: '数据提取 (Extractor)', icon: <Download size={18} /> },
-    { id: 'cleaner', label: '物料验证与清理 (Cleaner)', icon: <Trash2 size={18} /> },
-    { id: 'settings', label: '系统设置 (Settings)', icon: <Settings size={18} /> }
+    { key: 'extractor', label: '数据提取 (Extractor)', icon: <Download size={18} /> },
+    { key: 'cleaner', label: '物料验证与清理 (Cleaner)', icon: <Trash2 size={18} /> },
+    { key: 'settings', label: '系统设置 (Settings)', icon: <Settings size={18} /> }
   ]
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
-      {/* ================= 顶部导航与标题栏 ================= */}
-      <header
-        className="h-16 bg-slate-900 text-slate-300 flex items-center justify-between px-4 shadow-md z-20 flex-shrink-0"
-        style={{ WebkitAppRegion: 'drag' } as any}
-      >
-        <div className="flex items-center gap-6">
-          <div className="flex gap-2 pl-2">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+    <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm }}>
+      {contextHolder}
+      <Layout className="h-screen overflow-hidden bg-slate-50">
+        {/* ================= 顶部导航与标题栏 ================= */}
+        <Header
+          className="flex items-center justify-between px-4 shadow-md z-20 flex-shrink-0"
+          style={{ WebkitAppRegion: 'drag', backgroundColor: '#0f172a', height: '64px' } as any}
+        >
+          <div className="flex items-center gap-6 h-full">
+            <div className="flex gap-2 pl-2">
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            </div>
+
+            <div
+              className="flex items-center gap-2 text-white font-bold text-lg cursor-pointer h-full"
+              onClick={() => setCurrentPage('home')}
+              style={{ WebkitAppRegion: 'no-drag' } as any}
+            >
+              <LayoutDashboard size={22} className="text-blue-500" />
+              <span>ERP Auto</span>
+            </div>
           </div>
+
+          <Menu
+            theme="dark"
+            mode="horizontal"
+            selectedKeys={[currentPage]}
+            items={navItems}
+            onClick={(e) => setCurrentPage(e.key as Page)}
+            style={{ WebkitAppRegion: 'no-drag', backgroundColor: 'transparent', flex: 1, justifyContent: 'center', borderBottom: 'none', lineHeight: '64px' } as any}
+          />
 
           <div
-            className="flex items-center gap-2 text-white font-bold text-lg cursor-pointer"
-            onClick={() => setCurrentPage('home')}
+            className="flex items-center gap-4 text-sm"
             style={{ WebkitAppRegion: 'no-drag' } as any}
           >
-            <LayoutDashboard size={22} className="text-blue-500" />
-            <span>ERP Auto</span>
-          </div>
-        </div>
-
-        <nav
-          className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg"
-          style={{ WebkitAppRegion: 'no-drag' } as any}
-        >
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setCurrentPage(item.id as Page)}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                currentPage === item.id
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700'
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-        <div
-          className="flex items-center gap-4 text-sm"
-          style={{ WebkitAppRegion: 'no-drag' } as any}
-        >
-          <div className="flex items-center gap-2 text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
-            <Database size={14} className="text-green-500" />
-            <span className="text-slate-300">数据库已连接</span>
-          </div>
-          <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full">
-            <User size={16} className="text-slate-400" />
-            <span
-              className="font-medium text-slate-200"
-              title={`User Type: ${currentUser?.userType}`}
-            >
-              {currentUser?.username}
-            </span>
-            {shouldShowLogout && (
-              <button
-                ref={logoutButtonRef}
-                onClick={handleLogout}
-                className="ml-2 text-slate-400 hover:text-red-400 transition-colors"
-                title="退出登录"
-              >
-                <LogOut size={16} />
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* ================= 主体内容区域 ================= */}
-      <div className="flex flex-1 overflow-hidden relative">
-        <main className="flex-1 overflow-hidden bg-slate-50 p-6 h-full">
-          {currentPage === 'home' && (
-            <div className="h-full overflow-auto">
-              <div className="max-w-4xl mx-auto mt-10 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <LayoutDashboard size={48} className="mx-auto text-blue-500 mb-4" />
-                <h1 className="text-3xl font-bold text-slate-800 mb-4">欢迎使用 ERP Auto</h1>
-                <p className="text-slate-500 text-lg max-w-2xl mx-auto">
-                  自动化处理 ERP 系统中的数据提取和清理任务。请使用上方导航栏选择您需要的功能模块。
-                </p>
-              </div>
+            <div className="flex items-center gap-2 text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
+              <Database size={14} className="text-green-500" />
+              <span className="text-slate-300">数据库已连接</span>
             </div>
-          )}
-          {currentPage === 'extractor' && <ExtractorPage />}
-          {currentPage === 'cleaner' && <CleanerPage />}
-          {currentPage === 'settings' && <SettingsPage />}
-        </main>
-      </div>
+            <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full">
+              <User size={16} className="text-slate-400" />
+              <span
+                className="font-medium text-slate-200"
+                title={`User Type: ${currentUser?.userType}`}
+              >
+                {currentUser?.username}
+              </span>
+              {shouldShowLogout && (
+                <button
+                  ref={logoutButtonRef}
+                  onClick={handleLogout}
+                  className="ml-2 text-slate-400 hover:text-red-400 transition-colors"
+                  title="退出登录"
+                >
+                  <LogOut size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+        </Header>
 
-      {/* Toast Notifications */}
-      <Toast />
-    </div>
+        {/* ================= 主体内容区域 ================= */}
+        <Layout className="flex-1 overflow-hidden bg-slate-50 relative">
+          <Content className="overflow-auto p-6 h-full">
+            {currentPage === 'home' && (
+              <div className="h-full overflow-auto">
+                <div className="max-w-4xl mx-auto mt-10 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <LayoutDashboard size={48} className="mx-auto text-blue-500 mb-4" />
+                  <Title level={2} className="text-slate-800 mb-4" style={{ marginTop: 0 }}>欢迎使用 ERP Auto</Title>
+                  <Text className="text-slate-500 text-lg max-w-2xl mx-auto block">
+                    自动化处理 ERP 系统中的数据提取和清理任务。请使用上方导航栏选择您需要的功能模块。
+                  </Text>
+                </div>
+              </div>
+            )}
+            {currentPage === 'extractor' && <ExtractorPage />}
+            {currentPage === 'cleaner' && <CleanerPage />}
+            {currentPage === 'settings' && <SettingsPage />}
+          </Content>
+        </Layout>
+
+        {/* Toast Notifications */}
+        <Toast />
+      </Layout>
+    </ConfigProvider>
   )
 }
 

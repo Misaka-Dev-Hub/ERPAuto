@@ -7,8 +7,10 @@
  * - Return selected user info
  */
 
-import React, { useState, useEffect, useRef } from 'react'
-import { Modal } from './ui/Modal'
+import React, { useState, useEffect } from 'react'
+import { Modal, List, Tag, Button, Typography } from 'antd'
+
+const { Text } = Typography
 
 export interface UserInfo {
   id: number
@@ -31,11 +33,9 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
   users,
   currentUsername,
   onSelectUser,
-  onCancel,
-  triggerRef
+  onCancel
 }) => {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
-  const dialogRef = useRef<HTMLDivElement>(null)
 
   // Reset selection when dialog opens
   useEffect(() => {
@@ -59,83 +59,61 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
     onSelectUser(user)
   }
 
-  const userTypeStyles: Record<string, string> = {
-    Admin: 'bg-amber-50 text-amber-600',
-    User: 'bg-blue-50 text-blue-600',
-    Guest: 'bg-gray-100 text-gray-600'
+  const userTypeColors: Record<string, string> = {
+    Admin: 'orange',
+    User: 'blue',
+    Guest: 'default'
   }
-
-  if (!isOpen) return null
 
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={onCancel}
+      open={isOpen}
+      onCancel={onCancel}
       title="选择用户"
-      size="md"
-      triggerRef={triggerRef}
-      initialFocusSelector={users.length > 0 ? '.user-item:first-child' : undefined}
-      ariaDescribedBy="user-selection-description"
+      width={500}
+      footer={
+        <div className="flex justify-center gap-3 w-full">
+          <Button onClick={onCancel}>取消</Button>
+          <Button type="primary" onClick={handleConfirm} disabled={selectedUserId === null}>
+            确认
+          </Button>
+        </div>
+      }
+      destroyOnClose
     >
-      <div ref={dialogRef} className="max-h-[60vh] flex flex-col">
-        <div className="text-sm text-gray-600 mb-4">当前登录：{currentUsername}</div>
-        <p id="user-selection-description" className="sr-only">
-          从列表中选择一个用户，双击可直接确认选择
-        </p>
+      <div className="flex flex-col">
+        <Text type="secondary" className="mb-4 block">
+          当前登录：{currentUsername}
+        </Text>
 
-        <div className="flex-1 overflow-y-auto mb-4">
-          <div className="flex flex-col gap-2">
-            {users.map((user) => (
-              <div
-                key={user.id}
-                className={`user-item p-3 border border-gray-200 rounded-lg cursor-pointer transition-all hover:border-blue-500 hover:bg-green-50 ${
-                  selectedUserId === user.id ? 'border-blue-500 bg-blue-50' : ''
-                }`}
+        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+          <List
+            dataSource={users}
+            renderItem={(user) => (
+              <List.Item
+                className={`cursor-pointer transition-all hover:bg-blue-50 ${selectedUserId === user.id ? 'bg-blue-50 border-blue-500 border rounded-lg' : 'border-transparent border rounded-lg'}`}
+                style={{ padding: '12px', marginBottom: '8px' }}
                 onClick={() => setSelectedUserId(user.id)}
                 onDoubleClick={() => handleDoubleClick(user)}
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    setSelectedUserId(user.id)
-                  }
-                }}
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-900">{user.username}</span>
-                  <span
-                    className={`text-xs px-2 py-1 rounded font-medium ${userTypeStyles[user.userType]}`}
-                  >
-                    {user.userType}
-                  </span>
-                </div>
-                {user.createTime && (
-                  <div className="mt-1 text-xs text-gray-500">
-                    创建于：{new Date(user.createTime).toLocaleString('zh-CN')}
+                <div className="w-full">
+                  <div className="flex justify-between items-center mb-1">
+                    <Text strong>{user.username}</Text>
+                    <Tag color={userTypeColors[user.userType] || 'default'}>{user.userType}</Tag>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+                  {user.createTime && (
+                    <Text type="secondary" className="text-xs">
+                      创建于：{new Date(user.createTime).toLocaleString('zh-CN')}
+                    </Text>
+                  )}
+                </div>
+              </List.Item>
+            )}
+          />
         </div>
-
-        <div className="border-t border-gray-200 pt-4">
-          <div className="flex justify-center gap-3">
-            <button
-              className="px-6 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={handleConfirm}
-              disabled={selectedUserId === null}
-            >
-              确认
-            </button>
-            <button
-              className="px-6 py-2 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
-              onClick={onCancel}
-            >
-              取消
-            </button>
-          </div>
-          <div className="text-center text-xs text-gray-500 mt-3">双击用户可直接选择</div>
-        </div>
+        <Text type="secondary" className="text-center text-xs mt-3 block">
+          双击用户可直接选择
+        </Text>
       </div>
     </Modal>
   )

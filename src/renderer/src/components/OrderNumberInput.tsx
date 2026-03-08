@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
+import { Input, Badge, Space, Typography, Button } from 'antd'
+
+const { Text } = Typography
+const { TextArea } = Input
 
 interface OrderNumberInputProps {
   value: string
@@ -75,51 +79,62 @@ const OrderNumberInput: React.FC<OrderNumberInputProps> = ({
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-2">
-        <label className="text-sm font-medium text-slate-700">{label}</label>
-        <div className="flex items-center gap-1.5">
-          <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-xs font-medium">
-            {count} 个
-          </span>
+        <Text strong className="text-sm">{label}</Text>
+        <Space size="small">
+          <Badge
+            className="site-badge-count-109"
+            count={`${count} 个`}
+            style={{ backgroundColor: '#e6f4ff', color: '#1677ff' }}
+          />
           {enableFormatStats && stats.productionIdCount > 0 && (
-            <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full text-xs font-medium">
-              {stats.productionIdCount} 总排号
-            </span>
+            <Badge
+              className="site-badge-count-109"
+              count={`${stats.productionIdCount} 总排号`}
+              style={{ backgroundColor: '#f6ffed', color: '#52c41a' }}
+            />
           )}
           {enableFormatStats && stats.orderNumberCount > 0 && (
-            <span className="bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full text-xs font-medium">
-              {stats.orderNumberCount} 订单号
-            </span>
+            <Badge
+              className="site-badge-count-109"
+              count={`${stats.orderNumberCount} 订单号`}
+              style={{ backgroundColor: '#fffbe6', color: '#faad14' }}
+            />
           )}
           {enableFormatStats && stats.unknownCount > 0 && (
-            <span className="bg-red-50 text-red-500 px-2 py-0.5 rounded-full text-xs font-medium">
-              {stats.unknownCount} 未知
-            </span>
+            <Badge
+              className="site-badge-count-109"
+              count={`${stats.unknownCount} 未知`}
+              style={{ backgroundColor: '#fff2f0', color: '#ff4d4f' }}
+            />
           )}
-        </div>
+        </Space>
       </div>
 
-      <textarea
+      <TextArea
         value={value}
         onChange={handleChange}
         placeholder={placeholder}
         disabled={disabled}
-        className="flex-1 w-full border border-slate-300 rounded-lg p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
         style={{
-          userSelect: disabled ? 'none' : 'text',
-          cursor: disabled ? 'not-allowed' : 'text'
+          height: '100%',
+          resize: 'none',
+          fontFamily: 'monospace',
+          backgroundColor: '#fafafa'
         }}
       />
 
       {showReset && (
         <div className="flex items-center justify-end mt-2">
-          <button
+          <Button
+            type="text"
+            danger
+            icon={<X size={14} />}
             onClick={onReset}
             disabled={disabled}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            size="small"
           >
-            <X size={14} />
             清空
-          </button>
+          </Button>
         </div>
       )}
     </div>
