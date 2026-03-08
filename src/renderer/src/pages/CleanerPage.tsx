@@ -76,15 +76,15 @@ const CleanerPage: React.FC = () => {
       {isAdmin && (
         <div className="w-full xl:w-[380px] flex-shrink-0 flex flex-col gap-5 xl:self-start overflow-auto">
           {/* 1. 数据来源选择 */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6">
             <h3 className="text-base font-semibold mb-4 flex items-center gap-2 text-slate-800">
-              <DatabaseZap size={18} className="text-blue-500" />
+              <DatabaseZap size={18} className="text-blue-600" />
               校验数据来源
             </h3>
 
             <div className="space-y-3">
               <label
-                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${valMode === 'full' ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-50 border-slate-200'}`}
+                className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors ${valMode === 'full' ? 'bg-blue-50 border-blue-200 shadow-sm' : 'hover:bg-slate-50 border-slate-200/60'}`}
               >
                 <input
                   type="radio"
@@ -100,7 +100,7 @@ const CleanerPage: React.FC = () => {
               </label>
 
               <label
-                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${valMode === 'filtered' ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-50 border-slate-200'}`}
+                className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors ${valMode === 'filtered' ? 'bg-blue-50 border-blue-200 shadow-sm' : 'hover:bg-slate-50 border-slate-200/60'}`}
               >
                 <input
                   type="radio"
@@ -128,7 +128,7 @@ const CleanerPage: React.FC = () => {
           </div>
 
           {/* 2. 负责人筛选 */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-semibold flex items-center gap-2 text-slate-800">
                 <Users size={18} className="text-indigo-500" />
@@ -181,20 +181,20 @@ const CleanerPage: React.FC = () => {
       )}
 
       {/* 右栏：结果表格与工具栏 */}
-      <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+      <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200/60 flex flex-col overflow-hidden">
         {/* 获取物料状态按钮 */}
-        <div className="p-4 border-b border-slate-200 flex-shrink-0">
+        <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
           <button
             onClick={handleValidation}
             disabled={isValidationRunning}
-            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 py-3 rounded-lg font-medium transition-colors shadow-sm flex justify-center items-center gap-2 border border-slate-200 disabled:opacity-50"
+            className="w-full bg-white hover:bg-slate-50 text-slate-800 py-3.5 rounded-xl font-medium transition-colors shadow-sm flex justify-center items-center gap-2 border border-slate-200 disabled:opacity-50"
           >
-            <Search size={18} /> {isValidationRunning ? '正在获取...' : '获取并校验物料状态'}
+            <Search size={18} className="text-blue-600" /> {isValidationRunning ? '正在获取...' : '获取并校验物料状态'}
           </button>
         </div>
 
         {/* 顶部操作条 */}
-        <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex justify-between items-center flex-shrink-0">
+        <div className="bg-white border-b border-slate-100 px-5 py-3 flex justify-between items-center flex-shrink-0">
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setSelectedItems(new Set(filteredResults.map((r) => r.materialCode)))}
@@ -272,7 +272,7 @@ const CleanerPage: React.FC = () => {
         {/* 表格区域 */}
         <div className="flex-1 overflow-y-auto">
           <table className="w-full text-left text-sm whitespace-nowrap table-fixed">
-            <thead className="bg-slate-100 text-slate-600 sticky top-0 shadow-sm z-10 text-xs font-semibold">
+            <thead className="bg-slate-50 text-slate-600 sticky top-0 shadow-sm z-10 text-xs font-semibold">
               <tr>
                 <th className="px-4 py-3 w-16 text-center">选择</th>
                 <th className="px-4 py-3 w-64">材料名称</th>
@@ -296,7 +296,7 @@ const CleanerPage: React.FC = () => {
               ) : (
                 filteredResults.map((result, rowIndex) => {
                   const isChecked = selectedItems.has(result.materialCode)
-                  const trClass = isChecked ? 'bg-blue-50/30' : 'hover:bg-slate-50'
+                  const trClass = isChecked ? 'bg-blue-50/40' : 'hover:bg-slate-50/80'
                   const noManager = !result.managerName?.trim()
                   const managerCellClass = noManager
                     ? 'text-amber-500 text-xs italic'
@@ -407,7 +407,7 @@ const CleanerPage: React.FC = () => {
         </div>
 
         {/* 底部状态与执行区 */}
-        <div className="bg-white border-t border-slate-200 p-4 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 flex-shrink-0">
+        <div className="bg-white border-t border-slate-100 p-5 flex justify-between items-center shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)] z-10 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="text-sm text-slate-600 font-medium">
               共计 {filteredResults.length} 条记录 | 已选中{' '}

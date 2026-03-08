@@ -95,14 +95,14 @@ export function Modal({
         <div className="flex min-h-full items-center justify-center p-4">
           <div
             ref={dialogRef}
-            className={`relative w-full ${sizeStyles[size]} bg-white rounded-lg shadow-xl transform transition-all`}
+            className={`relative w-full ${sizeStyles[size]} bg-white rounded-2xl shadow-2xl border border-slate-200/60 transform transition-all`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             {(title || showCloseButton) && (
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl">
                 {title && (
-                  <h3 id={generatedTitleId} className="text-lg font-semibold text-gray-900">
+                  <h3 id={generatedTitleId} className="text-lg font-semibold text-slate-800">
                     {title}
                   </h3>
                 )}

@@ -60,9 +60,9 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
   }
 
   const userTypeStyles: Record<string, string> = {
-    Admin: 'bg-amber-50 text-amber-600',
-    User: 'bg-blue-50 text-blue-600',
-    Guest: 'bg-gray-100 text-gray-600'
+    Admin: 'bg-amber-50 text-amber-600 border border-amber-100',
+    User: 'bg-blue-50 text-blue-600 border border-blue-100',
+    Guest: 'bg-slate-100 text-slate-600 border border-slate-200'
   }
 
   if (!isOpen) return null
@@ -71,25 +71,29 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onCancel}
-      title="选择用户"
+      title="选择操作身份"
       size="md"
       triggerRef={triggerRef}
       initialFocusSelector={users.length > 0 ? '.user-item:first-child' : undefined}
       ariaDescribedBy="user-selection-description"
     >
       <div ref={dialogRef} className="max-h-[60vh] flex flex-col">
-        <div className="text-sm text-gray-600 mb-4">当前登录：{currentUsername}</div>
+        <div className="text-sm text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100 mb-4">
+          当前登录：<span className="font-medium text-slate-700">{currentUsername}</span>
+        </div>
         <p id="user-selection-description" className="sr-only">
           从列表中选择一个用户，双击可直接确认选择
         </p>
 
-        <div className="flex-1 overflow-y-auto mb-4">
+        <div className="flex-1 overflow-y-auto mb-6 pr-1">
           <div className="flex flex-col gap-2">
             {users.map((user) => (
               <div
                 key={user.id}
-                className={`user-item p-3 border border-gray-200 rounded-lg cursor-pointer transition-all hover:border-blue-500 hover:bg-green-50 ${
-                  selectedUserId === user.id ? 'border-blue-500 bg-blue-50' : ''
+                className={`user-item p-4 border rounded-xl cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
+                  selectedUserId === user.id
+                    ? 'border-blue-500 bg-blue-50/50 shadow-sm'
+                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                 }`}
                 onClick={() => setSelectedUserId(user.id)}
                 onDoubleClick={() => handleDoubleClick(user)}
@@ -101,15 +105,15 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
                 }}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-900">{user.username}</span>
+                  <span className="text-sm font-medium text-slate-800">{user.username}</span>
                   <span
-                    className={`text-xs px-2 py-1 rounded font-medium ${userTypeStyles[user.userType]}`}
+                    className={`text-xs px-2 py-0.5 rounded-md font-medium ${userTypeStyles[user.userType]}`}
                   >
                     {user.userType}
                   </span>
                 </div>
                 {user.createTime && (
-                  <div className="mt-1 text-xs text-gray-500">
+                  <div className="mt-2 text-xs text-slate-400">
                     创建于：{new Date(user.createTime).toLocaleString('zh-CN')}
                   </div>
                 )}
@@ -118,23 +122,23 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
           </div>
         </div>
 
-        <div className="border-t border-gray-200 pt-4">
-          <div className="flex justify-center gap-3">
+        <div className="border-t border-slate-100 pt-5">
+          <div className="flex justify-end gap-3">
             <button
-              className="px-6 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={handleConfirm}
-              disabled={selectedUserId === null}
-            >
-              确认
-            </button>
-            <button
-              className="px-6 py-2 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
+              className="px-6 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors"
               onClick={onCancel}
             >
               取消
             </button>
+            <button
+              className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleConfirm}
+              disabled={selectedUserId === null}
+            >
+              确认选择
+            </button>
           </div>
-          <div className="text-center text-xs text-gray-500 mt-3">双击用户可直接选择</div>
+          <div className="text-right text-xs text-slate-400 mt-3">双击用户卡片可直接选择</div>
         </div>
       </div>
     </Modal>
