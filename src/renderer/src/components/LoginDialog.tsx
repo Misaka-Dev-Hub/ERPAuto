@@ -93,15 +93,17 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
           </div>
         )}
 
-        <div className="space-y-4">
-          <div className="text-sm text-gray-600">当前计算机：{computerName}</div>
+        <div className="space-y-5">
+          <div className="text-sm text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100">
+            当前计算机：<span className="font-medium text-slate-700">{computerName}</span>
+          </div>
 
           <div>
-            <label className="block text-sm text-slate-700 mb-1">用户名:</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">用户名</label>
             <input
               ref={usernameInputRef}
               type="text"
-              className="border border-slate-300 rounded-md p-2 w-full text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-slate-200 rounded-xl p-3 w-full text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white shadow-inner transition-all"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="请输入用户名"
@@ -110,10 +112,10 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm text-slate-700 mb-1">密码:</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">密码</label>
             <input
               type="password"
-              className="border border-slate-300 rounded-md p-2 w-full text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-slate-200 rounded-xl p-3 w-full text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white shadow-inner transition-all"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="请输入密码"
@@ -122,16 +124,16 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
           </div>
         </div>
 
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-8 flex justify-end gap-3">
           <button
-            className="px-4 py-2 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+            className="px-6 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors"
             onClick={onCancel}
             disabled={isLoggingIn}
           >
             取消
           </button>
           <button
-            className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50"
+            className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-colors disabled:opacity-50"
             onClick={handleLogin}
             disabled={isLoggingIn}
           >
@@ -139,7 +141,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
           </button>
         </div>
 
-        <div className="mt-4 text-xs text-gray-400 text-right">v1.0</div>
+        <div className="mt-4 text-xs text-slate-400 text-right">v1.0</div>
       </div>
     </Modal>
   )

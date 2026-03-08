@@ -102,20 +102,22 @@ const SettingsPage: React.FC = () => {
         </div>
       )}
 
-      <div className="w-full max-w-xl bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="border-b border-slate-100 bg-slate-50 px-6 py-5">
+      <div className="w-full max-w-xl bg-white rounded-2xl shadow-sm border border-slate-200/60 overflow-hidden">
+        <div className="border-b border-slate-100/80 bg-slate-50/50 px-8 py-6">
           <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-800">
-            <SettingsIcon size={20} className="text-slate-600" />
+            <div className="bg-slate-100 p-2 rounded-lg text-slate-600">
+              <SettingsIcon size={20} />
+            </div>
             ERP 账号配置
           </h2>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 mt-2">
             设置 ERP 系统的登录账号和密码。此配置将存储在数据库中，按用户管理。
           </p>
         </div>
 
-        <div className="p-6 space-y-6 bg-white">
-          <div className="w-full max-w-md mx-auto">
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+        <div className="p-8 space-y-6 bg-white">
+          <div className="w-full mx-auto">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
               <span className="flex items-center gap-2">
                 <User size={16} className="text-slate-500" />
                 ERP 登录账号
@@ -129,12 +131,12 @@ const SettingsPage: React.FC = () => {
                 setCredentials((prev) => ({ ...prev, username: e.target.value }))
                 setIsModified(true)
               }}
-              className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
+              className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white shadow-inner transition-all"
             />
           </div>
 
-          <div className="w-full max-w-md mx-auto">
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+          <div className="w-full mx-auto">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
               <span className="flex items-center gap-2">
                 <Key size={16} className="text-slate-500" />
                 ERP 登录密码
@@ -148,13 +150,13 @@ const SettingsPage: React.FC = () => {
                 setCredentials((prev) => ({ ...prev, password: e.target.value }))
                 setIsModified(true)
               }}
-              className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
+              className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white shadow-inner transition-all"
             />
           </div>
 
-          <div className="w-full max-w-md mx-auto pt-6 mt-2 border-t border-slate-100 flex justify-center">
+          <div className="w-full mx-auto pt-6 mt-4 flex justify-end">
             <button
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 text-white px-8 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-sm transition-colors"
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 text-white px-8 py-3 rounded-xl flex items-center gap-2 font-medium shadow-sm transition-colors"
               onClick={handleSaveCredentials}
               disabled={!isModified}
             >
