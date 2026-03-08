@@ -115,31 +115,8 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
     return rows.filter((row) => selectedManagers.has(row.record.managerName) || row.state === 'new')
   }, [rows, isAdmin, selectedManagers])
 
-  // Handle keyboard events
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent) => {
-      if (editingCell) {
-        if (event.key === 'Enter') {
-          saveEdit()
-        } else if (event.key === 'Escape') {
-          cancelEdit()
-        }
-        return
-      }
-
-      if (event.key === 'Insert') {
-        event.preventDefault()
-        insertNewRow()
-      } else if (event.key === 'Delete' && selectedRowIndex !== null) {
-        event.preventDefault()
-        deleteRow(selectedRowIndex)
-      }
-    },
-    [editingCell, selectedRowIndex]
-  )
-
   // Insert new row
-  const insertNewRow = () => {
+  const insertNewRow = useCallback(() => {
     const newRow: RowState = {
       record: {
         materialName: '',
@@ -157,10 +134,10 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
       }, 0)
       return [...prev, newRow]
     })
-  }
+  }, [isAdmin, currentUsername])
 
   // Delete row
-  const deleteRow = (index: number) => {
+  const deleteRow = useCallback((index: number) => {
     setRows((prev) => {
       const newRows = [...prev]
       const row = newRows[index]
@@ -174,19 +151,19 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
       return newRows
     })
     setSelectedRowIndex(null)
-  }
+  }, [])
 
   // Start editing a cell
-  const startEdit = (rowIndex: number, field: string) => {
+  const startEdit = useCallback((rowIndex: number, field: string) => {
     const row = rows[rowIndex]
     if (row.state === 'deleted') return
 
     setEditingCell({ rowIndex, field })
     setEditValue(row.record[field as keyof MaterialTypeRecord] as string)
-  }
+  }, [rows])
 
   // Save edit
-  const saveEdit = () => {
+  const saveEdit = useCallback(() => {
     if (!editingCell) return
 
     const { rowIndex, field } = editingCell
@@ -209,13 +186,36 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
 
     setEditingCell(null)
     setEditValue('')
-  }
+  }, [editingCell, editValue])
 
   // Cancel edit
-  const cancelEdit = () => {
+  const cancelEdit = useCallback(() => {
     setEditingCell(null)
     setEditValue('')
-  }
+  }, [])
+
+  // Handle keyboard events
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (editingCell) {
+        if (event.key === 'Enter') {
+          saveEdit()
+        } else if (event.key === 'Escape') {
+          cancelEdit()
+        }
+        return
+      }
+
+      if (event.key === 'Insert') {
+        event.preventDefault()
+        insertNewRow()
+      } else if (event.key === 'Delete' && selectedRowIndex !== null) {
+        event.preventDefault()
+        deleteRow(selectedRowIndex)
+      }
+    },
+    [editingCell, selectedRowIndex, insertNewRow, deleteRow, saveEdit, cancelEdit]
+  )
 
   // Save all changes
   const handleSave = async () => {
