@@ -42,7 +42,10 @@ export function registerUserErpConfigHandlers(): void {
         const credentials = await erpConfigService.getCurrentUserErpConfig()
 
         if (!credentials) {
-          throw new ValidationError('未找到 ERP 配置。请先配置 ERP 账号和密码。', 'VAL_INVALID_INPUT')
+          throw new ValidationError(
+            '未找到 ERP 配置。请先配置 ERP 账号和密码。',
+            'VAL_INVALID_INPUT'
+          )
         }
 
         const configManager = ConfigManager.getInstance()
@@ -86,7 +89,10 @@ export function registerUserErpConfigHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.USER_ERP_CONFIG_TEST_CONNECTION,
-    async (_event, credentials: ErpCredentialsRequest): Promise<IpcResult<ConnectionTestResult>> => {
+    async (
+      _event,
+      credentials: ErpCredentialsRequest
+    ): Promise<IpcResult<ConnectionTestResult>> => {
       return withErrorHandling(async () => {
         if (!credentials.username || !credentials.password) {
           throw new ValidationError(
@@ -139,4 +145,3 @@ export function registerUserErpConfigHandlers(): void {
     }
   )
 }
-

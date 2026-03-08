@@ -56,7 +56,10 @@ export function useAuth(): UseAuthReturn {
     return true
   }, [])
 
-  const silentLogin = useCallback(async (): Promise<{ success: boolean; requiresUserSelection?: boolean }> => {
+  const silentLogin = useCallback(async (): Promise<{
+    success: boolean
+    requiresUserSelection?: boolean
+  }> => {
     setState((prev) => ({ ...prev, loading: true, error: null }))
     const result = await window.electron.auth.silentLogin()
 

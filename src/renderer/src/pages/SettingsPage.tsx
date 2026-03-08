@@ -27,7 +27,9 @@ const SettingsPage: React.FC = () => {
       setIsLoading(true)
       // ERP credentials are loaded from database (current user's config)
       const response = await window.electron.settings.getSettings()
-      const config = response.success ? (response.data as { erp?: ErpCredentials } | undefined) : undefined
+      const config = response.success
+        ? (response.data as { erp?: ErpCredentials } | undefined)
+        : undefined
 
       // Extract ERP credentials from the config
       if (config?.erp) {
@@ -60,7 +62,9 @@ const SettingsPage: React.FC = () => {
           password: credentials.password
         }
       })
-      const saveData = result.success ? (result.data as { success?: boolean; error?: string } | undefined) : undefined
+      const saveData = result.success
+        ? (result.data as { success?: boolean; error?: string } | undefined)
+        : undefined
 
       if (result.success && saveData?.success !== false) {
         setIsModified(false)

@@ -47,10 +47,7 @@ export function registerMaterialTypeHandlers(): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.MATERIAL_TYPE_GET_BY_MANAGER,
-    async (
-      _event,
-      managerName: string
-    ): Promise<IpcResult<MaterialTypeRecord[]>> => {
+    async (_event, managerName: string): Promise<IpcResult<MaterialTypeRecord[]>> => {
       return withErrorHandling(async () => {
         const records = await dao.getMaterialsByManager(managerName)
         return records
@@ -127,4 +124,3 @@ export function registerMaterialTypeHandlers(): void {
 
   log.info('Material type handlers registered')
 }
-

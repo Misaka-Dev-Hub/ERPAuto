@@ -497,18 +497,21 @@ export function registerValidationHandlers(): void {
   /**
    * Get unique manager names
    */
-  ipcMain.handle(IPC_CHANNELS.MATERIALS_GET_MANAGERS, async (_event): Promise<{ managers: string[] }> => {
-    try {
-      const dao = new MaterialsToBeDeletedDAO()
-      const managers = await dao.getManagers()
-      return { managers }
-    } catch (error) {
-      log.error('Get managers error', {
-        error: error instanceof Error ? error.message : String(error)
-      })
-      return { managers: [] }
+  ipcMain.handle(
+    IPC_CHANNELS.MATERIALS_GET_MANAGERS,
+    async (_event): Promise<{ managers: string[] }> => {
+      try {
+        const dao = new MaterialsToBeDeletedDAO()
+        const managers = await dao.getManagers()
+        return { managers }
+      } catch (error) {
+        log.error('Get managers error', {
+          error: error instanceof Error ? error.message : String(error)
+        })
+        return { managers: [] }
+      }
     }
-  })
+  )
 
   /**
    * Update manager for a single material

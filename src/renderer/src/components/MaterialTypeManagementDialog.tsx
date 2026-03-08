@@ -154,13 +154,16 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
   }, [])
 
   // Start editing a cell
-  const startEdit = useCallback((rowIndex: number, field: string) => {
-    const row = rows[rowIndex]
-    if (row.state === 'deleted') return
+  const startEdit = useCallback(
+    (rowIndex: number, field: string) => {
+      const row = rows[rowIndex]
+      if (row.state === 'deleted') return
 
-    setEditingCell({ rowIndex, field })
-    setEditValue(row.record[field as keyof MaterialTypeRecord] as string)
-  }, [rows])
+      setEditingCell({ rowIndex, field })
+      setEditValue(row.record[field as keyof MaterialTypeRecord] as string)
+    },
+    [rows]
+  )
 
   // Save edit
   const saveEdit = useCallback(() => {
@@ -252,7 +255,9 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
         toUpdate,
         toDelete
       })
-      const payload = result.success ? (result.data as { stats?: { success?: number; failed?: number } } | undefined) : undefined
+      const payload = result.success
+        ? (result.data as { stats?: { success?: number; failed?: number } } | undefined)
+        : undefined
 
       if (result.success) {
         alert(

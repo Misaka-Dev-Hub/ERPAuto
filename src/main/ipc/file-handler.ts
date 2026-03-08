@@ -31,13 +31,16 @@ function normalizeAndValidatePath(inputPath: string): string {
 }
 
 export function registerFileHandlers(): void {
-  ipcMain.handle(IPC_CHANNELS.FILE_READ, async (_event, filePath: string): Promise<IpcResult<string>> => {
-    return withErrorHandling(async () => {
-      const safePath = normalizeAndValidatePath(filePath)
-      log.debug('Reading file', { filePath: safePath })
-      return await fs.readFile(safePath, 'utf-8')
-    }, 'file:read')
-  })
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_READ,
+    async (_event, filePath: string): Promise<IpcResult<string>> => {
+      return withErrorHandling(async () => {
+        const safePath = normalizeAndValidatePath(filePath)
+        log.debug('Reading file', { filePath: safePath })
+        return await fs.readFile(safePath, 'utf-8')
+      }, 'file:read')
+    }
+  )
 
   ipcMain.handle(
     IPC_CHANNELS.FILE_WRITE,
@@ -52,36 +55,45 @@ export function registerFileHandlers(): void {
     }
   )
 
-  ipcMain.handle(IPC_CHANNELS.FILE_EXISTS, async (_event, filePath: string): Promise<IpcResult<boolean>> => {
-    return withErrorHandling(async () => {
-      const safePath = normalizeAndValidatePath(filePath)
-      try {
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_EXISTS,
+    async (_event, filePath: string): Promise<IpcResult<boolean>> => {
+      return withErrorHandling(async () => {
+        const safePath = normalizeAndValidatePath(filePath)
+        try {
+          await fs.access(safePath)
+          return true
+        } catch {
+          return false
+        }
+      }, 'file:exists')
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_LIST,
+    async (_event, dirPath: string): Promise<IpcResult<string[]>> => {
+      return withErrorHandling(async () => {
+        const safePath = normalizeAndValidatePath(dirPath)
+        log.debug('Listing directory', { dirPath: safePath })
+        const entries = await fs.readdir(safePath, { withFileTypes: true })
+        return entries
+          .filter((entry) => entry.isFile())
+          .map((entry) => entry.name)
+          .sort()
+      }, 'file:list')
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_OPEN_PATH,
+    async (_event, filePath: string): Promise<IpcResult<void>> => {
+      return withErrorHandling(async () => {
+        const safePath = normalizeAndValidatePath(filePath)
+        log.debug('Opening path in explorer', { filePath: safePath })
         await fs.access(safePath)
-        return true
-      } catch {
-        return false
-      }
-    }, 'file:exists')
-  })
-
-  ipcMain.handle(IPC_CHANNELS.FILE_LIST, async (_event, dirPath: string): Promise<IpcResult<string[]>> => {
-    return withErrorHandling(async () => {
-      const safePath = normalizeAndValidatePath(dirPath)
-      log.debug('Listing directory', { dirPath: safePath })
-      const entries = await fs.readdir(safePath, { withFileTypes: true })
-      return entries
-        .filter((entry) => entry.isFile())
-        .map((entry) => entry.name)
-        .sort()
-    }, 'file:list')
-  })
-
-  ipcMain.handle(IPC_CHANNELS.FILE_OPEN_PATH, async (_event, filePath: string): Promise<IpcResult<void>> => {
-    return withErrorHandling(async () => {
-      const safePath = normalizeAndValidatePath(filePath)
-      log.debug('Opening path in explorer', { filePath: safePath })
-      await fs.access(safePath)
-      await shell.openPath(safePath)
-    }, 'file:openPath')
-  })
+        await shell.openPath(safePath)
+      }, 'file:openPath')
+    }
+  )
 }

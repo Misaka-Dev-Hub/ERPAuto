@@ -100,7 +100,9 @@ export function useCleaner() {
         // Load managers
         if (admin) {
           const resp = await window.electron.materials.getManagers()
-          const managersPayload = resp.success ? (resp.data as { managers: string[] } | undefined) : undefined
+          const managersPayload = resp.success
+            ? (resp.data as { managers: string[] } | undefined)
+            : undefined
           const managerList = managersPayload?.managers ?? []
           setManagers(managerList)
           setSelectedManagers(new Set(managerList))
@@ -108,7 +110,9 @@ export function useCleaner() {
 
         // Get shared Production IDs
         const result = await window.electron.validation.getSharedProductionIds()
-        const idsPayload = result.success ? (result.data as { productionIds?: string[] } | undefined) : undefined
+        const idsPayload = result.success
+          ? (result.data as { productionIds?: string[] } | undefined)
+          : undefined
         setSharedProductionIdsCount(idsPayload?.productionIds?.length ?? 0)
       } catch (err) {
         console.error('Initialization failed:', err)
@@ -297,7 +301,9 @@ export function useCleaner() {
 
       if (materialsToUpsert.length > 0) {
         const res = await window.electron.materials.upsertBatch(materialsToUpsert)
-        const payload = res.success ? (res.data as { stats?: { success?: number } } | undefined) : undefined
+        const payload = res.success
+          ? (res.data as { stats?: { success?: number } } | undefined)
+          : undefined
         if (!res.success) throw new Error(res.error || '写入物料失败')
         msgParts.push(`写入/更新成功：${payload?.stats?.success || 0} 条`)
       }
@@ -314,7 +320,9 @@ export function useCleaner() {
       // Reload managers if admin
       if (isAdmin) {
         const resp = await window.electron.materials.getManagers()
-        const payload = resp.success ? (resp.data as { managers?: string[] } | undefined) : undefined
+        const payload = resp.success
+          ? (resp.data as { managers?: string[] } | undefined)
+          : undefined
         setManagers(payload?.managers ?? [])
       }
     } catch (err) {

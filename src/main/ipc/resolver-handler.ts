@@ -106,7 +106,9 @@ export function registerResolverHandlers(): void {
     async (
       _event,
       inputs: string[]
-    ): Promise<IpcResult<Array<{ input: string; type: 'productionId' | 'orderNumber' | 'unknown' }>>> => {
+    ): Promise<
+      IpcResult<Array<{ input: string; type: 'productionId' | 'orderNumber' | 'unknown' }>>
+    > => {
       return withErrorHandling(async () => {
         // Create a mock resolver without database connection
         const resolver = new OrderNumberResolver({

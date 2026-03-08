@@ -76,9 +76,7 @@ export interface ExtractorAPI {
    * Run ERP data extractor
    * @param input - Extractor input parameters
    */
-  runExtractor: (
-    input: ExtractorInput
-  ) => Promise<IpcResult<ExtractorResult>>
+  runExtractor: (input: ExtractorInput) => Promise<IpcResult<ExtractorResult>>
   /**
    * Subscribe to progress updates
    * @param callback - Callback function receiving progress data
@@ -101,9 +99,7 @@ export interface CleanerAPI {
    * Run ERP cleaner service
    * @param input - Cleaner input parameters
    */
-  runCleaner: (
-    input: CleanerInput
-  ) => Promise<IpcResult<CleanerResult>>
+  runCleaner: (input: CleanerInput) => Promise<IpcResult<CleanerResult>>
 
   /**
    * Export validation results to Excel

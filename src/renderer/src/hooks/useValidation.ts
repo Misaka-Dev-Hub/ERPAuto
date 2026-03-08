@@ -52,28 +52,39 @@ export function useValidation(): UseValidationReturn {
     error: null
   })
 
-  const validate = useCallback(async (request: ValidationRequest): Promise<ValidationResponse | null> => {
-    setState((prev) => ({ ...prev, loading: true, error: null }))
-    const response = await window.electron.validation.validate(request)
-    if (!response.success || !response.data) {
-      setState((prev) => ({ ...prev, loading: false, error: response.error || 'Validation failed' }))
-      return response.success ? null : { success: false, error: response.error }
-    }
+  const validate = useCallback(
+    async (request: ValidationRequest): Promise<ValidationResponse | null> => {
+      setState((prev) => ({ ...prev, loading: true, error: null }))
+      const response = await window.electron.validation.validate(request)
+      if (!response.success || !response.data) {
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          error: response.error || 'Validation failed'
+        }))
+        return response.success ? null : { success: false, error: response.error }
+      }
 
-    const result = response.data as ValidationResponse
-    if (!result.success) {
-      setState((prev) => ({ ...prev, loading: false, error: result.error || 'Validation failed' }))
+      const result = response.data as ValidationResponse
+      if (!result.success) {
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          error: result.error || 'Validation failed'
+        }))
+        return result
+      }
+
+      setState({
+        loading: false,
+        data: result.results || null,
+        stats: result.stats || null,
+        error: null
+      })
       return result
-    }
-
-    setState({
-      loading: false,
-      data: result.results || null,
-      stats: result.stats || null,
-      error: null
-    })
-    return result
-  }, [])
+    },
+    []
+  )
 
   const setSharedProductionIds = useCallback(async (ids: string[]): Promise<void> => {
     await window.electron.validation.setSharedProductionIds(ids)
@@ -88,7 +99,10 @@ export function useValidation(): UseValidationReturn {
     return payload.productionIds || []
   }, [])
 
-  const getCleanerData = useCallback(async (): Promise<{ orderNumbers: string[]; materialCodes: string[] } | null> => {
+  const getCleanerData = useCallback(async (): Promise<{
+    orderNumbers: string[]
+    materialCodes: string[]
+  } | null> => {
     const result = await window.electron.validation.getCleanerData()
     if (!result.success || !result.data) {
       return null
