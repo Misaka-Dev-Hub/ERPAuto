@@ -35,3 +35,6 @@ logs
 *.yaml.backup
 # But keep config.template.yaml
 !config.template.yaml
+
+# nul
+nul
