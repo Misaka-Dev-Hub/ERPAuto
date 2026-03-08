@@ -756,6 +756,17 @@ export function registerValidationHandlers(): void {
   )
 
   /**
+   * Clear shared Production IDs
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.VALIDATION_CLEAR_SHARED_PRODUCTION_IDS,
+    async (event): Promise<void> => {
+      log.info('Clearing shared Production IDs')
+      clearSharedProductionIds(event.sender.id)
+    }
+  )
+
+  /**
    * Get cleaner data (order numbers from shared Production IDs + material codes from MaterialsToBeDeleted)
    * Filters materials by current user (admin sees all, regular users see only their own)
    */

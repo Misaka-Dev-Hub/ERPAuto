@@ -140,6 +140,8 @@ const api = {
       invokeIpc(IPC_CHANNELS.VALIDATION_SET_SHARED_PRODUCTION_IDS, productionIds),
     getSharedProductionIds: (): Promise<IpcResult> =>
       invokeIpc(IPC_CHANNELS.VALIDATION_GET_SHARED_PRODUCTION_IDS),
+    clearSharedProductionIds: (): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.VALIDATION_CLEAR_SHARED_PRODUCTION_IDS),
     getCleanerData: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.VALIDATION_GET_CLEANER_DATA)
   },
 

@@ -30,6 +30,9 @@ const ExtractorPage: React.FC = () => {
         .map((line) => line.trim())
         .filter((line) => line.length > 0)
       window.electron.validation.setSharedProductionIds(orderNumberList)
+    } else {
+      // Clear shared Production IDs when input is cleared
+      window.electron.validation.clearSharedProductionIds()
     }
   }, [orderNumbers])
 

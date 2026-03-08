@@ -51,6 +51,7 @@ export const IPC_CHANNELS = {
   VALIDATION_VALIDATE: 'validation:validate',
   VALIDATION_SET_SHARED_PRODUCTION_IDS: 'validation:setSharedProductionIds',
   VALIDATION_GET_SHARED_PRODUCTION_IDS: 'validation:getSharedProductionIds',
+  VALIDATION_CLEAR_SHARED_PRODUCTION_IDS: 'validation:clearSharedProductionIds',
   VALIDATION_GET_CLEANER_DATA: 'validation:getCleanerData',
 
   // Materials
