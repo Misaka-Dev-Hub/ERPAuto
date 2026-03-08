@@ -6,9 +6,6 @@ import type {
   ExtractorCoreResult,
   ExtractionProgress
 } from '../../types/extractor.types'
-import { createLogger } from '../logger'
-
-const log = createLogger('ExtractorCore')
 
 /**
  * ExtractorCore - Handles all web page operations for data extraction
@@ -142,12 +139,12 @@ export class ExtractorCore {
    * Reference: Python download_batch() method lines 133-175
    */
   private async downloadBatch(
-    session: ErpSession,
+    _session: ErpSession,
     popupPage: any,
     workFrame: any,
     orderNumbers: string[],
     batchIndex: number,
-    totalBatches: number,
+    _totalBatches: number,
     downloadDir: string
   ): Promise<string> {
     // Fill order numbers (Python lines 143-145)

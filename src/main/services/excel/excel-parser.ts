@@ -1,6 +1,5 @@
 import ExcelJS from 'exceljs'
 import type { DiscreteMaterialPlan, ExcelParseOptions, OrderHeader } from '../../types/excel.types'
-import path from 'path'
 import { createLogger } from '../logger'
 
 const log = createLogger('ExcelParser')
@@ -53,12 +52,6 @@ export class ExcelParser {
     产品单位: 'unit'
   }
 
-  private verbose: boolean
-
-  constructor(options: ExcelParseOptions = {}) {
-    this.verbose = options.verbose || false
-  }
-
   /**
    * Parse Excel file and extract material plans
    */
@@ -77,7 +70,7 @@ export class ExcelParser {
     const allRows: any[][] = []
 
     // Read all rows into memory
-    worksheet.eachRow((row, rowNumber) => {
+    worksheet.eachRow((row, _rowNumber) => {
       allRows.push(row.values as any[])
     })
 

@@ -577,7 +577,7 @@ export class DiscreteMaterialPlanDAO {
   private buildRowValues(
     record: MaterialPlanRecord,
     columns: string[],
-    rowIndex: number,
+    _rowIndex: number,
     isSqlServer: boolean,
     values: any[]
   ): string[] {

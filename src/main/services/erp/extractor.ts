@@ -7,8 +7,7 @@ import type {
   ExtractorInput,
   ExtractorResult,
   ImportResult,
-  LogLevel,
-  ExtractionProgress
+  LogLevel
 } from '../../types/extractor.types'
 import { DataImportService } from '../database/data-importer'
 import { createLogger } from '../logger'
@@ -72,7 +71,6 @@ export class ExtractorService {
         const totalPoints = 1 + totalBatches + 2
         const progressPerPoint = 100 / totalPoints
         const mergeProgress = (1 + totalBatches) * progressPerPoint
-        const importProgress = (1 + totalBatches + 1) * progressPerPoint
 
         input.onProgress?.('正在合并文件...', mergeProgress, {
           phase: 'merging',
@@ -131,7 +129,7 @@ export class ExtractorService {
     }
 
     log.info('Starting merge', { fileCount: filePaths.length })
-    const parser = new ExcelParser({ verbose: true })
+    const parser = new ExcelParser()
 
     // Collect all orders with full order info and materials
     // Each order has: { orderInfo: OrderHeader, materials: MaterialRow[] }
@@ -302,42 +300,6 @@ export class ExtractorService {
       } catch (error) {
         // Log error but don't fail the main process
         log.error('Failed to delete temporary file', { filePath, error })
-      }
-    }
-  }
-
-  /**
-   * Import merged Excel data to database
-   * @param filePath - Path to the merged Excel file
-   * @returns Import result with statistics
-   */
-  private async importToDatabase(filePath: string): Promise<ImportResult> {
-    log.info('Starting database import', { filePath })
-
-    const importService = new DataImportService()
-
-    try {
-      const result = await importService.importFromExcel(filePath, 1000)
-
-      log.info('Import completed', {
-        success: result.success,
-        recordsRead: result.recordsRead,
-        recordsDeleted: result.recordsDeleted,
-        recordsImported: result.recordsImported
-      })
-
-      return result
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      log.error('Import failed', { error: errorMsg })
-
-      return {
-        success: false,
-        recordsRead: 0,
-        recordsDeleted: 0,
-        recordsImported: 0,
-        uniqueSourceNumbers: 0,
-        errors: [errorMsg]
       }
     }
   }
