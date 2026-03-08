@@ -7,8 +7,10 @@
  * - Error list (if any)
  */
 
-import React from 'react'
+import React, { useRef } from 'react'
 import { CheckCircle, XCircle, SkipForward, Package, Loader2 } from 'lucide-react'
+import FocusLock from 'react-focus-lock'
+import { useDialogFocus } from '../hooks/useDialogFocus'
 
 interface CleanerProgress {
   message: string
@@ -46,6 +48,34 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
   progress = null,
   startTime = null
 }) => {
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // Setup focus management with custom escape key handling
+  const { focusLockProps } = useDialogFocus({
+    isOpen,
+    dialogRef,
+    onClose
+  })
+
+  // Custom escape key handling - only close when NOT executing
+  React.useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only allow escape to close when not executing
+      if ((event.key === 'Escape' || event.keyCode === 27) && !isExecuting) {
+        event.preventDefault()
+        event.stopPropagation()
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, isExecuting, onClose])
+
   if (!isOpen) return null
 
   const hasErrors = errors.length > 0
@@ -91,188 +121,202 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
   }, [showProgress, startTime, progress, now])
 
   return (
-    <div className="execution-report-overlay" onClick={showProgress ? undefined : onClose}>
+    <FocusLock {...focusLockProps}>
       <div
-        className="execution-report-dialog"
-        onClick={(e) => e.stopPropagation()}
-        style={{ width: showProgress ? '560px' : '480px' }}
+        className="execution-report-overlay"
+        onClick={showProgress ? undefined : onClose}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={
+          showProgress ? 'execution-dialog-progress-title' : 'execution-dialog-report-title'
+        }
       >
-        {showProgress ? (
-          // Progress View
-          <div className="progress-header">
-            <div className="progress-icon-wrapper">
-              <Loader2 className="progress-icon spinning" />
-            </div>
-            <h2 className="progress-title">正在执行清理...</h2>
-            <p className="progress-subtitle">{progress?.message || '处理中...'}</p>
-          </div>
-        ) : (
-          // Result View
-          <div className="report-header">
-            <div className="report-icon-wrapper">
-              {dryRun ? (
-                <Package className="report-icon preview" />
-              ) : hasErrors ? (
-                <XCircle className="report-icon error" />
-              ) : (
-                <CheckCircle className="report-icon success" />
-              )}
-            </div>
-            <h2 className="report-title">
-              {dryRun ? '预览执行报告' : hasErrors ? '执行完成 (有错误)' : '执行完成'}
-            </h2>
-            <p className="report-subtitle">
-              {dryRun
-                ? '预览模式 - 未实际删除数据'
-                : hasErrors
-                  ? '部分操作未能完成，请查看下方错误信息'
-                  : '所有操作已成功完成'}
-            </p>
-          </div>
-        )}
-
-        <div className="report-body">
+        <div
+          ref={dialogRef}
+          className="execution-report-dialog"
+          onClick={(e) => e.stopPropagation()}
+          style={{ width: showProgress ? '560px' : '480px' }}
+        >
           {showProgress ? (
-            // Progress View Content
-            <div className="progress-content">
-              <div className="progress-bar-container">
-                <div
-                  className="progress-bar-fill"
-                  style={{ width: `${progress?.progress || 0}%` }}
-                />
+            // Progress View
+            <div className="progress-header">
+              <div className="progress-icon-wrapper">
+                <Loader2 className="progress-icon spinning" />
               </div>
-
-              <div className="progress-stats">
-                <div className="progress-stat-item">
-                  <span className="stat-label">订单进度</span>
-                  <span className="stat-value">
-                    {Math.min(progress!.currentOrderIndex, progress!.totalOrders)} /{' '}
-                    {progress!.totalOrders}
-                  </span>
-                </div>
-                {progress!.totalMaterialsInOrder > 0 && (
-                  <div className="progress-stat-item">
-                    <span className="stat-label">物料进度</span>
-                    <span className="stat-value">
-                      {progress!.currentMaterialIndex} / {progress!.totalMaterialsInOrder}
-                    </span>
-                  </div>
-                )}
-                <div className="progress-stat-item">
-                  <span className="stat-label">总进度</span>
-                  <span className="stat-value">{Math.round(progress?.progress || 0)}%</span>
-                </div>
-              </div>
-
-              {progress?.currentOrderNumber && (
-                <div className="current-order-info">
-                  <Package size={14} className="order-icon" />
-                  <span className="order-label">当前订单:</span>
-                  <span className="order-number">{progress.currentOrderNumber}</span>
-                </div>
-              )}
-
-              {estimatedTime && (
-                <div className="estimated-time-info">
-                  <div className="estimated-time-item">
-                    <span className="time-label">预估还要</span>
-                    <span className="time-value">{estimatedTime.remainingMinutes} 分钟</span>
-                  </div>
-                  <div className="estimated-time-item">
-                    <span className="time-label">将会在</span>
-                    <span className="time-value">{estimatedTime.formattedTime}</span>
-                    <span className="time-label">执行完毕</span>
-                  </div>
-                </div>
-              )}
+              <h2 id="execution-dialog-progress-title" className="progress-title">
+                正在执行清理...
+              </h2>
+              <p className="progress-subtitle" aria-live="polite" aria-atomic="true">
+                {progress?.message || '处理中...'}
+              </p>
             </div>
           ) : (
-            // Result View Content
-            <>
-              <div className="stats-grid">
-                <div className="stat-card">
-                  <div className="stat-icon orders">
-                    <Package size={20} />
+            // Result View
+            <div className="report-header">
+              <div className="report-icon-wrapper">
+                {dryRun ? (
+                  <Package className="report-icon preview" />
+                ) : hasErrors ? (
+                  <XCircle className="report-icon error" />
+                ) : (
+                  <CheckCircle className="report-icon success" />
+                )}
+              </div>
+              <h2 id="execution-dialog-report-title" className="report-title">
+                {dryRun ? '预览执行报告' : hasErrors ? '执行完成 (有错误)' : '执行完成'}
+              </h2>
+              <p className="report-subtitle">
+                {dryRun
+                  ? '预览模式 - 未实际删除数据'
+                  : hasErrors
+                    ? '部分操作未能完成，请查看下方错误信息'
+                    : '所有操作已成功完成'}
+              </p>
+            </div>
+          )}
+
+          <div className="report-body">
+            {showProgress ? (
+              // Progress View Content
+              <div className="progress-content">
+                <div className="progress-bar-container">
+                  <div
+                    className="progress-bar-fill"
+                    style={{ width: `${progress?.progress || 0}%` }}
+                  />
+                </div>
+
+                <div className="progress-stats">
+                  <div className="progress-stat-item">
+                    <span className="stat-label">订单进度</span>
+                    <span className="stat-value">
+                      {Math.min(progress!.currentOrderIndex, progress!.totalOrders)} /{' '}
+                      {progress!.totalOrders}
+                    </span>
                   </div>
-                  <div className="stat-content">
-                    <div className="stat-label">处理订单</div>
-                    <div className="stat-value">{ordersProcessed}</div>
+                  {progress!.totalMaterialsInOrder > 0 && (
+                    <div className="progress-stat-item">
+                      <span className="stat-label">物料进度</span>
+                      <span className="stat-value">
+                        {progress!.currentMaterialIndex} / {progress!.totalMaterialsInOrder}
+                      </span>
+                    </div>
+                  )}
+                  <div className="progress-stat-item">
+                    <span className="stat-label">总进度</span>
+                    <span className="stat-value">{Math.round(progress?.progress || 0)}%</span>
                   </div>
                 </div>
 
-                <div className="stat-card">
-                  <div className="stat-icon deleted">
-                    <CheckCircle size={20} />
+                {progress?.currentOrderNumber && (
+                  <div className="current-order-info">
+                    <Package size={14} className="order-icon" />
+                    <span className="order-label">当前订单:</span>
+                    <span className="order-number">{progress.currentOrderNumber}</span>
                   </div>
-                  <div className="stat-content">
-                    <div className="stat-label">{dryRun ? '拟删除物料' : '删除物料'}</div>
-                    <div className="stat-value">{materialsDeleted}</div>
-                  </div>
-                </div>
+                )}
 
-                <div className="stat-card">
-                  <div className="stat-icon skipped">
-                    <SkipForward size={20} />
+                {estimatedTime && (
+                  <div className="estimated-time-info">
+                    <div className="estimated-time-item">
+                      <span className="time-label">预估还要</span>
+                      <span className="time-value">{estimatedTime.remainingMinutes} 分钟</span>
+                    </div>
+                    <div className="estimated-time-item">
+                      <span className="time-label">将会在</span>
+                      <span className="time-value">{estimatedTime.formattedTime}</span>
+                      <span className="time-label">执行完毕</span>
+                    </div>
                   </div>
-                  <div className="stat-content">
-                    <div className="stat-label">跳过物料</div>
-                    <div className="stat-value">{materialsSkipped}</div>
+                )}
+              </div>
+            ) : (
+              // Result View Content
+              <>
+                <div className="stats-grid">
+                  <div className="stat-card">
+                    <div className="stat-icon orders">
+                      <Package size={20} />
+                    </div>
+                    <div className="stat-content">
+                      <div className="stat-label">处理订单</div>
+                      <div className="stat-value">{ordersProcessed}</div>
+                    </div>
                   </div>
+
+                  <div className="stat-card">
+                    <div className="stat-icon deleted">
+                      <CheckCircle size={20} />
+                    </div>
+                    <div className="stat-content">
+                      <div className="stat-label">{dryRun ? '拟删除物料' : '删除物料'}</div>
+                      <div className="stat-value">{materialsDeleted}</div>
+                    </div>
+                  </div>
+
+                  <div className="stat-card">
+                    <div className="stat-icon skipped">
+                      <SkipForward size={20} />
+                    </div>
+                    <div className="stat-content">
+                      <div className="stat-label">跳过物料</div>
+                      <div className="stat-value">{materialsSkipped}</div>
+                    </div>
+                  </div>
+
+                  {hasErrors && (
+                    <div className="stat-card">
+                      <div className="stat-icon errors">
+                        <XCircle size={20} />
+                      </div>
+                      <div className="stat-content">
+                        <div className="stat-label">错误数量</div>
+                        <div className="stat-value error">{errors.length}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {hasErrors && (
-                  <div className="stat-card">
-                    <div className="stat-icon errors">
-                      <XCircle size={20} />
-                    </div>
-                    <div className="stat-content">
-                      <div className="stat-label">错误数量</div>
-                      <div className="stat-value error">{errors.length}</div>
+                  <div className="errors-section">
+                    <div className="errors-title">错误详情</div>
+                    <div className="errors-list">
+                      {errors.map((error, index) => (
+                        <div key={index} className="error-item">
+                          <XCircle size={14} className="error-icon" />
+                          <span className="error-text">{error}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
-              </div>
 
-              {hasErrors && (
-                <div className="errors-section">
-                  <div className="errors-title">错误详情</div>
-                  <div className="errors-list">
-                    {errors.map((error, index) => (
-                      <div key={index} className="error-item">
-                        <XCircle size={14} className="error-icon" />
-                        <span className="error-text">{error}</span>
-                      </div>
-                    ))}
+                {!hasErrors && !dryRun && (
+                  <div className="success-message">
+                    <CheckCircle size={16} className="success-icon" />
+                    <span>操作已成功完成，数据已同步到 ERP 系统</span>
                   </div>
-                </div>
-              )}
+                )}
 
-              {!hasErrors && !dryRun && (
-                <div className="success-message">
-                  <CheckCircle size={16} className="success-icon" />
-                  <span>操作已成功完成，数据已同步到 ERP 系统</span>
-                </div>
-              )}
+                {!hasErrors && dryRun && (
+                  <div className="preview-message">
+                    <Package size={16} className="preview-icon" />
+                    <span>预览模式结束，数据未实际修改。确认无误后可正式执行。</span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
 
-              {!hasErrors && dryRun && (
-                <div className="preview-message">
-                  <Package size={16} className="preview-icon" />
-                  <span>预览模式结束，数据未实际修改。确认无误后可正式执行。</span>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+          <div className="report-footer">
+            {!showProgress && (
+              <button className="btn-report-close" onClick={onClose}>
+                关闭
+              </button>
+            )}
+          </div>
 
-        <div className="report-footer">
-          {!showProgress && (
-            <button className="btn-report-close" onClick={onClose}>
-              关闭
-            </button>
-          )}
-        </div>
-
-        <style>{`
+          <style>{`
           .execution-report-overlay {
             position: fixed;
             top: 0;
@@ -698,8 +742,9 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
             background: #096dd9;
           }
         `}</style>
+        </div>
       </div>
-    </div>
+    </FocusLock>
   )
 }
 

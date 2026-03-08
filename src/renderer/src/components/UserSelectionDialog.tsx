@@ -7,7 +7,9 @@
  * - Return selected user info
  */
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import FocusLock from 'react-focus-lock'
+import { useDialogFocus } from '../hooks/useDialogFocus'
 
 export interface UserInfo {
   id: number
@@ -32,6 +34,14 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
   onCancel
 }) => {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  const { focusLockProps } = useDialogFocus({
+    isOpen,
+    dialogRef,
+    onClose: onCancel,
+    initialFocusSelector: users.length > 0 ? '.user-item:first-child' : undefined
+  })
 
   // Reset selection when dialog opens
   useEffect(() => {
@@ -58,60 +68,68 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="user-selection-overlay">
-      <div className="user-selection-dialog">
-        <div className="user-selection-header">
-          <h2 className="user-selection-title">选择用户</h2>
-          <p className="user-selection-hint">当前登录：{currentUsername}</p>
-        </div>
+    <FocusLock {...focusLockProps}>
+      <div
+        className="user-selection-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="user-selection-dialog-title"
+      >
+        <div className="user-selection-dialog" ref={dialogRef}>
+          <div className="user-selection-header">
+            <h2 className="user-selection-title" id="user-selection-dialog-title">
+              选择用户
+            </h2>
+            <p className="user-selection-hint">当前登录：{currentUsername}</p>
+          </div>
 
-        <div className="user-selection-body">
-          <div className="user-list">
-            {users.map((user) => (
-              <div
-                key={user.id}
-                className={`user-item ${selectedUserId === user.id ? 'selected' : ''}`}
-                onClick={() => setSelectedUserId(user.id)}
-                onDoubleClick={() => handleDoubleClick(user)}
-              >
-                <div className="user-item-content">
-                  <div className="user-item-row">
-                    <span className="user-name">{user.username}</span>
-                    <span className={`user-type user-type-${user.userType.toLowerCase()}`}>
-                      {user.userType}
-                    </span>
-                  </div>
-                  {user.createTime && (
+          <div className="user-selection-body">
+            <div className="user-list">
+              {users.map((user) => (
+                <div
+                  key={user.id}
+                  className={`user-item ${selectedUserId === user.id ? 'selected' : ''}`}
+                  onClick={() => setSelectedUserId(user.id)}
+                  onDoubleClick={() => handleDoubleClick(user)}
+                >
+                  <div className="user-item-content">
                     <div className="user-item-row">
-                      <span className="user-create-time">
-                        创建于：{new Date(user.createTime).toLocaleString('zh-CN')}
+                      <span className="user-name">{user.username}</span>
+                      <span className={`user-type user-type-${user.userType.toLowerCase()}`}>
+                        {user.userType}
                       </span>
                     </div>
-                  )}
+                    {user.createTime && (
+                      <div className="user-item-row">
+                        <span className="user-create-time">
+                          创建于：{new Date(user.createTime).toLocaleString('zh-CN')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="user-selection-footer">
-          <button
-            className="btn btn-primary"
-            onClick={handleConfirm}
-            disabled={selectedUserId === null}
-          >
-            确认
-          </button>
-          <button className="btn btn-secondary" onClick={onCancel}>
-            取消
-          </button>
-        </div>
+          <div className="user-selection-footer">
+            <button
+              className="btn btn-primary"
+              onClick={handleConfirm}
+              disabled={selectedUserId === null}
+            >
+              确认
+            </button>
+            <button className="btn btn-secondary" onClick={onCancel}>
+              取消
+            </button>
+          </div>
 
-        <div className="user-selection-hint-footer">双击用户可直接选择</div>
+          <div className="user-selection-hint-footer">双击用户可直接选择</div>
+        </div>
       </div>
 
       <style>{`
-        .user-selection-overlay {
           position: fixed;
           top: 0;
           left: 0;
@@ -278,7 +296,7 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
           border-top: 1px solid #f0f0f0;
         }
       `}</style>
-    </div>
+    </FocusLock>
   )
 }
 
