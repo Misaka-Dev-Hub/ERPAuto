@@ -7,8 +7,10 @@
  * - Enter key to submit
  */
 
-import React, { useState, useRef } from 'react'
-import { Modal } from './ui/Modal'
+import React, { useState } from 'react'
+import { Modal, Form, Input, Button, Typography, Alert } from 'antd'
+
+const { Text } = Typography
 
 interface LoginDialogProps {
   isOpen: boolean
@@ -25,120 +27,84 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
   onCancel,
   onError
 }) => {
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
+  const [form] = Form.useForm()
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const usernameInputRef = useRef<HTMLInputElement>(null)
-  const errorRef = useRef<HTMLDivElement>(null)
 
-  // Display error message with aria-live
-  const showError = (message: string): void => {
-    setErrorMessage(message)
-    onError(message)
-  }
-
-  const handleLogin = async (): Promise<void> => {
+  const handleFinish = async (values: any) => {
     setErrorMessage('')
-
-    if (!username.trim()) {
-      showError('请输入用户名')
-      usernameInputRef.current?.focus()
-      return
-    }
-
-    if (!password.trim()) {
-      showError('请输入密码')
-      return
-    }
-
     setIsLoggingIn(true)
-    const success = await onLogin(username.trim(), password.trim())
+    const success = await onLogin(values.username.trim(), values.password.trim())
     setIsLoggingIn(false)
 
     if (!success) {
-      showError('用户名或密码错误')
-      setPassword('')
-    }
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent): void => {
-    if (e.key === 'Enter') {
-      handleLogin()
+      setErrorMessage('用户名或密码错误')
+      onError('用户名或密码错误')
+      form.setFieldsValue({ password: '' })
     }
   }
 
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={onCancel}
+      open={isOpen}
+      onCancel={onCancel}
       title="请登录"
-      size="md"
-      showCloseButton={true}
-      initialFocusSelector='input[type="text"]'
-      ariaDescribedBy={errorMessage ? 'login-dialog-error' : undefined}
+      width={400}
+      footer={null}
+      destroyOnClose
     >
-      <div onKeyDown={handleKeyDown}>
-        {/* Error message area with aria-live for screen readers */}
+      <div className="mt-4">
         {errorMessage && (
-          <div
-            ref={errorRef}
-            id="login-dialog-error"
-            className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm"
-            role="alert"
-            aria-live="polite"
-            tabIndex={-1}
-          >
-            {errorMessage}
-          </div>
+          <Alert
+            message={errorMessage}
+            type="error"
+            showIcon
+            className="mb-4"
+          />
         )}
 
-        <div className="space-y-4">
-          <div className="text-sm text-gray-600">当前计算机：{computerName}</div>
+        <Text type="secondary" className="block mb-4">
+          当前计算机：{computerName}
+        </Text>
 
-          <div>
-            <label className="block text-sm text-slate-700 mb-1">用户名:</label>
-            <input
-              ref={usernameInputRef}
-              type="text"
-              className="border border-slate-300 rounded-md p-2 w-full text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleFinish}
+          requiredMark={false}
+        >
+          <Form.Item
+            label="用户名"
+            name="username"
+            rules={[{ required: true, message: '请输入用户名' }]}
+          >
+            <Input
               placeholder="请输入用户名"
               disabled={isLoggingIn}
+              autoFocus
             />
-          </div>
+          </Form.Item>
 
-          <div>
-            <label className="block text-sm text-slate-700 mb-1">密码:</label>
-            <input
-              type="password"
-              className="border border-slate-300 rounded-md p-2 w-full text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+          <Form.Item
+            label="密码"
+            name="password"
+            rules={[{ required: true, message: '请输入密码' }]}
+          >
+            <Input.Password
               placeholder="请输入密码"
               disabled={isLoggingIn}
             />
-          </div>
-        </div>
+          </Form.Item>
 
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            className="px-4 py-2 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-            onClick={onCancel}
-            disabled={isLoggingIn}
-          >
-            取消
-          </button>
-          <button
-            className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50"
-            onClick={handleLogin}
-            disabled={isLoggingIn}
-          >
-            {isLoggingIn ? '登录中...' : '登录'}
-          </button>
-        </div>
-
+          <Form.Item className="mb-0 mt-6 text-right">
+            <Button onClick={onCancel} disabled={isLoggingIn} className="mr-2">
+              取消
+            </Button>
+            <Button type="primary" htmlType="submit" loading={isLoggingIn}>
+              {isLoggingIn ? '登录中...' : '登录'}
+            </Button>
+          </Form.Item>
+        </Form>
         <div className="mt-4 text-xs text-gray-400 text-right">v1.0</div>
       </div>
     </Modal>

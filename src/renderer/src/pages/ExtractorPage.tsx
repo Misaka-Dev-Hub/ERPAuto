@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { Download, Play, CheckCircle } from 'lucide-react'
+import { Card, Typography, Button, Space, Result, Layout } from 'antd'
 import OrderNumberInput from '../components/OrderNumberInput'
 import { useExtractor } from '../hooks/useExtractor'
 import LogPanel from '../components/ui/LogPanel'
+
+const { Title, Text } = Typography
+const { Sider, Content } = Layout
 import { SegmentedProgressBar } from '../components/ui/SegmentedProgressBar'
 
 const ExtractorPage: React.FC = () => {
@@ -45,12 +49,17 @@ const ExtractorPage: React.FC = () => {
   }
 
   return (
-    <div className="flex h-full gap-4 relative">
-      <aside className="w-80 flex-shrink-0 bg-white border border-slate-200 flex flex-col shadow-sm rounded-xl overflow-hidden h-full">
-        <div className="p-4 border-b border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-800">订单号输入</h3>
+    <Layout className="h-full bg-transparent flex flex-row gap-4 relative">
+      <Sider
+        width={320}
+        theme="light"
+        className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden h-full flex flex-col"
+        style={{ backgroundColor: 'white' }}
+      >
+        <div className="p-4 border-b border-slate-100 flex-shrink-0">
+          <Text strong className="text-slate-800">订单号输入</Text>
         </div>
-        <div className="flex-1 flex flex-col p-4 min-h-0">
+        <div className="flex-1 flex flex-col p-4 min-h-0 overflow-hidden">
           <OrderNumberInput
             value={orderNumbers}
             onChange={setOrderNumbers}
@@ -61,36 +70,44 @@ const ExtractorPage: React.FC = () => {
             onReset={handleReset}
           />
         </div>
-      </aside>
+      </Sider>
 
-      <div className="flex-1 min-w-0 flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center justify-between">
+      <Content className="flex-1 min-w-0 flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
+        <Card
+          className="shadow-sm border-slate-200 w-full"
+          bodyStyle={{ padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        >
           <div className="flex-1">
-            <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-800 mb-1">
+            <Title level={4} className="flex items-center gap-2 mb-1" style={{ marginTop: 0 }}>
               <Download size={20} className="text-blue-600" />
               批量数据提取
-            </h2>
-            <p className="text-sm text-slate-500">遍历订单列表，自动执行数据导出并保存至数据库</p>
-            {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
+            </Title>
+            <Text type="secondary" className="block">遍历订单列表，自动执行数据导出并保存至数据库</Text>
+            {error && <Text type="danger" className="mt-2 block">{error}</Text>}
           </div>
 
-          <div className="flex items-center gap-4">
-            <button
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-sm transition-colors"
+          <Space>
+            <Button
+              type="primary"
+              size="large"
+              icon={<Play size={18} fill="currentColor" />}
               onClick={handleExtract}
               disabled={isRunning || !orderNumbers.trim()}
+              loading={isRunning}
+              className="flex items-center gap-2 font-medium"
             >
-              <Play size={18} fill="currentColor" />
               {isRunning ? '提取中...' : '开始提取'}
-            </button>
-          </div>
-        </div>
+            </Button>
+          </Space>
+        </Card>
 
         {!isRunning && isComplete && (
-          <div className="bg-green-50 rounded-xl p-8 flex items-center justify-center gap-4 shadow-md">
-            <CheckCircle className="text-green-600" size={35} />
-            <p className="text-4xl font-bold text-green-600">提取完毕</p>
-          </div>
+          <Result
+            status="success"
+            title="提取完毕"
+            className="bg-green-50 rounded-xl shadow-md p-8 m-0"
+            icon={<CheckCircle className="text-green-600 mx-auto" size={48} />}
+          />
         )}
 
         {isRunning && progress && (
@@ -104,8 +121,8 @@ const ExtractorPage: React.FC = () => {
         )}
 
         <LogPanel logs={logs} onClear={clearLogs} />
-      </div>
-    </div>
+      </Content>
+    </Layout>
   )
 }
 
