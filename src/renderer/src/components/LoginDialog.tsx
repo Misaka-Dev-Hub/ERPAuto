@@ -7,7 +7,7 @@
  * - Enter key to submit
  */
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useRef } from 'react'
 import FocusLock from 'react-focus-lock'
 import { useDialogFocus } from '../hooks/useDialogFocus'
 
@@ -43,22 +43,16 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
   })
 
   // Display error message with aria-live
-  const showError = (message: string) => {
+  const showError = (message: string): void => {
     setErrorMessage(message)
     // Also call the original onError callback for backward compatibility
     onError(message)
   }
 
-  // Focus on username input when dialog opens (maintained for compatibility)
-  useEffect(() => {
-    if (isOpen && usernameInputRef.current) {
-      usernameInputRef.current.focus()
-    }
-    // Clear error message when dialog opens
+  const handleLogin = async (): Promise<void> => {
+    // Clear error message when attempting login
     setErrorMessage('')
-  }, [isOpen])
 
-  const handleLogin = async () => {
     if (!username.trim()) {
       showError('请输入用户名')
       usernameInputRef.current?.focus()
@@ -80,11 +74,9 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent): void => {
     if (e.key === 'Enter') {
       handleLogin()
-    } else if (e.key === 'Escape') {
-      onCancel()
     }
   }
 

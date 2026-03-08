@@ -49,39 +49,18 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
   startTime = null
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null)
+  const [now, setNow] = React.useState(() => Date.now())
 
-  // Setup focus management with custom escape key handling
+  // Setup focus management with conditional escape key handling
   const { focusLockProps } = useDialogFocus({
     isOpen,
     dialogRef,
-    onClose
+    onClose,
+    shouldCloseOnEscape: () => !isExecuting // Only close when NOT executing
   })
-
-  // Custom escape key handling - only close when NOT executing
-  React.useEffect(() => {
-    if (!isOpen) return
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Only allow escape to close when not executing
-      if ((event.key === 'Escape' || event.keyCode === 27) && !isExecuting) {
-        event.preventDefault()
-        event.stopPropagation()
-        onClose()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen, isExecuting, onClose])
-
-  if (!isOpen) return null
 
   const hasErrors = errors.length > 0
   const showProgress = isExecuting && progress
-
-  const [now, setNow] = React.useState(Date.now())
 
   React.useEffect(() => {
     if (!showProgress || !startTime) return
@@ -119,6 +98,8 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
       formattedTime
     }
   }, [showProgress, startTime, progress, now])
+
+  if (!isOpen) return null
 
   return (
     <FocusLock {...focusLockProps}>

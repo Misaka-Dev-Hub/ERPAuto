@@ -16,6 +16,11 @@ export interface UseDialogFocusOptions {
   initialFocusSelector?: string
   /** Whether to lock body scroll when dialog is open (default: true) */
   lockBodyScroll?: boolean
+  /**
+   * Whether Escape key should close the dialog (default: true)
+   * Can be a boolean or a function that receives the keyboard event and returns a boolean
+   */
+  shouldCloseOnEscape?: boolean | ((event: KeyboardEvent) => boolean)
 }
 
 /**
@@ -45,14 +50,15 @@ export interface UseDialogFocusReturn {
  *
  * @example
  * ```typescript
- * function MyDialog({ isOpen, onClose }) {
+ * function MyDialog({ isOpen, onClose, isExecuting }) {
  *   const dialogRef = useRef<HTMLDivElement>(null)
  *   const triggerRef = useRef<HTMLButtonElement>(null)
  *   const { focusLockEnabled, focusLockProps } = useDialogFocus({
  *     isOpen,
  *     dialogRef,
  *     onClose,
- *     triggerRef
+ *     triggerRef,
+ *     shouldCloseOnEscape: () => !isExecuting // Only close when not executing
  *   })
  *
  *   return (
@@ -73,26 +79,39 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
     onClose,
     triggerRef,
     initialFocusSelector,
-    lockBodyScroll = true
+    lockBodyScroll = true,
+    shouldCloseOnEscape = true
   } = options
 
   // Handle Escape key press
   useEffect(() => {
     if (!isOpen) return
 
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape' || event.keyCode === 27) {
-        event.preventDefault()
-        event.stopPropagation()
-        onClose()
+        // Check if we should close on escape
+        let shouldClose = true
+        if (shouldCloseOnEscape !== undefined) {
+          if (typeof shouldCloseOnEscape === 'function') {
+            shouldClose = shouldCloseOnEscape(event)
+          } else {
+            shouldClose = shouldCloseOnEscape
+          }
+        }
+
+        if (shouldClose) {
+          event.preventDefault()
+          event.stopPropagation()
+          onClose()
+        }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
-    return () => {
+    return (): void => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isOpen, onClose])
+  }, [isOpen, onClose, shouldCloseOnEscape])
 
   // Manage body scroll locking
   useEffect(() => {
@@ -119,7 +138,7 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
       }
     }
 
-    return () => {
+    return (): void => {
       // Cleanup on unmount or when isOpen changes
       if (isOpen) {
         const scrollY = document.body.style.top
@@ -139,7 +158,7 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
   useEffect(() => {
     if (!isOpen || !dialogRef.current) return
 
-    const setupFocus = () => {
+    const setupFocus = (): void => {
       const dialogElement = dialogRef.current
       if (!dialogElement) return
 
@@ -182,7 +201,7 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
   useEffect(() => {
     if (isOpen || !triggerRef?.current) return
 
-    const restoreFocus = () => {
+    const restoreFocus = (): void => {
       const triggerElement = triggerRef.current
       if (triggerElement && typeof triggerElement.focus === 'function') {
         // Delay to ensure dialog is fully unmounted

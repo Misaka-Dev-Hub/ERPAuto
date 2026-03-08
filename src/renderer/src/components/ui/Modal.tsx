@@ -4,7 +4,7 @@
  * A reusable modal dialog component.
  */
 
-import React, { useEffect, useCallback, useRef } from 'react'
+import React, { useRef, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import FocusLock from 'react-focus-lock'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
@@ -40,39 +40,24 @@ export function Modal({
   showCloseButton = true,
   triggerRef,
   titleId
-}: ModalProps) {
+}: ModalProps): React.JSX.Element | null {
   const dialogRef = useRef<HTMLDivElement>(null)
+  const [generatedId] = useState(
+    () => `modal-title-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`
+  )
 
-  // Generate unique title ID if not provided
-  const generatedTitleId = titleId || `modal-title-${Math.random().toString(36).substr(2, 9)}`
+  // Use provided titleId or generated one
+  const generatedTitleId = useMemo((): string => {
+    return titleId || generatedId
+  }, [titleId, generatedId])
 
-  // Setup focus management
+  // Setup focus management (includes Escape key handling)
   const { focusLockProps } = useDialogFocus({
     isOpen,
     dialogRef,
     onClose,
     triggerRef: triggerRef || undefined
   })
-
-  // Handle escape key (maintained for backward compatibility, useDialogFocus also handles this)
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    },
-    [onClose]
-  )
-
-  useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown)
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen, handleKeyDown])
 
   if (!isOpen) return null
 
