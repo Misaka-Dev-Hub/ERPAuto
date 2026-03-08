@@ -114,6 +114,15 @@ export const erpSystemConfigSchema = z.object({
 })
 
 /**
+ * 日志配置 Schema
+ */
+export const loggingConfigSchema = z.object({
+  level: z.enum(['error', 'warn', 'info', 'debug', 'verbose']).default('info'),
+  auditRetention: z.number().int().min(1).max(365).default(30),
+  appRetention: z.number().int().min(1).max(365).default(14)
+})
+
+/**
  * 完整应用配置 Schema
  */
 export const fullConfigSchema = z.object({
@@ -122,7 +131,8 @@ export const fullConfigSchema = z.object({
   paths: pathsConfigSchema,
   extraction: extractionConfigSchema,
   validation: validationConfigSchema,
-  orderResolution: orderResolutionSchema
+  orderResolution: orderResolutionSchema,
+  logging: loggingConfigSchema
 })
 
 /**
@@ -133,6 +143,7 @@ export type DatabaseConfig = z.infer<typeof databaseConfigSchema>
 export type MySqlConfig = z.infer<typeof mysqlConfigSchema>
 export type SqlServerConfig = z.infer<typeof sqlServerConfigSchema>
 export type ErpSystemConfig = z.infer<typeof erpSystemConfigSchema>
+export type LoggingConfig = z.infer<typeof loggingConfigSchema>
 
 /**
  * 验证并解析配置

@@ -20,13 +20,14 @@ import { dirname } from 'path'
 import { app } from 'electron'
 import yaml from 'js-yaml'
 import { z } from 'zod'
-import { createLogger } from '../logger'
+import { createLogger, setLogLevel } from '../logger'
 import {
   fullConfigSchema,
   type FullConfig,
   type DatabaseType,
   type MySqlConfig,
-  type SqlServerConfig
+  type SqlServerConfig,
+  type LoggingConfig
 } from '../../types/config.schema'
 
 const log = createLogger('ConfigManager')
@@ -84,6 +85,11 @@ const DEFAULT_CONFIG: FullConfig = {
     tableName: '',
     productionIdField: '',
     orderNumberField: ''
+  },
+  logging: {
+    level: 'info',
+    auditRetention: 30,
+    appRetention: 14
   }
 }
 
@@ -134,6 +140,8 @@ export class ConfigManager {
       log.info('Config file not found, creating default config.yaml')
       await this.saveConfig(DEFAULT_CONFIG)
       this.config = DEFAULT_CONFIG
+      // Apply logging configuration from default config
+      setLogLevel(DEFAULT_CONFIG.logging.level)
       return
     }
 
@@ -151,6 +159,9 @@ export class ConfigManager {
       // Zod 验证
       const validated = fullConfigSchema.parse(parsed)
       this.config = validated
+
+      // Apply logging configuration
+      setLogLevel(validated.logging.level)
 
       log.info('Configuration loaded and validated successfully')
     } catch (error) {
@@ -228,6 +239,16 @@ export class ConfigManager {
       throw new Error('Configuration not initialized')
     }
     return this.config.database.activeType
+  }
+
+  /**
+   * 获取日志配置
+   */
+  public getLoggingConfig(): LoggingConfig {
+    if (!this.config) {
+      throw new Error('Configuration not initialized')
+    }
+    return this.config.logging
   }
 
   /**

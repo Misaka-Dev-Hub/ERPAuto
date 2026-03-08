@@ -11,7 +11,7 @@ import type {
   MaterialTypeBatchRequest
 } from '../main/types/validation.types'
 import type { IpcResult } from '../main/ipc'
-import { IPC_CHANNELS } from '../shared/ipc-channels'
+import { IPC_CHANNELS, type LogLevel } from '../shared/ipc-channels'
 
 type ErpSettingsPayload = {
   erp?: {
@@ -104,8 +104,7 @@ const api = {
   },
 
   auth: {
-    getComputerName: (): Promise<IpcResult> =>
-      invokeIpc(IPC_CHANNELS.AUTH_GET_COMPUTER_NAME),
+    getComputerName: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.AUTH_GET_COMPUTER_NAME),
     silentLogin: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.AUTH_SILENT_LOGIN),
     login: (request: LoginRequest): Promise<IpcResult> =>
       invokeIpc(IPC_CHANNELS.AUTH_LOGIN, request),
@@ -121,8 +120,7 @@ const api = {
     connectMySql: (config: MySqlConfig): Promise<IpcResult> =>
       invokeIpc(IPC_CHANNELS.DATABASE_MYSQL_CONNECT, config),
     disconnectMySql: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.DATABASE_MYSQL_DISCONNECT),
-    isMySqlConnected: (): Promise<IpcResult> =>
-      invokeIpc(IPC_CHANNELS.DATABASE_MYSQL_IS_CONNECTED),
+    isMySqlConnected: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.DATABASE_MYSQL_IS_CONNECTED),
     queryMySql: (sql: string, params?: any[]): Promise<IpcResult> =>
       invokeIpc(IPC_CHANNELS.DATABASE_MYSQL_QUERY, sql, params),
     connectSqlServer: (config: SqlServerConfig): Promise<IpcResult> =>
@@ -142,8 +140,7 @@ const api = {
       invokeIpc(IPC_CHANNELS.VALIDATION_SET_SHARED_PRODUCTION_IDS, productionIds),
     getSharedProductionIds: (): Promise<IpcResult> =>
       invokeIpc(IPC_CHANNELS.VALIDATION_GET_SHARED_PRODUCTION_IDS),
-    getCleanerData: (): Promise<IpcResult> =>
-      invokeIpc(IPC_CHANNELS.VALIDATION_GET_CLEANER_DATA)
+    getCleanerData: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.VALIDATION_GET_CLEANER_DATA)
   },
 
   materials: {
@@ -166,8 +163,7 @@ const api = {
     saveSettings: (settings: ErpSettingsPayload): Promise<IpcResult> =>
       invokeIpc(IPC_CHANNELS.SETTINGS_SAVE_SETTINGS, settings),
     resetDefaults: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.SETTINGS_RESET_DEFAULTS),
-    testDbConnection: (): Promise<IpcResult> =>
-      invokeIpc(IPC_CHANNELS.SETTINGS_TEST_DB_CONNECTION)
+    testDbConnection: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.SETTINGS_TEST_DB_CONNECTION)
   },
 
   materialType: {
@@ -189,9 +185,23 @@ const api = {
     getCurrent: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.USER_ERP_CONFIG_GET_CURRENT),
     update: (config: { url: string; username: string; password: string }): Promise<IpcResult> =>
       invokeIpc(IPC_CHANNELS.USER_ERP_CONFIG_UPDATE, config),
-    testConnection: (config: { url: string; username: string; password: string }): Promise<IpcResult> =>
-      invokeIpc(IPC_CHANNELS.USER_ERP_CONFIG_TEST_CONNECTION, config),
+    testConnection: (config: {
+      url: string
+      username: string
+      password: string
+    }): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.USER_ERP_CONFIG_TEST_CONNECTION, config),
     getAll: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.USER_ERP_CONFIG_GET_ALL)
+  },
+
+  logger: {
+    log: (level: LogLevel, message: string, context?: Record<string, unknown>): void => {
+      ipcRenderer.send(IPC_CHANNELS.LOGGER_FORWARD, {
+        level,
+        message,
+        context,
+        timestamp: Date.now()
+      })
+    }
   }
 } as const
 
@@ -208,4 +218,3 @@ if (process.contextIsolated) {
   // @ts-ignore (define in dts)
   window.api = api
 }
-

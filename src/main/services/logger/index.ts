@@ -52,9 +52,9 @@ const createFileTransport = (level?: string): DailyRotateFile => {
   })
 }
 
-// Create the logger instance
+// Create the logger instance with default level
 const logger = winston.createLogger({
-  level: 'info', // Log level is now hardcoded, can be moved to config.yaml if needed
+  level: 'info', // Default level, can be updated via setLogLevel()
   defaultMeta: { service: 'erpauto' },
   transports: [
     // Console transport - always enabled
@@ -65,6 +65,14 @@ const logger = winston.createLogger({
     createFileTransport()
   ]
 })
+
+/**
+ * Update the logger level dynamically
+ * @param level - The new log level
+ */
+export function setLogLevel(level: string): void {
+  logger.level = level
+}
 
 // Add error-specific file transport in production
 if (app.isPackaged) {

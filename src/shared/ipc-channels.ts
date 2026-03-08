@@ -81,5 +81,13 @@ export const IPC_CHANNELS = {
   USER_ERP_CONFIG_GET_CURRENT: 'user-erp-config:getCurrent',
   USER_ERP_CONFIG_UPDATE: 'user-erp-config:update',
   USER_ERP_CONFIG_TEST_CONNECTION: 'user-erp-config:testConnection',
-  USER_ERP_CONFIG_GET_ALL: 'user-erp-config:getAll'
+  USER_ERP_CONFIG_GET_ALL: 'user-erp-config:getAll',
+
+  // Logger
+  LOGGER_FORWARD: 'logger:forward'
 } as const
+
+/**
+ * Log level for logger service
+ */
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
