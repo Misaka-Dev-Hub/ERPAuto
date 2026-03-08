@@ -13,6 +13,9 @@ import { SqlServerService } from '../database/sql-server'
 import { ConfigManager } from '../config/config-manager'
 import sql from 'mssql'
 import type { UserInfo } from '../../types/user.types'
+import { createLogger } from '../logger'
+
+const log = createLogger('BipUsersDao')
 
 /**
  * Database configuration for BIPUsers table
@@ -160,7 +163,7 @@ export class BIPUsersDAO {
         return null
       }
     } catch (error) {
-      console.error('[BIPUsersDAO] Authenticate error:', error)
+      log.error('Authenticate error:', error)
       return null
     }
   }
@@ -215,7 +218,7 @@ export class BIPUsersDAO {
         return null
       }
     } catch (error) {
-      console.error('[BIPUsersDAO] Authenticate by computer name error:', error)
+      log.error('Authenticate by computer name error:', error)
       return null
     }
   }
@@ -247,7 +250,7 @@ export class BIPUsersDAO {
         createTime: row.CreateTime as Date | undefined
       }))
     } catch (error) {
-      console.error('[BIPUsersDAO] Get all users error:', error)
+      log.error('Get all users error:', error)
       return []
     }
   }
@@ -331,7 +334,7 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      console.error('[BIPUsersDAO] Create user error:', error)
+      log.error('Create user error:', error)
       return false
     }
   }
@@ -370,7 +373,7 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      console.error('[BIPUsersDAO] Update user type error:', error)
+      log.error('Update user type error:', error)
       return false
     }
   }
@@ -409,7 +412,7 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      console.error('[BIPUsersDAO] Update password error:', error)
+      log.error('Update password error:', error)
       return false
     }
   }
@@ -444,7 +447,7 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      console.error('[BIPUsersDAO] Delete user error:', error)
+      log.error('Delete user error:', error)
       return false
     }
   }
@@ -481,7 +484,7 @@ export class BIPUsersDAO {
         return result.rows.length > 0 && (result.rows[0].count as number) > 0
       }
     } catch (error) {
-      console.error('[BIPUsersDAO] User exists error:', error)
+      log.error('User exists error:', error)
       return false
     }
   }
@@ -538,7 +541,7 @@ export class BIPUsersDAO {
         return null
       }
     } catch (error) {
-      console.error('[BIPUsersDAO] Get user ERP credentials error:', error)
+      log.error('Get user ERP credentials error:', error)
       return null
     }
   }
@@ -586,7 +589,7 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      console.error('[BIPUsersDAO] Update user ERP credentials error:', error)
+      log.error('Update user ERP credentials error:', error)
       return false
     }
   }
@@ -624,7 +627,7 @@ export class BIPUsersDAO {
         erpUsername: (row[cols.ERP_USERNAME] as string) || ''
       }))
     } catch (error) {
-      console.error('[BIPUsersDAO] Get all users ERP config error:', error)
+      log.error('Get all users ERP config error:', error)
       return []
     }
   }

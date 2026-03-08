@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { LayoutDashboard, Download, Trash2, Settings, Database, User, LogOut } from 'lucide-react'
+import { useLogger } from './hooks/useLogger'
 import LoginDialog from './components/LoginDialog'
 import UserSelectionDialog, {
   type UserInfo as SelectedUserInfo
@@ -26,6 +27,9 @@ interface CurrentUser {
 }
 
 function App(): React.JSX.Element {
+  // Create logger instance for App component
+  const logger = useLogger('App')
+
   // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isAuthenticating, setIsAuthenticating] = useState(true)
@@ -52,28 +56,30 @@ function App(): React.JSX.Element {
 
   // Initialize authentication on mount
   useEffect(() => {
-    console.log('=== App: Initializing auth... ===')
+    logger.info('=== Initializing auth... ===')
     initializeAuth()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const initializeAuth = async () => {
-    console.log('=== App: Starting initializeAuth ===')
+    logger.info('=== Starting initializeAuth ===')
     try {
       // Get computer name
-      console.log('Getting computer name...')
+      logger.debug('Getting computer name...')
       const computerNameResult = await window.electron.auth.getComputerName()
-      const name = computerNameResult.success && computerNameResult.data ? computerNameResult.data : ''
-      console.log('Computer name:', name)
+      const name =
+        computerNameResult.success && computerNameResult.data ? computerNameResult.data : ''
+      logger.debug('Computer name obtained', { name })
       setComputerName(name)
 
       // Try silent login
-      console.log('Trying silent login...')
+      logger.debug('Trying silent login...')
       const silentLoginResult = await window.electron.auth.silentLogin()
       const result = silentLoginResult.data
-      console.log('Silent login result:', result)
+      logger.debug('Silent login result', { result })
 
       if (silentLoginResult.success && result?.success && result.userInfo) {
-        console.log('Silent login success:', result.userInfo)
+        logger.info('Silent login success', { username: result.userInfo.username })
         setCurrentUser({
           username: result.userInfo.username,
           userType: result.userInfo.userType
@@ -81,28 +87,30 @@ function App(): React.JSX.Element {
 
         // Check if admin needs user selection
         if (result.requiresUserSelection) {
-          console.log('Admin user needs to select user')
+          logger.info('Admin user needs to select user')
           // Load all users for selection
           const usersResult = await window.electron.auth.getAllUsers()
           setAllUsers(usersResult.success && usersResult.data ? usersResult.data : [])
           setShowUserSelection(true)
         } else {
-          console.log('Setting authenticated to true')
+          logger.info('Setting authenticated to true')
           setIsAuthenticated(true)
         }
       } else {
-        console.log('Silent login failed, showing login dialog')
+        logger.info('Silent login failed, showing login dialog')
         // Silent login failed, show login dialog
         setShowLoginDialog(true)
       }
     } catch (error) {
-      console.error('Auth initialization error:', error)
+      logger.error('Auth initialization error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       setShowLoginDialog(true)
     } finally {
-      console.log('Setting isAuthenticating to false')
+      logger.debug('Setting isAuthenticating to false')
       setIsAuthenticating(false)
     }
-    console.log('=== App: Auth initialization complete ===')
+    logger.info('=== Auth initialization complete ===')
   }
 
   // Handle login dialog submit
@@ -132,7 +140,7 @@ function App(): React.JSX.Element {
       }
       return false
     } catch (error) {
-      console.error('Login error:', error)
+      logger.error('Login error', { error: error instanceof Error ? error.message : String(error) })
       return false
     }
   }
@@ -159,7 +167,9 @@ function App(): React.JSX.Element {
         setIsSwitchedByAdmin(true)
       }
     } catch (error) {
-      console.error('User selection error:', error)
+      logger.error('User selection error', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       showError('切换用户失败')
     }
   }
@@ -223,12 +233,7 @@ function App(): React.JSX.Element {
 
   // Show login dialog if not authenticated
   if (!isAuthenticated) {
-    console.log(
-      'Render: not authenticated, showLoginDialog:',
-      showLoginDialog,
-      'computerName:',
-      computerName
-    )
+    logger.debug('Render: not authenticated', { showLoginDialog, computerName })
     return (
       <>
         <LoginDialog
@@ -299,7 +304,7 @@ function App(): React.JSX.Element {
   }
 
   // Show main content when authenticated
-  console.log('Render: authenticated, currentUser:', currentUser, 'currentPage:', currentPage)
+  logger.debug('Render: authenticated', { currentUser, currentPage })
 
   const navItems = [
     { id: 'extractor', label: '数据提取 (Extractor)', icon: <Download size={18} /> },

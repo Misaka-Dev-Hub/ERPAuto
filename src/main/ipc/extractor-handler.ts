@@ -4,6 +4,8 @@ import { ExtractorService } from '../services/erp/extractor'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
 import { create, type IDatabaseService } from '../services/database'
 import { createLogger } from '../services/logger'
+import { logAudit } from '../services/logger/audit-logger'
+import { SessionManager } from '../services/user/session-manager'
 import { withErrorHandling, type IpcResult } from './index'
 import { ErpConnectionError, ValidationError, DatabaseQueryError } from '../types/errors'
 import type { ExtractorInput, ExtractorResult, ExtractionProgress } from '../types/extractor.types'
@@ -200,6 +202,29 @@ export function registerExtractorHandlers(): void {
             result.errors.forEach((err, index) => {
               log.error(`Error ${index + 1}/${result.errors.length}: ${err}`)
             })
+          }
+
+          // Audit log: EXTRACT (non-blocking)
+          const os = await import('os')
+          const currentUser = SessionManager.getInstance().getUserInfo()
+          if (currentUser) {
+            const status: 'success' | 'failure' | 'partial' =
+              result.errors.length > 0 && result.recordCount > 0
+                ? 'partial'
+                : result.errors.length > 0
+                  ? 'failure'
+                  : 'success'
+            logAudit('EXTRACT', String(currentUser.id), {
+              username: currentUser.username,
+              computerName: os.hostname(),
+              resource: 'MATERIAL_PLAN',
+              status,
+              metadata: {
+                orderCount: validOrderNumbers.length,
+                recordCount: result.recordCount,
+                errorCount: result.errors.length
+              }
+            }).catch((err) => log.warn('Failed to write audit log', { err }))
           }
 
           return result

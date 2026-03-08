@@ -1,6 +1,9 @@
 import ExcelJS from 'exceljs'
 import type { DiscreteMaterialPlan, ExcelParseOptions, OrderHeader } from '../../types/excel.types'
 import path from 'path'
+import { createLogger } from '../logger'
+
+const log = createLogger('ExcelParser')
 
 /**
  * Excel Parser Service
@@ -56,17 +59,11 @@ export class ExcelParser {
     this.verbose = options.verbose || false
   }
 
-  private log(...args: any[]): void {
-    if (this.verbose) {
-      console.log('[ExcelParser]', ...args)
-    }
-  }
-
   /**
    * Parse Excel file and extract material plans
    */
   async parse(filePath: string, options: ExcelParseOptions = {}): Promise<DiscreteMaterialPlan[]> {
-    this.log('Parsing Excel file:', filePath)
+    log.debug('Parsing Excel file:', filePath)
 
     const workbook = new ExcelJS.Workbook()
     await workbook.xlsx.readFile(filePath)
@@ -84,7 +81,7 @@ export class ExcelParser {
       allRows.push(row.values as any[])
     })
 
-    this.log(`Total rows read: ${allRows.length} (worksheet has ${worksheet.rowCount} rows)`)
+    log.debug(`Total rows read: ${allRows.length} (worksheet has ${worksheet.rowCount} rows)`)
 
     // Parse orders from rows
     const orders = this.parseOrders(allRows)
@@ -98,7 +95,7 @@ export class ExcelParser {
 
       // Skip empty orders if option is set
       if (options.skipEmptyOrders && materials.length === 0) {
-        this.log('Skipping empty order:', orderInfo.productionOrder)
+        log.debug('Skipping empty order:', orderInfo.productionOrder)
         continue
       }
 
@@ -125,7 +122,7 @@ export class ExcelParser {
       }
     }
 
-    this.log(`Parsed ${plans.length} material plans from ${orders.length} orders`)
+    log.debug(`Parsed ${plans.length} material plans from ${orders.length} orders`)
 
     return plans
   }
@@ -143,7 +140,7 @@ export class ExcelParser {
       throw new Error('No parsed data available. Call parse() first.')
     }
 
-    this.log('Saving parsed data to Excel:', outputPath)
+    log.debug('Saving parsed data to Excel:', outputPath)
 
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Data')
@@ -226,7 +223,7 @@ export class ExcelParser {
 
     // Save workbook
     await workbook.xlsx.writeFile(outputPath)
-    this.log(
+    log.debug(
       `Excel file saved: ${outputPath} (${orders.length} orders, ${worksheet.rowCount - 1} data rows)`
     )
   }
@@ -253,7 +250,7 @@ export class ExcelParser {
         }
 
         // Debug: check productionOrder extraction
-        this.log(`Order ${orders.length + 1}: productionOrder="${orderInfo.productionOrder}"`)
+        log.debug(`Order ${orders.length + 1}: productionOrder="${orderInfo.productionOrder}"`)
 
         // Find table header row dynamically (look for "序号" in index 1)
         // Note: worksheet.eachRow() skips empty rows, so we can't use fixed offsets
@@ -263,7 +260,7 @@ export class ExcelParser {
         }
 
         if (tableRow >= allRows.length || !allRows[tableRow]) {
-          this.log('  ⚠️ Table header not found, skipping this order')
+          log.debug('  ⚠️ Table header not found, skipping this order')
           i++
           continue
         }
@@ -280,7 +277,7 @@ export class ExcelParser {
 
           if (isEmptyRow) {
             // No data, find footer info
-            this.log('Order has no material data')
+            log.debug('Order has no material data')
             const materials: any[] = []
             const footerInfo: OrderHeader = {}
             let dataRow = nextRow + 1
@@ -306,7 +303,7 @@ export class ExcelParser {
             })
           } else {
             // Has data, extract materials
-            this.log('Order has material data')
+            log.debug('Order has material data')
             const materials: any[] = []
             const footerInfo: OrderHeader = {}
             let dataRow = tableRow + 1
@@ -332,7 +329,7 @@ export class ExcelParser {
                 if (dataRow + 1 < allRows.length && allRows[dataRow + 1]) {
                   this.parseHeaderRow(allRows[dataRow + 1], footerInfo)
                 }
-                this.log('  Found footer row, stopping material parsing')
+                log.debug('  Found footer row, stopping material parsing')
                 break
               }
 
@@ -340,7 +337,7 @@ export class ExcelParser {
                 // Next row is footer, parse current row as material first
                 const material = this.parseMaterialRowInternal(allRows[dataRow], dataRow + 1)
                 if (material) {
-                  this.log('  Parsed material:', material.materialCode)
+                  log.debug('  Parsed material:', material.materialCode)
                   materials.push(material)
                 }
 
@@ -349,17 +346,17 @@ export class ExcelParser {
                 if (dataRow + 2 < allRows.length && allRows[dataRow + 2]) {
                   this.parseHeaderRow(allRows[dataRow + 2], footerInfo)
                 }
-                this.log('  Found footer in next row, stopping material parsing')
+                log.debug('  Found footer in next row, stopping material parsing')
                 break
               }
 
               // Extract material data
               const material = this.parseMaterialRowInternal(allRows[dataRow], dataRow + 1)
               if (material) {
-                //this.log('  Parsed material:', material.materialCode)
+                //log.debug('  Parsed material:', material.materialCode)
                 materials.push(material)
               } else {
-                this.log('  Skipped material row at', dataRow + 1)
+                log.debug('  Skipped material row at', dataRow + 1)
               }
 
               dataRow++
@@ -371,7 +368,7 @@ export class ExcelParser {
             })
           }
         } else {
-          this.log(
+          log.debug(
             `  ⚠️ Table header check failed at row ${tableRow + 1}, value="${allRows[tableRow] ? allRows[tableRow][1] : 'null'}"`
           )
         }
@@ -383,7 +380,7 @@ export class ExcelParser {
       }
     }
 
-    this.log(`parseOrders: Returning ${orders.length} orders`)
+    log.debug(`parseOrders: Returning ${orders.length} orders`)
     return orders
   }
 

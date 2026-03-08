@@ -13,6 +13,7 @@
 import { ipcMain } from 'electron'
 import { SessionManager } from '../services/user/session-manager'
 import { createLogger } from '../services/logger'
+import { logAudit } from '../services/logger/audit-logger'
 import type { UserInfo } from '../types/user.types'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { ValidationError } from '../types/errors'
@@ -83,32 +84,45 @@ export function registerAuthHandlers(): void {
   /**
    * Silent login by computer name
    */
-  ipcMain.handle(IPC_CHANNELS.AUTH_SILENT_LOGIN, async (): Promise<IpcResult<SilentLoginResponse>> => {
-    return withErrorHandling(async () => {
-      log.info('Attempting silent login')
-      const success = await sessionManager.loginByComputerName()
-      const userInfo = sessionManager.getUserInfo()
+  ipcMain.handle(
+    IPC_CHANNELS.AUTH_SILENT_LOGIN,
+    async (): Promise<IpcResult<SilentLoginResponse>> => {
+      return withErrorHandling(async () => {
+        log.info('Attempting silent login')
+        const success = await sessionManager.loginByComputerName()
+        const userInfo = sessionManager.getUserInfo()
 
-      if (success && userInfo) {
-        // Check if admin needs user selection
-        const requiresUserSelection = userInfo.userType === 'Admin'
+        if (success && userInfo) {
+          // Check if admin needs user selection
+          const requiresUserSelection = userInfo.userType === 'Admin'
 
-        log.info('Silent login successful', {
-          username: userInfo.username,
-          userType: userInfo.userType,
-          requiresUserSelection
-        })
+          log.info('Silent login successful', {
+            username: userInfo.username,
+            userType: userInfo.userType,
+            requiresUserSelection
+          })
 
-        return {
-          success: true,
-          userInfo,
-          requiresUserSelection
+          // Audit log: LOGIN success (non-blocking)
+          const os = await import('os')
+          logAudit('LOGIN', String(userInfo.id), {
+            username: userInfo.username,
+            computerName: os.hostname(),
+            resource: 'ERP_SYSTEM',
+            status: 'success',
+            metadata: { loginType: 'silent', userType: userInfo.userType }
+          }).catch((err) => log.warn('Failed to write audit log', { err }))
+
+          return {
+            success: true,
+            userInfo,
+            requiresUserSelection
+          }
         }
-      }
 
-      throw new ValidationError('无感登录失败：未找到匹配用户', 'VAL_INVALID_INPUT')
-    }, 'auth:silentLogin')
-  })
+        throw new ValidationError('无感登录失败：未找到匹配用户', 'VAL_INVALID_INPUT')
+      }, 'auth:silentLogin')
+    }
+  )
 
   /**
    * Login with username and password
@@ -117,27 +131,48 @@ export function registerAuthHandlers(): void {
     IPC_CHANNELS.AUTH_LOGIN,
     async (_event, request: LoginRequest): Promise<IpcResult<LoginResponse>> => {
       return withErrorHandling(async () => {
-      const { username, password } = request
+        const { username, password } = request
 
-      if (!username || !password) {
-        log.warn('Login attempt with missing credentials')
-        throw new ValidationError('请输入用户名和密码', 'VAL_MISSING_REQUIRED')
-      }
-
-      log.info('Login attempt', { username })
-      const success = await sessionManager.login(username, password)
-      const userInfo = sessionManager.getUserInfo()
-
-      if (success && userInfo) {
-        log.info('Login successful', { username, userType: userInfo.userType })
-        return {
-          success: true,
-          userInfo
+        if (!username || !password) {
+          log.warn('Login attempt with missing credentials')
+          throw new ValidationError('请输入用户名和密码', 'VAL_MISSING_REQUIRED')
         }
-      }
 
-      log.warn('Login failed - invalid credentials', { username })
-      throw new ValidationError('用户名或密码错误', 'VAL_INVALID_INPUT')
+        log.info('Login attempt', { username })
+        const success = await sessionManager.login(username, password)
+        const userInfo = sessionManager.getUserInfo()
+
+        if (success && userInfo) {
+          log.info('Login successful', { username, userType: userInfo.userType })
+
+          // Audit log: LOGIN success (non-blocking)
+          const os = await import('os')
+          logAudit('LOGIN', String(userInfo.id), {
+            username: userInfo.username,
+            computerName: os.hostname(),
+            resource: 'ERP_SYSTEM',
+            status: 'success',
+            metadata: { loginType: 'credentials', userType: userInfo.userType }
+          }).catch((err) => log.warn('Failed to write audit log', { err }))
+
+          return {
+            success: true,
+            userInfo
+          }
+        }
+
+        // Audit log: LOGIN failure (non-blocking)
+        const os = await import('os')
+        logAudit('LOGIN', '0', {
+          username,
+          computerName: os.hostname(),
+          resource: 'ERP_SYSTEM',
+          status: 'failure',
+          metadata: { loginType: 'credentials', reason: 'invalid_credentials' }
+        }).catch((err) => log.warn('Failed to write audit log', { err }))
+
+        log.warn('Login failed - invalid credentials', { username })
+        throw new ValidationError('用户名或密码错误', 'VAL_INVALID_INPUT')
       }, 'auth:login')
     }
   )
@@ -149,6 +184,19 @@ export function registerAuthHandlers(): void {
     return withErrorHandling(async () => {
       const userInfo = sessionManager.getUserInfo()
       log.info('User logout', { username: userInfo?.username })
+
+      // Audit log: LOGOUT (non-blocking)
+      if (userInfo) {
+        const os = await import('os')
+        logAudit('LOGOUT', String(userInfo.id), {
+          username: userInfo.username,
+          computerName: os.hostname(),
+          resource: 'ERP_SYSTEM',
+          status: 'success',
+          metadata: { userType: userInfo.userType }
+        }).catch((err) => log.warn('Failed to write audit log', { err }))
+      }
+
       sessionManager.logout()
     }, 'auth:logout')
   })
@@ -156,16 +204,19 @@ export function registerAuthHandlers(): void {
   /**
    * Get current user
    */
-  ipcMain.handle(IPC_CHANNELS.AUTH_GET_CURRENT_USER, async (): Promise<IpcResult<CurrentUserResponse>> => {
-    return withErrorHandling(async () => {
-      const isAuthenticated = sessionManager.isAuthenticated()
-      const userInfo = sessionManager.getUserInfo()
-      return {
-        isAuthenticated,
-        userInfo: userInfo ?? undefined
-      }
-    }, 'auth:getCurrentUser')
-  })
+  ipcMain.handle(
+    IPC_CHANNELS.AUTH_GET_CURRENT_USER,
+    async (): Promise<IpcResult<CurrentUserResponse>> => {
+      return withErrorHandling(async () => {
+        const isAuthenticated = sessionManager.isAuthenticated()
+        const userInfo = sessionManager.getUserInfo()
+        return {
+          isAuthenticated,
+          userInfo: userInfo ?? undefined
+        }
+      }, 'auth:getCurrentUser')
+    }
+  )
 
   /**
    * Get all users (for admin user selection)
@@ -209,4 +260,3 @@ export function registerAuthHandlers(): void {
     return withErrorHandling(async () => sessionManager.isAdmin(), 'auth:isAdmin')
   })
 }
-

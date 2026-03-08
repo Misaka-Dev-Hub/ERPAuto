@@ -11,6 +11,9 @@ import type {
   ExtractionProgress
 } from '../../types/extractor.types'
 import { DataImportService } from '../database/data-importer'
+import { createLogger } from '../logger'
+
+const log = createLogger('ExtractorService')
 
 /**
  * ERP Data Extractor Service
@@ -127,7 +130,7 @@ export class ExtractorService {
       return { mergedFile: null, recordCount: 0 }
     }
 
-    console.log(`[Extractor] Starting merge of ${filePaths.length} files`)
+    log.info('Starting merge', { fileCount: filePaths.length })
     const parser = new ExcelParser({ verbose: true })
 
     // Collect all orders with full order info and materials
@@ -137,17 +140,17 @@ export class ExtractorService {
     // Parse each downloaded file and collect orders
     for (const filePath of filePaths) {
       try {
-        console.log(`[Extractor] Parsing file: ${filePath}`)
+        log.debug('Parsing file', { filePath })
         await parser.parse(filePath)
-        // After parse(), the parser stores orders internally as lastOrders
+        // After parse(), the parser store orders internally as lastOrders
         const orders = (parser as any).lastOrders
-        console.log(`[Extractor] Parsed ${orders?.length || 0} orders from ${filePath}`)
+        log.debug('File parsed', { filePath, orderCount: orders?.length || 0 })
         if (orders && Array.isArray(orders)) {
           allOrders.push(...orders)
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error)
-        console.error(`[Extractor] Failed to parse file ${filePath}:`, errorMsg)
+        log.error('Failed to parse file', { filePath, error: errorMsg })
       }
     }
 
@@ -157,10 +160,10 @@ export class ExtractorService {
       recordCount += order.materials.length
     }
 
-    console.log(`[Extractor] Total orders: ${allOrders.length}, total records: ${recordCount}`)
+    log.info('Merge summary', { orderCount: allOrders.length, recordCount })
 
     if (recordCount === 0) {
-      console.warn('[Extractor] No records found in any of the downloaded files')
+      log.warn('No records found in any downloaded files')
       return { mergedFile: null, recordCount: 0 }
     }
 
@@ -174,17 +177,16 @@ export class ExtractorService {
 
     // Save with error handling
     try {
-      console.log(`[Extractor] Saving merged file to: ${outputPath}`)
+      log.info('Saving merged file', { outputPath })
       await this.saveMergedOrders(allOrders, outputPath)
-      console.log(`[Extractor] Successfully saved merged file with ${recordCount} records`)
+      log.info('Merged file saved successfully', { recordCount })
       return { mergedFile: outputPath, recordCount }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       const errorStack = error instanceof Error ? error.stack : ''
-      console.error(`[Extractor] Failed to save merged file: ${errorMsg}`)
-      console.error(`[Extractor] Error stack: ${errorStack}`)
+      log.error('Failed to save merged file', { error: errorMsg, stack: errorStack })
       // Return parsed record count and error info even if save fails
-      return { mergedFile: null, recordCount, error: `保存合并文件失败: ${errorMsg}` }
+      return { mergedFile: null, recordCount, error: `保存合并文件失败：${errorMsg}` }
     }
   }
 
@@ -196,11 +198,11 @@ export class ExtractorService {
     orders: Array<{ orderInfo: any; materials: any[] }>,
     outputPath: string
   ): Promise<void> {
-    console.log(`[Extractor] Loading ExcelJS...`)
+    log.debug('Loading ExcelJS')
     const ExcelJSModule = await import('exceljs')
     // Handle both ESM and CommonJS module formats
     const ExcelJS = ExcelJSModule.default || ExcelJSModule
-    console.log(`[Extractor] ExcelJS loaded, creating workbook...`)
+    log.debug('ExcelJS loaded, creating workbook')
 
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Data')
@@ -239,7 +241,7 @@ export class ExtractorService {
       { header: '打印日期', key: 'printDate', width: 20 }
     ]
 
-    console.log(`[Extractor] Adding ${orders.length} orders to worksheet...`)
+    log.debug('Adding orders to worksheet', { orderCount: orders.length })
     // Add data rows - merge orderInfo with each material
     for (const order of orders) {
       const { orderInfo, materials } = order
@@ -283,9 +285,9 @@ export class ExtractorService {
       }
     }
 
-    console.log(`[Extractor] Writing file to ${outputPath}...`)
+    log.debug('Writing file', { outputPath })
     await workbook.xlsx.writeFile(outputPath)
-    console.log(`[Extractor] File saved successfully: ${outputPath}`)
+    log.debug('File saved successfully', { outputPath })
   }
 
   /**
@@ -296,10 +298,10 @@ export class ExtractorService {
     for (const filePath of filePaths) {
       try {
         await fs.unlink(filePath)
-        console.log(`Deleted temporary file: ${filePath}`)
+        log.debug('Deleted temporary file', { filePath })
       } catch (error) {
         // Log error but don't fail the main process
-        console.error(`Failed to delete temporary file ${filePath}:`, error)
+        log.error('Failed to delete temporary file', { filePath, error })
       }
     }
   }
@@ -310,14 +312,14 @@ export class ExtractorService {
    * @returns Import result with statistics
    */
   private async importToDatabase(filePath: string): Promise<ImportResult> {
-    console.log(`[Extractor] Starting database import from: ${filePath}`)
+    log.info('Starting database import', { filePath })
 
     const importService = new DataImportService()
 
     try {
       const result = await importService.importFromExcel(filePath, 1000)
 
-      console.log(`[Extractor] Import completed`, {
+      log.info('Import completed', {
         success: result.success,
         recordsRead: result.recordsRead,
         recordsDeleted: result.recordsDeleted,
@@ -327,7 +329,7 @@ export class ExtractorService {
       return result
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
-      console.error(`[Extractor] Import failed: ${errorMsg}`)
+      log.error('Import failed', { error: errorMsg })
 
       return {
         success: false,
@@ -350,7 +352,7 @@ export class ExtractorService {
     filePath: string,
     onLog?: (level: LogLevel, message: string) => void
   ): Promise<ImportResult> {
-    console.log(`[Extractor] Starting database import from: ${filePath}`)
+    log.info('Starting database import', { filePath })
     onLog?.('info', `开始导入数据到数据库...`)
 
     const importService = new DataImportService()
@@ -358,7 +360,7 @@ export class ExtractorService {
     try {
       const result = await importService.importFromExcel(filePath, 1000)
 
-      console.log(`[Extractor] Import completed`, {
+      log.info('Import completed', {
         success: result.success,
         recordsRead: result.recordsRead,
         recordsDeleted: result.recordsDeleted,
@@ -377,7 +379,7 @@ export class ExtractorService {
       return result
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
-      console.error(`[Extractor] Import failed: ${errorMsg}`)
+      log.error('Import failed', { error: errorMsg })
       onLog?.('error', `导入失败：${errorMsg}`)
 
       return {

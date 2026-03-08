@@ -5,6 +5,7 @@ import { UserErpConfigService } from '../services/user/user-erp-config-service'
 import { MySqlService } from '../services/database/mysql'
 import { SqlServerService } from '../services/database/sql-server'
 import { createLogger } from '../services/logger'
+import { logAudit } from '../services/logger/audit-logger'
 import type { UserType, ConnectionTestResult, SaveSettingsResult } from '../types/settings.types'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { ValidationError } from '../types/errors'
@@ -60,6 +61,16 @@ export function registerSettingsHandlers(): void {
             username: settings.erp.username || '',
             password: settings.erp.password || ''
           })
+
+          // Audit log: SETTINGS_CHANGE (non-blocking)
+          const os = await import('os')
+          logAudit('SETTINGS_CHANGE', String(currentUser.id), {
+            username: currentUser.username,
+            computerName: os.hostname(),
+            resource: 'ERP_CONFIG',
+            status: 'success',
+            metadata: { changeType: 'erp_credentials', usernameChanged: !!settings.erp.username }
+          }).catch((err) => log.warn('Failed to write audit log', { err }))
         }
 
         return { success: true }
@@ -164,4 +175,3 @@ export function registerSettingsHandlers(): void {
     }
   )
 }
-

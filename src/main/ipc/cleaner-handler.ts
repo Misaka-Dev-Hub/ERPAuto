@@ -9,6 +9,7 @@ import { ResultExporter } from '../services/excel/result-exporter'
 import { CleanerReportGenerator } from '../services/report/cleaner-report-generator'
 import { SessionManager } from '../services/user/session-manager'
 import { createLogger } from '../services/logger'
+import { logAudit } from '../services/logger/audit-logger'
 import { withErrorHandling, type IpcResult } from './index'
 import { ErpConnectionError, ValidationError, DatabaseQueryError } from '../types/errors'
 import type {
@@ -229,6 +230,31 @@ export function registerCleanerHandlers(): void {
             processedCount: result.ordersProcessed,
             errorCount: result.errors.length
           })
+
+          // Audit log: CLEAN (non-blocking)
+          const os = await import('os')
+          const currentUser = SessionManager.getInstance().getUserInfo()
+          if (currentUser) {
+            const status: 'success' | 'failure' | 'partial' =
+              result.errors.length > 0 && result.materialsDeleted > 0
+                ? 'partial'
+                : result.errors.length > 0
+                  ? 'failure'
+                  : 'success'
+            logAudit('CLEAN', String(currentUser.id), {
+              username: currentUser.username,
+              computerName: os.hostname(),
+              resource: 'MATERIAL_PLAN',
+              status,
+              metadata: {
+                orderCount: validOrderNumbers.length,
+                dryRun: input.dryRun ?? false,
+                materialsDeleted: result.materialsDeleted,
+                materialsSkipped: result.materialsSkipped,
+                errorCount: result.errors.length
+              }
+            }).catch((err) => log.warn('Failed to write audit log', { err }))
+          }
 
           // Generate report (silent, user unaware)
           try {

@@ -20,10 +20,13 @@ import type {
   SaveSettingsResult
 } from '../main/types/settings.types'
 import type { IpcResult } from '../main/ipc'
+import type { LogLevel } from '../shared/ipc-channels'
 
 export interface ResolverAPI {
   resolve: (input: ResolverInput) => Promise<IpcResult<ResolverResponse>>
-  validateFormat: (inputs: string[]) => Promise<
+  validateFormat: (
+    inputs: string[]
+  ) => Promise<
     IpcResult<Array<{ input: string; type: 'productionId' | 'orderNumber' | 'unknown' }>>
   >
 }
@@ -52,9 +55,9 @@ export interface ValidationAPI {
 }
 
 export interface MaterialsAPI {
-  upsertBatch: (materials: { materialCode: string; managerName: string }[]) => Promise<
-    IpcResult<{ stats: { total: number; success: number; failed: number } }>
-  >
+  upsertBatch: (
+    materials: { materialCode: string; managerName: string }[]
+  ) => Promise<IpcResult<{ stats: { total: number; success: number; failed: number } }>>
   delete: (materialCodes: string[]) => Promise<IpcResult<{ count: number }>>
   getManagers: () => Promise<IpcResult<{ managers: string[] }>>
   getByManager: (managerName: string) => Promise<IpcResult<{ materials: unknown[] }>>
@@ -69,7 +72,9 @@ export interface MaterialsAPI {
 export interface SettingsAPI {
   getUserType: () => Promise<IpcResult<UserType>>
   getSettings: () => Promise<IpcResult<{ erp: { username: string; password: string } }>>
-  saveSettings: (settings: { erp?: { username?: string; password?: string } }) => Promise<IpcResult<SaveSettingsResult>>
+  saveSettings: (settings: {
+    erp?: { username?: string; password?: string }
+  }) => Promise<IpcResult<SaveSettingsResult>>
   resetDefaults: () => Promise<IpcResult<SaveSettingsResult>>
   testDbConnection: () => Promise<IpcResult<ConnectionTestResult>>
 }
@@ -80,9 +85,9 @@ export interface MaterialTypeAPI {
   getManagers: () => Promise<IpcResult<string[]>>
   upsert: (materialName: string, managerName: string) => Promise<IpcResult<{ updated: boolean }>>
   delete: (materialName: string, managerName: string) => Promise<IpcResult<{ deleted: boolean }>>
-  upsertBatch: (request: MaterialTypeBatchRequest) => Promise<
-    IpcResult<{ stats: { total: number; success: number; failed: number } }>
-  >
+  upsertBatch: (
+    request: MaterialTypeBatchRequest
+  ) => Promise<IpcResult<{ stats: { total: number; success: number; failed: number } }>>
 }
 
 export interface UserErpConfigAPI {
@@ -96,10 +101,16 @@ export interface UserErpConfigAPI {
       config: { url: string; username: string; password: string }
     }>
   >
-  testConnection: (config: { url: string; username: string; password: string }) => Promise<
-    IpcResult<{ message: string }>
-  >
+  testConnection: (config: {
+    url: string
+    username: string
+    password: string
+  }) => Promise<IpcResult<{ message: string }>>
   getAll: () => Promise<IpcResult<Array<{ username: string; erpUrl: string; erpUsername: string }>>>
+}
+
+export interface LoggerAPI {
+  log: (level: LogLevel, message: string, context?: Record<string, unknown>) => void
 }
 
 export interface ProcessAPI {
@@ -125,6 +136,7 @@ declare global {
       settings: SettingsAPI
       materialType: MaterialTypeAPI
       userErpConfig: UserErpConfigAPI
+      logger: LoggerAPI
     }
     api: unknown
   }

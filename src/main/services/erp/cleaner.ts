@@ -3,6 +3,9 @@ import { ErpAuthService } from './erp-auth'
 import type { CleanerInput, CleanerResult, OrderCleanDetail } from '../../types/cleaner.types'
 import type { ErpSession } from '../../types/erp.types'
 import type { FrameLocator, Locator, Page } from 'playwright'
+import { createLogger } from '../logger'
+
+const log = createLogger('CleanerService')
 
 /**
  * Cleaner Service Options
@@ -103,6 +106,13 @@ export class CleanerService {
     }
 
     const totalOrders = input.orderNumbers.length
+    const dryRun = input.dryRun ?? this.dryRun
+
+    log.info('Starting cleaner', {
+      totalOrders,
+      materialCount: input.materialCodes.length,
+      dryRun
+    })
 
     // Create delete set for O(1) lookup
     const deleteSet = new Set(input.materialCodes)
@@ -121,6 +131,7 @@ export class CleanerService {
         const orderNumber = input.orderNumbers[i]
 
         try {
+          log.debug('Processing order', { orderNumber, index: i + 1, total: totalOrders })
           const detail = await this.processOrder({
             workFrame,
             popupPage,
@@ -138,6 +149,7 @@ export class CleanerService {
           result.materialsSkipped += detail.materialsSkipped
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error'
+          log.error('Order processing failed', { orderNumber, error: message })
           result.errors.push(`Order ${orderNumber}: ${message}`)
 
           // Add error detail
@@ -153,8 +165,15 @@ export class CleanerService {
 
       // Close popup page
       await popupPage.close()
+      log.info('Cleaner completed', {
+        ordersProcessed: result.ordersProcessed,
+        materialsDeleted: result.materialsDeleted,
+        materialsSkipped: result.materialsSkipped,
+        errorCount: result.errors.length
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
+      log.error('Cleaner failed', { error: message })
       result.errors.push(`Clean failed: ${message}`)
     }
 

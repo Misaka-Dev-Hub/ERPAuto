@@ -6,6 +6,9 @@ import type {
   ExtractorCoreResult,
   ExtractionProgress
 } from '../../types/extractor.types'
+import { createLogger } from '../logger'
+
+const log = createLogger('ExtractorCore')
 
 /**
  * ExtractorCore - Handles all web page operations for data extraction
