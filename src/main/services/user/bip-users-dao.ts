@@ -14,7 +14,6 @@ import { ConfigManager } from '../config/config-manager'
 import sql from 'mssql'
 import type { UserInfo } from '../../types/user.types'
 import { createLogger, logError } from '../logger'
-import { serializeError } from '../logger/error-utils'
 
 const log = createLogger('BipUsersDao')
 

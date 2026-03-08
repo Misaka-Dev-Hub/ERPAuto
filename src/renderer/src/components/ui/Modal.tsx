@@ -20,6 +20,14 @@ interface ModalProps {
   triggerRef?: React.RefObject<HTMLElement | null>
   /** ID of the title element (for aria-labelledby) */
   titleId?: string
+  /** Selector for the element to focus initially inside the modal */
+  initialFocusSelector?: string
+  /** ID of the element that describes the modal (for aria-describedby) */
+  ariaDescribedBy?: string
+  /** Whether this is an alert dialog (role="alertdialog" instead of "dialog") */
+  isAlertDialog?: boolean
+  /** Whether to disable escape key handling (e.g., during execution) */
+  disableEscapeKey?: boolean
 }
 
 const sizeStyles: Record<string, string> = {
@@ -39,7 +47,11 @@ export function Modal({
   size = 'md',
   showCloseButton = true,
   triggerRef,
-  titleId
+  titleId,
+  initialFocusSelector,
+  ariaDescribedBy,
+  isAlertDialog = false,
+  disableEscapeKey = false
 }: ModalProps): React.JSX.Element | null {
   const dialogRef = useRef<HTMLDivElement>(null)
   const [generatedId] = useState(
@@ -56,18 +68,27 @@ export function Modal({
     isOpen,
     dialogRef,
     onClose,
-    triggerRef: triggerRef || undefined
+    triggerRef,
+    initialFocusSelector,
+    shouldCloseOnEscape: !disableEscapeKey
   })
 
   if (!isOpen) return null
 
   return (
     <FocusLock {...focusLockProps}>
-      <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div
+        className="fixed inset-0 z-50 overflow-y-auto"
+        role={isAlertDialog ? 'alertdialog' : 'dialog'}
+        aria-modal="true"
+        aria-labelledby={generatedTitleId}
+        aria-describedby={ariaDescribedBy}
+      >
         {/* Backdrop */}
         <div
           className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
           onClick={onClose}
+          aria-hidden="true"
         />
 
         {/* Modal container */}
@@ -75,9 +96,6 @@ export function Modal({
           <div
             ref={dialogRef}
             className={`relative w-full ${sizeStyles[size]} bg-white rounded-lg shadow-xl transform transition-all`}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={generatedTitleId}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -92,6 +110,7 @@ export function Modal({
                   <button
                     onClick={onClose}
                     className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                    aria-label="关闭对话框"
                   >
                     <X className="w-5 h-5" />
                   </button>

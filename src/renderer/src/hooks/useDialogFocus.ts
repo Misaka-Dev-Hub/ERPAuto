@@ -166,21 +166,29 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
       if (initialFocusSelector) {
         const focusElement = dialogElement.querySelector(initialFocusSelector) as HTMLElement
         if (focusElement && typeof focusElement.focus === 'function') {
-          // Delay focus to ensure DOM is ready
-          requestAnimationFrame(() => {
-            focusElement.focus()
-          })
-          return
+          // Check if element is visible and focusable
+          const style = window.getComputedStyle(focusElement)
+          if (style.display !== 'none' && style.visibility !== 'hidden') {
+            requestAnimationFrame(() => {
+              focusElement.focus({ preventScroll: true })
+            })
+            return
+          }
+          // Fallback: element found but not visible, log warning and try default
+          console.warn(`Focus element found but not visible: ${initialFocusSelector}`)
+        } else {
+          // Fallback: element not found, log warning and try default
+          console.warn(`Focus element not found for selector: ${initialFocusSelector}`)
         }
       }
 
       // Otherwise, focus the first interactive element
       const focusableSelectors = [
-        'button:not([disabled])',
+        'button:not([disabled]):not([tabindex="-1"])',
         'a[href]',
-        'input:not([disabled])',
-        'select:not([disabled])',
-        'textarea:not([disabled])',
+        'input:not([disabled]):not([tabindex="-1"])',
+        'select:not([disabled]):not([tabindex="-1"])',
+        'textarea:not([disabled]):not([tabindex="-1"])',
         '[tabindex]:not([tabindex="-1"])'
       ]
       const firstFocusable = dialogElement.querySelector(
@@ -188,7 +196,7 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
       ) as HTMLElement
       if (firstFocusable && typeof firstFocusable.focus === 'function') {
         requestAnimationFrame(() => {
-          firstFocusable.focus()
+          firstFocusable.focus({ preventScroll: true })
         })
       }
     }
@@ -203,16 +211,101 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
 
     const restoreFocus = (): void => {
       const triggerElement = triggerRef.current
-      if (triggerElement && typeof triggerElement.focus === 'function') {
-        // Delay to ensure dialog is fully unmounted
-        requestAnimationFrame(() => {
-          triggerElement.focus()
-        })
+
+      // Check if element still exists in DOM
+      if (!triggerElement || !document.contains(triggerElement)) {
+        if (import.meta.env.DEV) {
+          console.warn('[useDialogFocus] Trigger element not found in DOM, cannot restore focus')
+        }
+        return
+      }
+
+      // Check if element has a focus method
+      if (typeof triggerElement.focus !== 'function') {
+        if (import.meta.env.DEV) {
+          console.warn('[useDialogFocus] Trigger element does not have a focus method')
+        }
+        return
+      }
+
+      // Check if element is visible (not display: none)
+      const style = window.getComputedStyle(triggerElement)
+      if (style.display === 'none') {
+        if (import.meta.env.DEV) {
+          console.warn('[useDialogFocus] Trigger element is display: none, cannot restore focus')
+        }
+        return
+      }
+
+      if (style.visibility === 'hidden') {
+        if (import.meta.env.DEV) {
+          console.warn('[useDialogFocus] Trigger element is visibility: hidden, cannot restore focus')
+        }
+        return
+      }
+
+      // Check if element is disabled
+      if (triggerElement instanceof HTMLButtonElement && triggerElement.disabled) {
+        if (import.meta.env.DEV) {
+          console.warn('[useDialogFocus] Trigger element is disabled, cannot restore focus')
+        }
+        // Try to find nearest enabled ancestor or fallback to body
+        const focusableParent = findNearestFocusableElement(triggerElement)
+        if (focusableParent) {
+          focusableParent.focus({ preventScroll: true })
+          if (import.meta.env.DEV) {
+            console.info('[useDialogFocus] Restored focus to nearest focusable ancestor')
+          }
+        }
+        return
+      }
+
+      // All checks passed, restore focus
+      try {
+        triggerElement.focus({ preventScroll: true })
+        if (import.meta.env.DEV) {
+          console.info('[useDialogFocus] Successfully restored focus to trigger element')
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('[useDialogFocus] Error restoring focus:', error)
+        }
       }
     }
 
-    // Wait for next tick to ensure dialog is closed
-    setTimeout(restoreFocus, 0)
+    // Helper function to find nearest focusable ancestor
+    const findNearestFocusableElement = (element: HTMLElement): HTMLElement | null => {
+      let parent = element.parentElement
+      const focusableSelectors = [
+        'button:not([disabled]):not([tabindex="-1"])',
+        'a[href]',
+        'input:not([disabled]):not([tabindex="-1"])',
+        'select:not([disabled]):not([tabindex="-1"])',
+        'textarea:not([disabled]):not([tabindex="-1"])',
+        '[tabindex]:not([tabindex="-1"])'
+      ]
+
+      while (parent && parent !== document.body) {
+        // Check if parent itself is focusable
+        if (
+          focusableSelectors.some((selector) => parent?.matches(selector)) &&
+          window.getComputedStyle(parent).display !== 'none' &&
+          window.getComputedStyle(parent).visibility !== 'hidden'
+        ) {
+          return parent
+        }
+        // Check if parent contains focusable element
+        const focusableChild = parent.querySelector(focusableSelectors.join(', ')) as HTMLElement
+        if (focusableChild) {
+          return focusableChild
+        }
+        parent = parent.parentElement
+      }
+      return null
+    }
+
+    // Use microtask queue to ensure this runs after DOM cleanup
+    queueMicrotask(restoreFocus)
   }, [isOpen, triggerRef])
 
   // Return focus lock configuration

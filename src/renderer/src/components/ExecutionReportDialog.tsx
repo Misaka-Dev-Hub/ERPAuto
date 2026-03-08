@@ -7,10 +7,9 @@
  * - Error list (if any)
  */
 
-import React, { useRef } from 'react'
+import React from 'react'
 import { CheckCircle, XCircle, SkipForward, Package, Loader2 } from 'lucide-react'
-import FocusLock from 'react-focus-lock'
-import { useDialogFocus } from '../hooks/useDialogFocus'
+import { Modal } from './ui/Modal'
 
 interface CleanerProgress {
   message: string
@@ -34,6 +33,7 @@ interface ExecutionReportDialogProps {
   isExecuting?: boolean
   progress?: CleanerProgress | null
   startTime?: number | null
+  triggerRef?: React.RefObject<HTMLElement | null>
 }
 
 export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
@@ -46,21 +46,14 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
   dryRun = false,
   isExecuting = false,
   progress = null,
-  startTime = null
+  startTime = null,
+  triggerRef
 }) => {
-  const dialogRef = useRef<HTMLDivElement>(null)
   const [now, setNow] = React.useState(() => Date.now())
-
-  // Setup focus management with conditional escape key handling
-  const { focusLockProps } = useDialogFocus({
-    isOpen,
-    dialogRef,
-    onClose,
-    shouldCloseOnEscape: () => !isExecuting // Only close when NOT executing
-  })
 
   const hasErrors = errors.length > 0
   const showProgress = isExecuting && progress
+  const isProgressing = !!showProgress
 
   React.useEffect(() => {
     if (!showProgress || !startTime) return
@@ -99,633 +92,208 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
     }
   }, [showProgress, startTime, progress, now])
 
-  if (!isOpen) return null
-
   return (
-    <FocusLock {...focusLockProps}>
-      <div
-        className="execution-report-overlay"
-        onClick={showProgress ? undefined : onClose}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={
-          showProgress ? 'execution-dialog-progress-title' : 'execution-dialog-report-title'
-        }
-      >
-        <div
-          ref={dialogRef}
-          className="execution-report-dialog"
-          onClick={(e) => e.stopPropagation()}
-          style={{ width: showProgress ? '560px' : '480px' }}
-        >
-          {showProgress ? (
-            // Progress View
-            <div className="progress-header">
-              <div className="progress-icon-wrapper">
-                <Loader2 className="progress-icon spinning" />
-              </div>
-              <h2 id="execution-dialog-progress-title" className="progress-title">
-                正在执行清理...
-              </h2>
-              <p className="progress-subtitle" aria-live="polite" aria-atomic="true">
-                {progress?.message || '处理中...'}
-              </p>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={
+        isProgressing
+          ? '正在执行清理...'
+          : dryRun
+            ? '预览执行报告'
+            : hasErrors
+              ? '执行完成 (有错误)'
+              : '执行完成'
+      }
+      size={isProgressing ? 'lg' : 'md'}
+      showCloseButton={!isExecuting}
+      triggerRef={triggerRef}
+      isAlertDialog={isProgressing}
+      disableEscapeKey={isProgressing}
+      ariaDescribedBy={isProgressing ? 'execution-dialog-progress-desc' : undefined}
+      initialFocusSelector={!isProgressing ? '.btn-report-close' : undefined}
+    >
+      {isProgressing ? (
+        // Progress View
+        <div className="text-center">
+          <div className="flex justify-center mb-4">
+            <div className="relative">
+              <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
             </div>
-          ) : (
-            // Result View
-            <div className="report-header">
-              <div className="report-icon-wrapper">
-                {dryRun ? (
-                  <Package className="report-icon preview" />
-                ) : hasErrors ? (
-                  <XCircle className="report-icon error" />
-                ) : (
-                  <CheckCircle className="report-icon success" />
-                )}
+          </div>
+          <p
+            id="execution-dialog-progress-desc"
+            className="text-sm text-gray-600 mb-4"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {progress?.message || '处理中...'}
+          </p>
+        </div>
+      ) : (
+        // Result View
+        <div className="text-center mb-4">
+          <div className="flex justify-center mb-4">
+            {dryRun ? (
+              <Package className="w-12 h-12 text-amber-500" />
+            ) : hasErrors ? (
+              <XCircle className="w-12 h-12 text-red-500" />
+            ) : (
+              <CheckCircle className="w-12 h-12 text-green-500" />
+            )}
+          </div>
+          <p className="text-sm text-gray-600">
+            {dryRun
+              ? '预览模式 - 未实际删除数据'
+              : hasErrors
+                ? '部分操作未能完成，请查看下方错误信息'
+                : '所有操作已成功完成'}
+          </p>
+        </div>
+      )}
+
+      {isProgressing ? (
+        // Progress View Content
+        <div className="space-y-4">
+          <div className="progress-bar-container w-full h-6 bg-gradient-to-r from-blue-50 to-sky-100 rounded-full overflow-hidden border border-blue-200 relative">
+            <div
+              className="progress-bar-fill h-full bg-gradient-to-r from-blue-500 to-blue-700 transition-all duration-300 relative overflow-hidden"
+              style={{ width: `${progress?.progress || 0}%` }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+            </div>
+          </div>
+
+          <div className="flex justify-around py-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex flex-col items-center">
+              <span className="text-xs text-gray-600">订单进度</span>
+              <span className="text-lg font-semibold text-blue-600">
+                {Math.min(progress!.currentOrderIndex, progress!.totalOrders)} /{' '}
+                {progress!.totalOrders}
+              </span>
+            </div>
+            {progress!.totalMaterialsInOrder > 0 && (
+              <div className="flex flex-col items-center">
+                <span className="text-xs text-gray-600">物料进度</span>
+                <span className="text-lg font-semibold text-blue-600">
+                  {progress!.currentMaterialIndex} / {progress!.totalMaterialsInOrder}
+                </span>
               </div>
-              <h2 id="execution-dialog-report-title" className="report-title">
-                {dryRun ? '预览执行报告' : hasErrors ? '执行完成 (有错误)' : '执行完成'}
-              </h2>
-              <p className="report-subtitle">
-                {dryRun
-                  ? '预览模式 - 未实际删除数据'
-                  : hasErrors
-                    ? '部分操作未能完成，请查看下方错误信息'
-                    : '所有操作已成功完成'}
-              </p>
+            )}
+            <div className="flex flex-col items-center">
+              <span className="text-xs text-gray-600">总进度</span>
+              <span className="text-lg font-semibold text-blue-600">
+                {Math.round(progress?.progress || 0)}%
+              </span>
+            </div>
+          </div>
+
+          {progress?.currentOrderNumber && (
+            <div className="flex items-center justify-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <Package size={14} className="text-blue-600" />
+              <span className="text-sm text-gray-600">当前订单:</span>
+              <span className="text-sm font-medium text-gray-900 font-mono">
+                {progress.currentOrderNumber}
+              </span>
             </div>
           )}
 
-          <div className="report-body">
-            {showProgress ? (
-              // Progress View Content
-              <div className="progress-content">
-                <div className="progress-bar-container">
-                  <div
-                    className="progress-bar-fill"
-                    style={{ width: `${progress?.progress || 0}%` }}
-                  />
-                </div>
-
-                <div className="progress-stats">
-                  <div className="progress-stat-item">
-                    <span className="stat-label">订单进度</span>
-                    <span className="stat-value">
-                      {Math.min(progress!.currentOrderIndex, progress!.totalOrders)} /{' '}
-                      {progress!.totalOrders}
-                    </span>
-                  </div>
-                  {progress!.totalMaterialsInOrder > 0 && (
-                    <div className="progress-stat-item">
-                      <span className="stat-label">物料进度</span>
-                      <span className="stat-value">
-                        {progress!.currentMaterialIndex} / {progress!.totalMaterialsInOrder}
-                      </span>
-                    </div>
-                  )}
-                  <div className="progress-stat-item">
-                    <span className="stat-label">总进度</span>
-                    <span className="stat-value">{Math.round(progress?.progress || 0)}%</span>
-                  </div>
-                </div>
-
-                {progress?.currentOrderNumber && (
-                  <div className="current-order-info">
-                    <Package size={14} className="order-icon" />
-                    <span className="order-label">当前订单:</span>
-                    <span className="order-number">{progress.currentOrderNumber}</span>
-                  </div>
-                )}
-
-                {estimatedTime && (
-                  <div className="estimated-time-info">
-                    <div className="estimated-time-item">
-                      <span className="time-label">预估还要</span>
-                      <span className="time-value">{estimatedTime.remainingMinutes} 分钟</span>
-                    </div>
-                    <div className="estimated-time-item">
-                      <span className="time-label">将会在</span>
-                      <span className="time-value">{estimatedTime.formattedTime}</span>
-                      <span className="time-label">执行完毕</span>
-                    </div>
-                  </div>
-                )}
+          {estimatedTime && (
+            <div className="flex flex-col items-center gap-2 p-3 bg-green-50 rounded-lg border border-green-200">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-600">预估还要</span>
+                <span className="font-semibold text-green-600">
+                  {estimatedTime.remainingMinutes} 分钟
+                </span>
               </div>
-            ) : (
-              // Result View Content
-              <>
-                <div className="stats-grid">
-                  <div className="stat-card">
-                    <div className="stat-icon orders">
-                      <Package size={20} />
-                    </div>
-                    <div className="stat-content">
-                      <div className="stat-label">处理订单</div>
-                      <div className="stat-value">{ordersProcessed}</div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card">
-                    <div className="stat-icon deleted">
-                      <CheckCircle size={20} />
-                    </div>
-                    <div className="stat-content">
-                      <div className="stat-label">{dryRun ? '拟删除物料' : '删除物料'}</div>
-                      <div className="stat-value">{materialsDeleted}</div>
-                    </div>
-                  </div>
-
-                  <div className="stat-card">
-                    <div className="stat-icon skipped">
-                      <SkipForward size={20} />
-                    </div>
-                    <div className="stat-content">
-                      <div className="stat-label">跳过物料</div>
-                      <div className="stat-value">{materialsSkipped}</div>
-                    </div>
-                  </div>
-
-                  {hasErrors && (
-                    <div className="stat-card">
-                      <div className="stat-icon errors">
-                        <XCircle size={20} />
-                      </div>
-                      <div className="stat-content">
-                        <div className="stat-label">错误数量</div>
-                        <div className="stat-value error">{errors.length}</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {hasErrors && (
-                  <div className="errors-section">
-                    <div className="errors-title">错误详情</div>
-                    <div className="errors-list">
-                      {errors.map((error, index) => (
-                        <div key={index} className="error-item">
-                          <XCircle size={14} className="error-icon" />
-                          <span className="error-text">{error}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {!hasErrors && !dryRun && (
-                  <div className="success-message">
-                    <CheckCircle size={16} className="success-icon" />
-                    <span>操作已成功完成，数据已同步到 ERP 系统</span>
-                  </div>
-                )}
-
-                {!hasErrors && dryRun && (
-                  <div className="preview-message">
-                    <Package size={16} className="preview-icon" />
-                    <span>预览模式结束，数据未实际修改。确认无误后可正式执行。</span>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          <div className="report-footer">
-            {!showProgress && (
-              <button className="btn-report-close" onClick={onClose}>
-                关闭
-              </button>
-            )}
-          </div>
-
-          <style>{`
-          .execution-report-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            animation: fadeIn 0.2s ease-out;
-          }
-
-          @keyframes fadeIn {
-            from {
-              opacity: 0;
-            }
-            to {
-              opacity: 1;
-            }
-          }
-
-          @keyframes slideDown {
-            from {
-              opacity: 0;
-              transform: translateY(-20px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-
-          @keyframes spin {
-            from {
-              transform: rotate(0deg);
-            }
-            to {
-              transform: rotate(360deg);
-            }
-          }
-
-          .execution-report-dialog {
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            max-width: 90vw;
-            animation: slideDown 0.2s ease-out;
-            transition: width 0.3s ease;
-          }
-
-          .progress-header,
-          .report-header {
-            text-align: center;
-            padding: 24px 24px 16px 24px;
-            border-bottom: 1px solid #f0f0f0;
-          }
-
-          .progress-icon-wrapper,
-          .report-icon-wrapper {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 12px;
-          }
-
-          .progress-icon {
-            width: 48px;
-            height: 48px;
-            color: #1890ff;
-            animation: spin 1.5s linear infinite;
-          }
-
-          .progress-title {
-            font-size: 20px;
-            font-weight: 600;
-            color: #333;
-            margin: 0 0 8px 0;
-          }
-
-          .progress-subtitle {
-            font-size: 13px;
-            color: #666;
-            margin: 0;
-          }
-
-          .report-icon {
-            width: 48px;
-            height: 48px;
-          }
-
-          .report-icon.success {
-            color: #52c41a;
-          }
-
-          .report-icon.error {
-            color: #ff4d4f;
-          }
-
-          .report-icon.preview {
-            color: #faad14;
-          }
-
-          .report-title {
-            font-size: 20px;
-            font-weight: 600;
-            color: #333;
-            margin: 0 0 8px 0;
-          }
-
-          .report-subtitle {
-            font-size: 13px;
-            color: #999;
-            margin: 0;
-          }
-
-          .report-body {
-            padding: 20px 24px;
-          }
-
-          /* Progress View Styles */
-          .progress-content {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-          }
-
-          .progress-bar-container {
-            width: 100%;
-            height: 24px;
-            background: linear-gradient(90deg, #e6f7ff 0%, #bae7ff 100%);
-            border-radius: 12px;
-            overflow: hidden;
-            border: 1px solid #91d5ff;
-            position: relative;
-          }
-
-          .progress-bar-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #1890ff 0%, #096dd9 100%);
-            border-radius: 12px;
-            transition: width 0.3s ease;
-            position: relative;
-            overflow: hidden;
-          }
-
-          .progress-bar-fill::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(
-              90deg,
-              transparent 0%,
-              rgba(255, 255, 255, 0.3) 50%,
-              transparent 100%
-            );
-            animation: shimmer 1.5s infinite;
-          }
-
-          @keyframes shimmer {
-            0% {
-              transform: translateX(-100%);
-            }
-            100% {
-              transform: translateX(100%);
-            }
-          }
-
-          .progress-stats {
-            display: flex;
-            justify-content: space-around;
-            padding: 16px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            border: 1px solid #e8e8e8;
-          }
-
-          .progress-stat-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-          }
-
-          .progress-stat-item .stat-label {
-            font-size: 12px;
-            color: #666;
-          }
-
-          .progress-stat-item .stat-value {
-            font-size: 18px;
-            font-weight: 600;
-            color: #1890ff;
-          }
-
-          .current-order-info {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 12px;
-            background: #f0f5ff;
-            border-radius: 6px;
-            border: 1px solid #d6e4ff;
-          }
-
-          .current-order-info .order-icon {
-            color: #1890ff;
-          }
-
-          .current-order-info .order-label {
-            font-size: 13px;
-            color: #666;
-          }
-
-          .current-order-info .order-number {
-            font-size: 14px;
-            font-weight: 500;
-            color: #333;
-            font-family: monospace;
-          }
-
-          .estimated-time-info {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-            padding: 12px;
-            background: #f6ffed;
-            border-radius: 6px;
-            border: 1px solid #b7eb8f;
-          }
-
-          .estimated-time-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 13px;
-          }
-
-          .estimated-time-item .time-label {
-            color: #666;
-          }
-
-          .estimated-time-item .time-value {
-            font-size: 14px;
-            font-weight: 600;
-            color: #52c41a;
-          }
-
-          /* Result View Styles */
-          .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-bottom: 16px;
-          }
-
-          .stat-card {
-            background: #f8f9fa;
-            border-radius: 6px;
-            padding: 12px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            border: 1px solid #e8e8e8;
-          }
-
-          .stat-card:nth-child(4) {
-            grid-column: span 3;
-          }
-
-          .stat-icon {
-            width: 36px;
-            height: 36px;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-          }
-
-          .stat-icon.orders {
-            background: #e6f7ff;
-            color: #1890ff;
-          }
-
-          .stat-icon.deleted {
-            background: #f6ffed;
-            color: #52c41a;
-          }
-
-          .stat-icon.skipped {
-            background: #fff7e6;
-            color: #faad14;
-          }
-
-          .stat-icon.errors {
-            background: #fff1f0;
-            color: #ff4d4f;
-          }
-
-          .stat-content {
-            flex: 1;
-            min-width: 0;
-          }
-
-          .stat-label {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 4px;
-          }
-
-          .stat-value {
-            font-size: 20px;
-            font-weight: 600;
-            color: #333;
-            line-height: 1;
-          }
-
-          .stat-value.error {
-            color: #ff4d4f;
-          }
-
-          .errors-section {
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: 1px solid #f0f0f0;
-          }
-
-          .errors-title {
-            font-size: 13px;
-            font-weight: 600;
-            color: #ff4d4f;
-            margin-bottom: 8px;
-          }
-
-          .errors-list {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            max-height: 150px;
-            overflow-y: auto;
-          }
-
-          .error-item {
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            padding: 8px 10px;
-            background: #fff1f0;
-            border-radius: 4px;
-            border: 1px solid #ffccc7;
-          }
-
-          .error-icon {
-            color: #ff4d4f;
-            flex-shrink: 0;
-            margin-top: 1px;
-          }
-
-          .error-text {
-            font-size: 12px;
-            color: #333;
-            word-break: break-word;
-          }
-
-          .success-message,
-          .preview-message {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 12px;
-            border-radius: 6px;
-            font-size: 13px;
-          }
-
-          .success-message {
-            background: #f6ffed;
-            color: #52c41a;
-            border: 1px solid #b7eb8f;
-          }
-
-          .preview-message {
-            background: #fff7e6;
-            color: #faad14;
-            border: 1px solid #ffd591;
-          }
-
-          .success-icon,
-          .preview-icon {
-            flex-shrink: 0;
-          }
-
-          .report-footer {
-            padding: 16px 24px;
-            border-top: 1px solid #f0f0f0;
-            display: flex;
-            justify-content: center;
-          }
-
-          .btn-report-close {
-            background: #1890ff;
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            padding: 10px 32px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s;
-          }
-
-          .btn-report-close:hover {
-            background: #40a9ff;
-          }
-
-          .btn-report-close:active {
-            background: #096dd9;
-          }
-        `}</style>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-600">将会在</span>
+                <span className="font-semibold text-green-600">{estimatedTime.formattedTime}</span>
+                <span className="text-gray-600">执行完毕</span>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-    </FocusLock>
+      ) : (
+        // Result View Content
+        <>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3 border border-gray-200">
+              <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                <Package size={20} className="text-blue-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-gray-600">处理订单</div>
+                <div className="text-xl font-semibold text-gray-900">{ordersProcessed}</div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3 border border-gray-200">
+              <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center flex-shrink-0">
+                <CheckCircle size={20} className="text-green-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-gray-600">{dryRun ? '拟删除物料' : '删除物料'}</div>
+                <div className="text-xl font-semibold text-gray-900">{materialsDeleted}</div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3 border border-gray-200">
+              <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+                <SkipForward size={20} className="text-amber-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-gray-600">跳过物料</div>
+                <div className="text-xl font-semibold text-gray-900">{materialsSkipped}</div>
+              </div>
+            </div>
+
+            {hasErrors && (
+              <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3 border border-gray-200 col-span-3">
+                <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
+                  <XCircle size={20} className="text-red-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-gray-600">错误数量</div>
+                  <div className="text-xl font-semibold text-red-600">{errors.length}</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {hasErrors && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="text-sm font-semibold text-red-600 mb-2">错误详情</div>
+              <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
+                {errors.map((error, index) => (
+                  <div
+                    key={index}
+                    className="flex items-start gap-2 p-2 bg-red-50 rounded border border-red-200"
+                  >
+                    <XCircle size={14} className="text-red-600 flex-shrink-0 mt-0.5" />
+                    <span className="text-sm text-gray-900 break-words">{error}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!hasErrors && !dryRun && (
+            <div className="flex items-center justify-center gap-2 p-3 bg-green-50 rounded-lg border border-green-200 text-green-700 text-sm">
+              <CheckCircle size={16} className="flex-shrink-0" />
+              <span>操作已成功完成，数据已同步到 ERP 系统</span>
+            </div>
+          )}
+
+          {!hasErrors && dryRun && (
+            <div className="flex items-center justify-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200 text-amber-700 text-sm">
+              <Package size={16} className="flex-shrink-0" />
+              <span>预览模式结束，数据未实际修改。确认无误后可正式执行。</span>
+            </div>
+          )}
+        </>
+      )}
+    </Modal>
   )
 }
 

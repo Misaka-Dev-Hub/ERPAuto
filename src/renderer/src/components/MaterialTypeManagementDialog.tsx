@@ -27,13 +27,15 @@ interface MaterialTypeManagementDialogProps {
   onClose: () => void
   isAdmin: boolean
   currentUsername: string
+  triggerRef?: React.RefObject<HTMLButtonElement | null>
 }
 
 export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialogProps> = ({
   isOpen,
   onClose,
   isAdmin,
-  currentUsername
+  currentUsername,
+  triggerRef
 }) => {
   const [rows, setRows] = useState<RowState[]>([])
   const [managers, setManagers] = useState<string[]>([])
@@ -304,7 +306,13 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="物料类型管理" size="2xl">
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="物料类型管理"
+      size="2xl"
+      triggerRef={triggerRef}
+    >
       <div onKeyDown={handleKeyDown}>
         {/* Manager filter (admin only) */}
         {isAdmin && (

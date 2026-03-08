@@ -20,6 +20,9 @@ import ExecutionReportDialog from '../components/ExecutionReportDialog'
 import { useCleaner } from '../hooks/useCleaner'
 
 const CleanerPage: React.FC = () => {
+  const typeManagementButtonRef = React.useRef<HTMLButtonElement>(null)
+  const executeButtonRef = React.useRef<HTMLButtonElement>(null)
+
   const {
     isAdmin,
     currentUsername,
@@ -249,6 +252,7 @@ const CleanerPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsTypeDialogOpen(true)}
+              ref={typeManagementButtonRef}
               className="text-xs bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50 flex items-center gap-1.5"
             >
               <Settings2 size={14} /> 类型管理
@@ -458,6 +462,7 @@ const CleanerPage: React.FC = () => {
             </div>
             <button
               onClick={handleExecuteDeletion}
+              ref={executeButtonRef}
               disabled={isRunning}
               className={`${dryRun ? 'bg-amber-500 hover:bg-amber-600' : 'bg-red-600 hover:bg-red-700 shadow-red-500/30'} text-white px-8 py-2.5 rounded-lg font-medium shadow-md transition-all flex items-center gap-2 disabled:opacity-50 w-[300px] justify-center`}
             >
@@ -473,6 +478,7 @@ const CleanerPage: React.FC = () => {
         onClose={() => setIsTypeDialogOpen(false)}
         isAdmin={isAdmin}
         currentUsername={currentUsername}
+        triggerRef={typeManagementButtonRef}
       />
 
       {/* Execution Report Dialog */}
@@ -487,6 +493,7 @@ const CleanerPage: React.FC = () => {
         isExecuting={isExecuting}
         progress={progress}
         startTime={startTime}
+        triggerRef={executeButtonRef}
       />
     </div>
   )

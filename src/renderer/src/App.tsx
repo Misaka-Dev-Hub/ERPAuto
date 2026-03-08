@@ -45,6 +45,9 @@ function App(): React.JSX.Element {
   // Track if current session is switched by Admin
   const [isSwitchedByAdmin, setIsSwitchedByAdmin] = useState(false)
 
+  // Ref for logout button (for focus restoration)
+  const logoutButtonRef = React.useRef<HTMLButtonElement>(null)
+
   // Navigation state
   const [currentPage, setCurrentPage] = useState<Page>('extractor') // Default to extractor for the new layout
 
@@ -251,6 +254,7 @@ function App(): React.JSX.Element {
           currentUsername={currentUser?.username || ''}
           onSelectUser={handleUserSelect}
           onCancel={handleUserSelectionCancel}
+          triggerRef={logoutButtonRef}
         />
 
         {errorMessage && <div className="error-toast">{errorMessage}</div>}
@@ -374,6 +378,7 @@ function App(): React.JSX.Element {
             </span>
             {shouldShowLogout && (
               <button
+                ref={logoutButtonRef}
                 onClick={handleLogout}
                 className="ml-2 text-slate-400 hover:text-red-400 transition-colors"
                 title="退出登录"

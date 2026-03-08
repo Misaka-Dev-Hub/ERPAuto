@@ -59,9 +59,11 @@ export function withErrorHandling<T>(
       const code = getErrorCode(error)
 
       // Serialize error with full details
-      const serializedError = serializeError(error)
-      const errorToLog =
-        process.env.NODE_ENV === 'production' ? sanitizeError(serializedError) : serializedError
+      if (process.env.NODE_ENV === 'production') {
+        sanitizeError(serializeError(error))
+      } else {
+        serializeError(error)
+      }
 
       if (isBaseError(error)) {
         logError(log, `[${context}] ${error.name}`, error, {

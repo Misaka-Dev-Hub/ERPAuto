@@ -8,8 +8,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react'
-import FocusLock from 'react-focus-lock'
-import { useDialogFocus } from '../hooks/useDialogFocus'
+import { Modal } from './ui/Modal'
 
 export interface UserInfo {
   id: number
@@ -24,6 +23,7 @@ interface UserSelectionDialogProps {
   currentUsername: string
   onSelectUser: (user: UserInfo) => void
   onCancel: () => void
+  triggerRef?: React.RefObject<HTMLElement | null>
 }
 
 export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
@@ -31,17 +31,11 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
   users,
   currentUsername,
   onSelectUser,
-  onCancel
+  onCancel,
+  triggerRef
 }) => {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
-
-  const { focusLockProps } = useDialogFocus({
-    isOpen,
-    dialogRef,
-    onClose: onCancel,
-    initialFocusSelector: users.length > 0 ? '.user-item:first-child' : undefined
-  })
 
   // Reset selection when dialog opens
   useEffect(() => {
@@ -65,238 +59,85 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
     onSelectUser(user)
   }
 
+  const userTypeStyles: Record<string, string> = {
+    Admin: 'bg-amber-50 text-amber-600',
+    User: 'bg-blue-50 text-blue-600',
+    Guest: 'bg-gray-100 text-gray-600'
+  }
+
   if (!isOpen) return null
 
   return (
-    <FocusLock {...focusLockProps}>
-      <div
-        className="user-selection-overlay"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="user-selection-dialog-title"
-      >
-        <div className="user-selection-dialog" ref={dialogRef}>
-          <div className="user-selection-header">
-            <h2 className="user-selection-title" id="user-selection-dialog-title">
-              选择用户
-            </h2>
-            <p className="user-selection-hint">当前登录：{currentUsername}</p>
-          </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onCancel}
+      title="选择用户"
+      size="md"
+      triggerRef={triggerRef}
+      initialFocusSelector={users.length > 0 ? '.user-item:first-child' : undefined}
+      ariaDescribedBy="user-selection-description"
+    >
+      <div ref={dialogRef} className="max-h-[60vh] flex flex-col">
+        <div className="text-sm text-gray-600 mb-4">当前登录：{currentUsername}</div>
+        <p id="user-selection-description" className="sr-only">
+          从列表中选择一个用户，双击可直接确认选择
+        </p>
 
-          <div className="user-selection-body">
-            <div className="user-list">
-              {users.map((user) => (
-                <div
-                  key={user.id}
-                  className={`user-item ${selectedUserId === user.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedUserId(user.id)}
-                  onDoubleClick={() => handleDoubleClick(user)}
-                >
-                  <div className="user-item-content">
-                    <div className="user-item-row">
-                      <span className="user-name">{user.username}</span>
-                      <span className={`user-type user-type-${user.userType.toLowerCase()}`}>
-                        {user.userType}
-                      </span>
-                    </div>
-                    {user.createTime && (
-                      <div className="user-item-row">
-                        <span className="user-create-time">
-                          创建于：{new Date(user.createTime).toLocaleString('zh-CN')}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+        <div className="flex-1 overflow-y-auto mb-4">
+          <div className="flex flex-col gap-2">
+            {users.map((user) => (
+              <div
+                key={user.id}
+                className={`user-item p-3 border border-gray-200 rounded-lg cursor-pointer transition-all hover:border-blue-500 hover:bg-green-50 ${
+                  selectedUserId === user.id ? 'border-blue-500 bg-blue-50' : ''
+                }`}
+                onClick={() => setSelectedUserId(user.id)}
+                onDoubleClick={() => handleDoubleClick(user)}
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    setSelectedUserId(user.id)
+                  }
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-900">{user.username}</span>
+                  <span
+                    className={`text-xs px-2 py-1 rounded font-medium ${userTypeStyles[user.userType]}`}
+                  >
+                    {user.userType}
+                  </span>
                 </div>
-              ))}
-            </div>
+                {user.createTime && (
+                  <div className="mt-1 text-xs text-gray-500">
+                    创建于：{new Date(user.createTime).toLocaleString('zh-CN')}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
+        </div>
 
-          <div className="user-selection-footer">
+        <div className="border-t border-gray-200 pt-4">
+          <div className="flex justify-center gap-3">
             <button
-              className="btn btn-primary"
+              className="px-6 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleConfirm}
               disabled={selectedUserId === null}
             >
               确认
             </button>
-            <button className="btn btn-secondary" onClick={onCancel}>
+            <button
+              className="px-6 py-2 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
+              onClick={onCancel}
+            >
               取消
             </button>
           </div>
-
-          <div className="user-selection-hint-footer">双击用户可直接选择</div>
+          <div className="text-center text-xs text-gray-500 mt-3">双击用户可直接选择</div>
         </div>
       </div>
-
-      <style>{`
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 9999;
-        }
-
-        .user-selection-dialog {
-          background: #fff;
-          border-radius: 8px;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-          width: 450px;
-          max-height: 80vh;
-          display: flex;
-          flex-direction: column;
-        }
-
-        .user-selection-header {
-          padding: 20px 24px;
-          border-bottom: 1px solid #f0f0f0;
-        }
-
-        .user-selection-title {
-          font-size: 18px;
-          font-weight: 600;
-          color: #333;
-          margin: 0 0 8px 0;
-        }
-
-        .user-selection-hint {
-          font-size: 13px;
-          color: #666;
-          margin: 0;
-        }
-
-        .user-selection-body {
-          flex: 1;
-          overflow-y: auto;
-          padding: 16px 24px;
-          min-height: 200px;
-          max-height: 400px;
-        }
-
-        .user-list {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .user-item {
-          padding: 12px 16px;
-          border: 1px solid #e8e8e8;
-          border-radius: 6px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .user-item:hover {
-          border-color: #1890ff;
-          background: #f6ffed;
-        }
-
-        .user-item.selected {
-          border-color: #1890ff;
-          background: #e6f7ff;
-        }
-
-        .user-item-content {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-
-        .user-item-row {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .user-name {
-          font-size: 14px;
-          font-weight: 500;
-          color: #333;
-        }
-
-        .user-type {
-          font-size: 12px;
-          padding: 2px 8px;
-          border-radius: 4px;
-          font-weight: 500;
-        }
-
-        .user-type-admin {
-          background: #fff7e6;
-          color: #fa8c16;
-        }
-
-        .user-type-user {
-          background: #e6f7ff;
-          color: #1890ff;
-        }
-
-        .user-type-guest {
-          background: #f5f5f5;
-          color: #666;
-        }
-
-        .user-create-time {
-          font-size: 12px;
-          color: #999;
-        }
-
-        .user-selection-footer {
-          display: flex;
-          gap: 12px;
-          justify-content: center;
-          padding: 16px 24px;
-          border-top: 1px solid #f0f0f0;
-        }
-
-        .btn {
-          padding: 10px 24px;
-          border: none;
-          border-radius: 6px;
-          font-size: 14px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.3s;
-        }
-
-        .btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .btn-primary {
-          background: #1890ff;
-          color: #fff;
-        }
-
-        .btn-primary:hover:not(:disabled) {
-          background: #40a9ff;
-        }
-
-        .btn-secondary {
-          background: #f5f5f5;
-          color: #666;
-        }
-
-        .btn-secondary:hover:not(:disabled) {
-          background: #e8e8e8;
-        }
-
-        .user-selection-hint-footer {
-          text-align: center;
-          font-size: 12px;
-          color: #999;
-          padding: 8px 16px;
-          border-top: 1px solid #f0f0f0;
-        }
-      `}</style>
-    </FocusLock>
+    </Modal>
   )
 }
 
