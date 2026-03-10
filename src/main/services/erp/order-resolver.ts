@@ -50,9 +50,10 @@ export interface ResolutionStats {
 }
 
 /**
- * ProductionID pattern: 2 digits + 1 letter + 1-4 digits
+ * ProductionID pattern: 2 digits + 1 letter + 1-6 digits
+ * Examples: 22A1, 22A123, 26B10617
  */
-const PRODUCTION_ID_PATTERN = /^\d{2}[A-Z]\d{1,4}$/i
+const PRODUCTION_ID_PATTERN = /^\d{2}[A-Z]\d{1,6}$/i
 
 /**
  * Production order number pattern: SC + 14 digits
@@ -85,9 +86,21 @@ export class OrderNumberResolver {
 
   /**
    * Get table name based on database type
+   * Converts MySQL schema_tablename format to SQL Server [schema].[tablename] format
+   * e.g., productionContractData_26年压力表合同数据 -> [productionContractData].[26年压力表合同数据]
+   *      dbo_MaterialsToBeDeleted -> [dbo].[MaterialsToBeDeleted]
    */
   private getTableName(tableName: string): string {
     if (this.dbService.type === 'sqlserver') {
+      // Find the FIRST underscore to split schema and table name
+      // This handles patterns like: schema_tablename
+      const firstUnderscoreIndex = tableName.indexOf('_')
+      if (firstUnderscoreIndex > 0) {
+        const schema = tableName.substring(0, firstUnderscoreIndex)
+        const actualTableName = tableName.substring(firstUnderscoreIndex + 1)
+        return `[${schema}].[${actualTableName}]`
+      }
+      // If no underscore found, default to dbo schema
       return `[dbo].[${tableName}]`
     }
     return tableName
