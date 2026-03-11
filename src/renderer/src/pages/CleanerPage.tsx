@@ -46,6 +46,8 @@ const CleanerPage: React.FC = () => {
     setIsTypeDialogOpen,
     headless,
     setHeadless,
+    concurrency,
+    setConcurrency,
     showSettingsMenu,
     setShowSettingsMenu,
     filteredResults,
@@ -456,6 +458,29 @@ const CleanerPage: React.FC = () => {
                         >
                           {headless ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
                         </button>
+                      </div>
+                    </div>
+                    <div className="border-t border-slate-100 pt-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-medium text-slate-800">
+                            并发数量 (Concurrency)
+                          </div>
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            同时处理的订单数量 (1-20)
+                          </div>
+                        </div>
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={concurrency}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10)
+                            if (!isNaN(val)) setConcurrency(Math.min(Math.max(val, 1), 20))
+                          }}
+                          className="w-16 ml-4 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
                       </div>
                     </div>
                   </div>

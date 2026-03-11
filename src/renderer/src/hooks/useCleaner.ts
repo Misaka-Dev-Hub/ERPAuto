@@ -76,6 +76,10 @@ export function useCleaner() {
     const saved = sessionStorage.getItem('cleaner_headless')
     return saved ? saved === 'true' : true
   })
+  const [concurrency, setConcurrency] = useState(() => {
+    const saved = sessionStorage.getItem('cleaner_concurrency')
+    return saved ? parseInt(saved, 10) : 1
+  })
   const [showSettingsMenu, setShowSettingsMenu] = useState(false)
 
   // Inline editing state for manager field (Admin only)
@@ -167,6 +171,10 @@ export function useCleaner() {
   useEffect(() => {
     sessionStorage.setItem('cleaner_headless', headless.toString())
   }, [headless])
+
+  useEffect(() => {
+    sessionStorage.setItem('cleaner_concurrency', concurrency.toString())
+  }, [concurrency])
 
   useEffect(() => {
     sessionStorage.setItem('cleaner_validationMode', valMode)
@@ -417,7 +425,8 @@ export function useCleaner() {
         orderNumbers: orderNumberList,
         materialCodes: materialCodeList,
         dryRun,
-        headless
+        headless,
+        concurrency
       })
       const cleanerRunData = response.success ? (response.data as any) : null
 
@@ -499,6 +508,8 @@ export function useCleaner() {
     setIsTypeDialogOpen,
     headless,
     setHeadless,
+    concurrency,
+    setConcurrency,
     showSettingsMenu,
     setShowSettingsMenu,
     filteredResults,

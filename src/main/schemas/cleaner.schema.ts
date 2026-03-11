@@ -12,7 +12,8 @@ export const CleanerInputSchema = z.object({
     .array(z.string().min(1, 'Order number cannot be empty'))
     .min(1, 'At least one order number is required'),
   materialCodes: z.array(z.string().min(1, 'Material code cannot be empty')),
-  dryRun: z.boolean()
+  dryRun: z.boolean(),
+  concurrency: z.number().int().min(1).max(20).optional()
   // Note: onProgress is a function, not validated via Zod
 })
 

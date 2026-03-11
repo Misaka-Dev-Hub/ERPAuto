@@ -32,7 +32,7 @@ const ExtractorPage: React.FC = () => {
       window.electron.validation.setSharedProductionIds(orderNumberList)
     } else {
       // Clear shared Production IDs when input is cleared
-      window.electron.validation.clearSharedProductionIds()
+      window.electron.validation.setSharedProductionIds([])
     }
   }, [orderNumbers])
 
