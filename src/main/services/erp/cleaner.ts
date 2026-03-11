@@ -25,6 +25,13 @@ export interface ShouldDeleteParams {
   deleteSet: Set<string>
 }
 
+interface PopupTask {
+  orderNumber: string
+  orderIndex: number
+  popupPage: Page
+  detailFrame: FrameLocator
+}
+
 /**
  * ERP Cleaner Service
  * Deletes specified materials from production orders in ERP system
@@ -107,11 +114,13 @@ export class CleanerService {
 
     const totalOrders = input.orderNumbers.length
     const dryRun = input.dryRun ?? this.dryRun
+    const concurrency = Math.min(Math.max(input.concurrency ?? 1, 1), 20)
 
     log.info('Starting cleaner', {
       totalOrders,
       materialCount: input.materialCodes.length,
-      dryRun
+      dryRun,
+      concurrency
     })
 
     // Create delete set for O(1) lookup
@@ -126,45 +135,106 @@ export class CleanerService {
       // Setup query interface
       await this.setupQueryInterface(workFrame)
 
-      // Process each order
-      for (let i = 0; i < totalOrders; i++) {
-        const orderNumber = input.orderNumbers[i]
+      // Task Queue Setup
+      const taskQueue: PopupTask[] = []
+      let notEmptyResolver: (() => void) | null = null
+      let producerFinished = false
 
-        try {
-          log.debug('Processing order', { orderNumber, index: i + 1, total: totalOrders })
-          const detail = await this.processOrder({
-            workFrame,
-            popupPage,
-            orderNumber,
-            orderIndex: i,
-            totalOrders,
-            deleteSet,
-            dryRun: input.dryRun ?? this.dryRun,
-            onProgress: input.onProgress
-          })
-
-          result.details.push(detail)
-          result.ordersProcessed++
-          result.materialsDeleted += detail.materialsDeleted
-          result.materialsSkipped += detail.materialsSkipped
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error'
-          log.error('Order processing failed', { orderNumber, error: message })
-          result.errors.push(`Order ${orderNumber}: ${message}`)
-
-          // Add error detail
-          result.details.push({
-            orderNumber,
-            materialsDeleted: 0,
-            materialsSkipped: 0,
-            errors: [message],
-            skippedMaterials: []
-          })
+      const notifyTaskAdded = () => {
+        if (notEmptyResolver) {
+          const resolve = notEmptyResolver
+          notEmptyResolver = null
+          resolve()
         }
       }
 
-      // Close popup page
+      const waitForTask = async (): Promise<PopupTask | null> => {
+        while (taskQueue.length === 0 && !producerFinished) {
+          await new Promise<void>((resolve) => {
+            notEmptyResolver = resolve
+          })
+        }
+        return taskQueue.shift() ?? null
+      }
+
+      // Producer logic
+      const producerPromise = (async () => {
+        for (let i = 0; i < totalOrders; i++) {
+          const orderNumber = input.orderNumbers[i]
+          try {
+            log.debug('Dispatching order', { orderNumber, index: i + 1, total: totalOrders })
+            const task = await this.dispatchOrder({
+              workFrame,
+              popupPage,
+              orderNumber,
+              orderIndex: i
+            })
+            taskQueue.push(task)
+            notifyTaskAdded()
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error'
+            log.error('Order dispatch failed', { orderNumber, error: message })
+            result.errors.push(`Order ${orderNumber} dispatch failed: ${message}`)
+            result.details.push({
+              orderNumber,
+              materialsDeleted: 0,
+              materialsSkipped: 0,
+              errors: [message],
+              skippedMaterials: []
+            })
+            // Still increment ordersProcessed for failures so they count towards progress
+            result.ordersProcessed++
+          }
+        }
+        producerFinished = true
+        notifyTaskAdded() // Wake up workers so they can exit if queue is empty
+      })()
+
+      // Consumer worker logic
+      const workerPromises = Array.from({ length: concurrency }).map(async (_, workerId) => {
+        while (true) {
+          const task = await waitForTask()
+          if (!task) break // Queue is empty and producer finished
+
+          try {
+            log.debug(`Worker ${workerId} processing order`, { orderNumber: task.orderNumber })
+            const detail = await this.processPopupPage({
+              popupPage: task.popupPage,
+              detailFrame: task.detailFrame,
+              orderNumber: task.orderNumber,
+              orderIndex: task.orderIndex,
+              totalOrders,
+              deleteSet,
+              dryRun,
+              onProgress: input.onProgress
+            })
+
+            result.details.push(detail)
+            result.ordersProcessed++
+            result.materialsDeleted += detail.materialsDeleted
+            result.materialsSkipped += detail.materialsSkipped
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error'
+            log.error(`Worker ${workerId} order processing failed`, { orderNumber: task.orderNumber, error: message })
+            result.errors.push(`Order ${task.orderNumber}: ${message}`)
+            result.details.push({
+              orderNumber: task.orderNumber,
+              materialsDeleted: 0,
+              materialsSkipped: 0,
+              errors: [message],
+              skippedMaterials: []
+            })
+            result.ordersProcessed++
+          }
+        }
+      })
+
+      // Wait for everything to finish
+      await Promise.all([producerPromise, ...workerPromises])
+
+      // Close main popup page
       await popupPage.close()
+
       log.info('Cleaner completed', {
         ordersProcessed: result.ordersProcessed,
         materialsDeleted: result.materialsDeleted,
@@ -232,12 +302,62 @@ export class CleanerService {
   }
 
   /**
-   * Process a single order
-   * Reference: Python process_order() lines 171-443
+   * Dispatch an order - search and open the popup page
    */
-  private async processOrder(params: {
+  private async dispatchOrder(params: {
     workFrame: FrameLocator
     popupPage: Page
+    orderNumber: string
+    orderIndex: number
+  }): Promise<PopupTask> {
+    const { workFrame, popupPage, orderNumber, orderIndex } = params
+
+    // Query the order
+    const textbox = workFrame.getByRole('textbox', { name: '生产订单号' })
+    await textbox.fill(orderNumber)
+    await workFrame.locator('.search-component-searchBtn').click()
+
+    // Wait for loading
+    await this.waitForLoading(workFrame)
+
+    // Click "更多" to open menu
+    await workFrame.locator('#hot-key-head_list').getByText('更多').click()
+
+    // Click "备料计划" and expect popup
+    const detailPagePromise = popupPage.waitForEvent('popup')
+    await workFrame.getByText('备料计划').click()
+    const detailPage = await detailPagePromise
+
+    // Navigate nested frames in detail page
+    const detailMainFrame = detailPage.locator('#forwardFrame')
+    const dFrame = await detailMainFrame.contentFrame()
+
+    if (!dFrame) {
+      throw new Error('Failed to access detail page forward frame')
+    }
+
+    const detailInnerLocator = dFrame.locator('#mainiframe')
+    await detailInnerLocator.waitFor({ state: 'visible', timeout: 30000 })
+    const detailInnerFrame = await detailInnerLocator.contentFrame()
+
+    if (!detailInnerFrame) {
+      throw new Error('Failed to access detail inner frame')
+    }
+
+    return {
+      orderNumber,
+      orderIndex,
+      popupPage: detailPage,
+      detailFrame: detailInnerFrame
+    }
+  }
+
+  /**
+   * Process a popup page for an order
+   */
+  private async processPopupPage(params: {
+    popupPage: Page
+    detailFrame: FrameLocator
     orderNumber: string
     orderIndex: number
     totalOrders: number
@@ -250,8 +370,8 @@ export class CleanerService {
     ) => void
   }): Promise<OrderCleanDetail> {
     const {
-      workFrame,
-      popupPage,
+      popupPage: detailPage,
+      detailFrame: detailInnerFrame,
       orderNumber,
       orderIndex,
       totalOrders,
@@ -268,50 +388,18 @@ export class CleanerService {
       skippedMaterials: []
     }
 
-    // Query the order (Python lines 187-189)
-    const textbox = workFrame.getByRole('textbox', { name: '生产订单号' })
-    await textbox.fill(orderNumber)
-    await workFrame.locator('.search-component-searchBtn').click()
-
-    // Wait for loading (Python lines 192-197)
-    await this.waitForLoading(workFrame)
-
-    // Click "更多" to open menu (Python line 200)
-    await workFrame.locator('#hot-key-head_list').getByText('更多').click()
-
-    // Click "备料计划" and expect popup (Python lines 201-203)
-    const detailPagePromise = popupPage.waitForEvent('popup')
-    await workFrame.getByText('备料计划').click()
-    const detailPage = await detailPagePromise
-
     try {
-      // Navigate nested frames in detail page (Python lines 206-207)
-      const detailMainFrame = detailPage.locator('#forwardFrame')
-      const dFrame = await detailMainFrame.contentFrame()
-
-      if (!dFrame) {
-        throw new Error('Failed to access detail page forward frame')
-      }
-
-      const detailInnerLocator = dFrame.locator('#mainiframe')
-      await detailInnerLocator.waitFor({ state: 'visible', timeout: 30000 })
-      const detailInnerFrame = await detailInnerLocator.contentFrame()
-
-      if (!detailInnerFrame) {
-        throw new Error('Failed to access detail inner frame')
-      }
-
-      // Wait for plan code (Python lines 210-213)
+      // Wait for plan code
       await detailInnerFrame
         .getByText(/^离散备料计划维护：/)
         .waitFor({ state: 'visible', timeout: 30000 })
 
-      // Extract detail count (Python lines 215-218)
+      // Extract detail count
       const detailCountText = await detailInnerFrame.getByText(/^详细信息 \(\d+\)$/).innerText()
       const detailCountMatch = detailCountText.match(/\((\d+)\)/)
       const detailCount = detailCountMatch ? parseInt(detailCountMatch[1], 10) : 0
 
-      // Extract status (Python lines 220-225)
+      // Extract status
       const statusText = await detailInnerFrame.getByText(/^备料状态:.+$/).innerText()
       const statusMatch = statusText.replace(/\n/g, '').match(/备料状态:(.+)$/)
       const detailStatus = statusMatch ? statusMatch[1].trim() : ''
@@ -329,19 +417,19 @@ export class CleanerService {
         }
       )
 
-      // Process based on status (Python lines 228-441)
+      // Process based on status
       if (detailStatus === '审批通过' && detailCount > 0) {
-        // Click modify button (Python line 235)
+        // Click modify button
         await detailInnerFrame.getByRole('button', { name: '修改' }).click()
 
-        // Wait for save button (Python lines 238-242)
+        // Wait for save button
         const saveButtonLocator = detailInnerFrame.getByRole('button', { name: '保存' })
         await saveButtonLocator.waitFor({ state: 'visible', timeout: 30000 })
 
-        // Expand the form (Python line 245)
+        // Expand the form
         await detailInnerFrame.getByText('展开').first().click()
 
-        // Get form elements (Python lines 247-253)
+        // Get form elements
         const childForm = detailInnerFrame.locator('.card-table-side-box')
         const buttonWrapper = childForm.locator('.button-wrapper')
         const deleteRowBtn = buttonWrapper.getByRole('button', { name: '删行' })
@@ -351,11 +439,11 @@ export class CleanerService {
         let lastRowNumber = ''
         let materialIdx = 0
 
-        // Process each material row (Python lines 257-423)
+        // Process each material row
         while (true) {
           materialIdx++
 
-          // Wait for row number to stabilize (Python lines 262-265)
+          // Wait for row number to stabilize
           const currentRow = await this.getInputValue(childForm, /^行号$/)
           const rowNumInt = parseInt(currentRow, 10)
 
@@ -363,13 +451,12 @@ export class CleanerService {
             await this.delay(500)
           }
 
-          // Get material data (Python lines 267-271)
+          // Get material data
           const materialCode = await this.getInputValue(childForm, /^材料编码/)
           const materialName = await this.getInputValue(childForm, /^材料名称/)
           const pendingQty = await this.getInputValue(childForm, /^累计待发数量$/)
 
           // Report progress using formula: (1 + i + j/Mᵢ) / (1 + N) × 100
-          // where i = orderIndex (0-based), j = materialIdx (1-based), Mᵢ = detailCount, N = totalOrders
           const progress = ((1 + orderIndex + materialIdx / detailCount) / (1 + totalOrders)) * 100
 
           onProgress?.(
@@ -384,7 +471,7 @@ export class CleanerService {
             }
           )
 
-          // Check if should delete (Python lines 284-406)
+          // Check if should delete
           if (deleteSet.has(materialCode)) {
             const shouldDelete = this.shouldDeleteMaterial({
               rowNumber: rowNumInt,
@@ -394,11 +481,11 @@ export class CleanerService {
             })
 
             if (shouldDelete && !dryRun) {
-              // Delete the material (Python lines 302-340)
+              // Delete the material
               const oldRowNumber = currentRow
               await deleteRowBtn.click()
 
-              // Wait for row number to change (Python lines 306-324)
+              // Wait for row number to change
               const deleteSuccess = await this.waitForRowChange(childForm, oldRowNumber, 10000)
 
               if (deleteSuccess) {
@@ -422,7 +509,7 @@ export class CleanerService {
             }
           }
 
-          // Move to next row (Python lines 419-423)
+          // Move to next row
           const isNextEnabled = await this.isButtonEnabled(nextBtn)
           if (isNextEnabled) {
             lastRowNumber = currentRow
@@ -432,17 +519,17 @@ export class CleanerService {
           }
         }
 
-        // Collapse form (Python line 424)
+        // Collapse form
         await collapseBtn.click()
 
-        // Save changes (Python lines 427-435)
+        // Save changes
         if (!dryRun && detail.materialsDeleted > 0) {
           await saveButtonLocator.click()
           await saveButtonLocator.waitFor({ state: 'hidden', timeout: 60000 })
         }
       }
     } finally {
-      // Close detail page (Python lines 442-443)
+      // Close detail page
       await detailPage.close()
     }
 
