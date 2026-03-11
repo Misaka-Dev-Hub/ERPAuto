@@ -114,8 +114,8 @@ export class CleanerService {
 
     const totalOrders = input.orderNumbers.length
     const dryRun = input.dryRun ?? this.dryRun
-    const concurrency = Math.min(Math.max(input.concurrency ?? 1, 1), 20)
-
+    //const concurrency = Math.min(Math.max(input.concurrency ?? 1, 1), 20)
+    const concurrency = 5
     log.info('Starting cleaner', {
       totalOrders,
       materialCount: input.materialCodes.length,
@@ -135,15 +135,15 @@ export class CleanerService {
       // Setup query interface
       await this.setupQueryInterface(workFrame)
 
-      // Task Queue Setup
+      // Task Queue Setup - Use a proper async queue with multiple waiters support
       const taskQueue: PopupTask[] = []
-      let notEmptyResolver: (() => void) | null = null
+      const waiters: (() => void)[] = []
       let producerFinished = false
 
       const notifyTaskAdded = () => {
-        if (notEmptyResolver) {
-          const resolve = notEmptyResolver
-          notEmptyResolver = null
+        // Wake up ALL waiting workers so they can check the queue
+        while (waiters.length > 0 && taskQueue.length > 0) {
+          const resolve = waiters.shift()!
           resolve()
         }
       }
@@ -151,7 +151,7 @@ export class CleanerService {
       const waitForTask = async (): Promise<PopupTask | null> => {
         while (taskQueue.length === 0 && !producerFinished) {
           await new Promise<void>((resolve) => {
-            notEmptyResolver = resolve
+            waiters.push(resolve)
           })
         }
         return taskQueue.shift() ?? null
@@ -159,21 +159,33 @@ export class CleanerService {
 
       // Producer logic
       const producerPromise = (async () => {
+        log.info('Producer started', { totalOrders })
         for (let i = 0; i < totalOrders; i++) {
           const orderNumber = input.orderNumbers[i]
+          const dispatchStartTime = Date.now()
           try {
-            log.debug('Dispatching order', { orderNumber, index: i + 1, total: totalOrders })
+            log.info(
+              `Producer DISPATCHING order ${i + 1}/${totalOrders}: ${orderNumber}, queue length before: ${taskQueue.length}`
+            )
             const task = await this.dispatchOrder({
               workFrame,
               popupPage,
               orderNumber,
               orderIndex: i
             })
+            const dispatchDuration = Date.now() - dispatchStartTime
             taskQueue.push(task)
+            log.info(
+              `Producer DISPATCHED order ${orderNumber} in ${dispatchDuration}ms, queue length after: ${taskQueue.length}`
+            )
             notifyTaskAdded()
           } catch (error) {
+            const dispatchDuration = Date.now() - dispatchStartTime
             const message = error instanceof Error ? error.message : 'Unknown error'
-            log.error('Order dispatch failed', { orderNumber, error: message })
+            log.error(`Producer DISPATCH FAILED order ${orderNumber} after ${dispatchDuration}ms`, {
+              orderNumber,
+              error: message
+            })
             result.errors.push(`Order ${orderNumber} dispatch failed: ${message}`)
             result.details.push({
               orderNumber,
@@ -186,18 +198,27 @@ export class CleanerService {
             result.ordersProcessed++
           }
         }
+        log.info('Producer finished', { finalQueueLength: taskQueue.length })
         producerFinished = true
         notifyTaskAdded() // Wake up workers so they can exit if queue is empty
       })()
 
       // Consumer worker logic
       const workerPromises = Array.from({ length: concurrency }).map(async (_, workerId) => {
+        log.info(`Worker ${workerId} started`)
         while (true) {
           const task = await waitForTask()
-          if (!task) break // Queue is empty and producer finished
+          if (!task) {
+            log.info(`Worker ${workerId} exiting - no more tasks`)
+            break
+          }
+
+          const startTime = Date.now()
+          log.info(
+            `Worker ${workerId} STARTED processing order ${task.orderNumber}, queue length: ${taskQueue.length}`
+          )
 
           try {
-            log.debug(`Worker ${workerId} processing order`, { orderNumber: task.orderNumber })
             const detail = await this.processPopupPage({
               popupPage: task.popupPage,
               detailFrame: task.detailFrame,
@@ -209,13 +230,20 @@ export class CleanerService {
               onProgress: input.onProgress
             })
 
+            const duration = Date.now() - startTime
+            log.info(`Worker ${workerId} COMPLETED order ${task.orderNumber} in ${duration}ms`)
+
             result.details.push(detail)
             result.ordersProcessed++
             result.materialsDeleted += detail.materialsDeleted
             result.materialsSkipped += detail.materialsSkipped
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error'
-            log.error(`Worker ${workerId} order processing failed`, { orderNumber: task.orderNumber, error: message })
+            const duration = Date.now() - startTime
+            log.error(`Worker ${workerId} FAILED order ${task.orderNumber} after ${duration}ms`, {
+              orderNumber: task.orderNumber,
+              error: message
+            })
             result.errors.push(`Order ${task.orderNumber}: ${message}`)
             result.details.push({
               orderNumber: task.orderNumber,
