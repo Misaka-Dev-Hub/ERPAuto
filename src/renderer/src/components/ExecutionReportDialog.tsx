@@ -34,6 +34,9 @@ interface ExecutionReportDialogProps {
   progress?: CleanerProgress | null
   startTime?: number | null
   triggerRef?: React.RefObject<HTMLElement | null>
+  // Retry-related props
+  retriedOrders?: number
+  successfulRetries?: number
 }
 
 export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
@@ -47,11 +50,14 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
   isExecuting = false,
   progress = null,
   startTime = null,
-  triggerRef
+  triggerRef,
+  retriedOrders = 0,
+  successfulRetries = 0
 }) => {
   const [now, setNow] = React.useState(() => Date.now())
 
   const hasErrors = errors.length > 0
+  const hasRetries = retriedOrders > 0
   const showProgress = isExecuting && progress
   const isProgressing = !!showProgress
 
@@ -258,6 +264,46 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
                   <div className="text-xl font-semibold text-red-600">{errors.length}</div>
                 </div>
               </div>
+            )}
+
+            {hasRetries && (
+              <>
+                <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3 border border-gray-200">
+                  <div className="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-purple-600"
+                    >
+                      <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                      <path d="M3 3v5h5" />
+                      <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                      <path d="M16 21h5v-5" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-600">重试订单</div>
+                    <div className="text-xl font-semibold text-gray-900">{retriedOrders}</div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3 border border-gray-200">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                    <CheckCircle size={20} className="text-emerald-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-600">成功重试</div>
+                    <div className="text-xl font-semibold text-gray-900">{successfulRetries}</div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
 

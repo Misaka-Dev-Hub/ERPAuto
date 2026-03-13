@@ -107,11 +107,7 @@ export function ConfirmDialog({
         <Button variant="secondary" onClick={onCancel}>
           {cancelText}
         </Button>
-        <Button
-          data-autofocus="true"
-          variant={styles.buttonVariant}
-          onClick={onConfirm}
-        >
+        <Button data-autofocus="true" variant={styles.buttonVariant} onClick={onConfirm}>
           {confirmText}
         </Button>
       </div>
@@ -125,14 +121,14 @@ export function ConfirmDialog({
  */
 export function useConfirmDialog() {
   const [config, setConfig] = useState<
-    (Omit<ConfirmDialogProps, 'isOpen' | 'onConfirm' | 'onCancel'> & {
-      resolve: (value: boolean) => void
-    }) | null>(null)
+    | (Omit<ConfirmDialogProps, 'isOpen' | 'onConfirm' | 'onCancel'> & {
+        resolve: (value: boolean) => void
+      })
+    | null
+  >(null)
 
   const confirm = useCallback(
-    (
-      options: Omit<ConfirmDialogProps, 'isOpen' | 'onConfirm' | 'onCancel'>
-    ): Promise<boolean> => {
+    (options: Omit<ConfirmDialogProps, 'isOpen' | 'onConfirm' | 'onCancel'>): Promise<boolean> => {
       return new Promise<boolean>((resolve) => {
         setConfig({
           ...options,

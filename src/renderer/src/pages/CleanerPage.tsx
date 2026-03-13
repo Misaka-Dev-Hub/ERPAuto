@@ -496,6 +496,8 @@ const CleanerPage: React.FC = () => {
         progress={progress}
         startTime={startTime}
         triggerRef={executeButtonRef}
+        retriedOrders={reportData?.retriedOrders}
+        successfulRetries={reportData?.successfulRetries}
       />
 
       {/* Confirmation Dialog */}

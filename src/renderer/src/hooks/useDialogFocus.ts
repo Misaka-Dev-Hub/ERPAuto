@@ -239,7 +239,9 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
 
       if (style.visibility === 'hidden') {
         if (import.meta.env.DEV) {
-          console.warn('[useDialogFocus] Trigger element is visibility: hidden, cannot restore focus')
+          console.warn(
+            '[useDialogFocus] Trigger element is visibility: hidden, cannot restore focus'
+          )
         }
         return
       }

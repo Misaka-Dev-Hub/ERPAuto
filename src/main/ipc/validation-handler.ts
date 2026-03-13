@@ -296,7 +296,8 @@ export function registerValidationHandlers(): void {
             if (sourceNumbers.length === 0) {
               return {
                 success: false,
-                error: '共享的 Production ID 没有找到对应的订单数据。请确保在数据提取页面输入了有效的 Production ID 并成功获取了订单数据。',
+                error:
+                  '共享的 Production ID 没有找到对应的订单数据。请确保在数据提取页面输入了有效的 Production ID 并成功获取了订单数据。',
                 stats: {
                   totalRecords: 0,
                   matchedCount: 0,
@@ -315,7 +316,8 @@ export function registerValidationHandlers(): void {
             if (sourceNumbers.length === 0) {
               return {
                 success: false,
-                error: '文件中的 Production ID 没有找到对应的订单数据。请检查 Production ID 是否正确，或确保数据库中有对应的订单数据。',
+                error:
+                  '文件中的 Production ID 没有找到对应的订单数据。请检查 Production ID 是否正确，或确保数据库中有对应的订单数据。',
                 stats: {
                   totalRecords: 0,
                   matchedCount: 0,

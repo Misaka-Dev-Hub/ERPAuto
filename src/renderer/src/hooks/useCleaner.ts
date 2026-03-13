@@ -65,6 +65,8 @@ export function useCleaner() {
     materialsDeleted: number
     materialsSkipped: number
     errors: string[]
+    retriedOrders?: number
+    successfulRetries?: number
   } | null>(null)
 
   // Progress state
@@ -426,7 +428,9 @@ export function useCleaner() {
           ordersProcessed: cleanerRunData.ordersProcessed,
           materialsDeleted: cleanerRunData.materialsDeleted,
           materialsSkipped: cleanerRunData.materialsSkipped,
-          errors: cleanerRunData.errors
+          errors: cleanerRunData.errors,
+          retriedOrders: cleanerRunData.retriedOrders,
+          successfulRetries: cleanerRunData.successfulRetries
         })
       } else {
         throw new Error(response.error || '清理失败')

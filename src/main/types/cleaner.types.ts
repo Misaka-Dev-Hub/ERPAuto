@@ -25,6 +25,9 @@ export interface CleanerResult {
   materialsSkipped: number
   errors: string[]
   details: OrderCleanDetail[]
+  // Retry statistics
+  retriedOrders: number
+  successfulRetries: number
 }
 
 export interface SkippedMaterial {
@@ -34,12 +37,23 @@ export interface SkippedMaterial {
   reason: string
 }
 
+export interface RetryAttempt {
+  attempt: number
+  error: string
+  timestamp: number
+}
+
 export interface OrderCleanDetail {
   orderNumber: string
   materialsDeleted: number
   materialsSkipped: number
   errors: string[]
   skippedMaterials: SkippedMaterial[]
+  // Retry-related fields
+  retryCount: number
+  retryAttempts?: RetryAttempt[]
+  retriedAt?: number
+  retrySuccess?: boolean
 }
 
 /**

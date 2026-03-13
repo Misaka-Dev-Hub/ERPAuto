@@ -89,6 +89,10 @@ export class CleanerReportGenerator {
     lines.push(`| **删除物料数** | \`${result.materialsDeleted}\``)
     lines.push(`| **跳过物料数** | \`${result.materialsSkipped}\``)
     lines.push(`| **错误数量**   | \`${result.errors.length}\``)
+    if (result.retriedOrders > 0) {
+      lines.push(`| **重试订单数** | \`${result.retriedOrders}\``)
+      lines.push(`| **成功重试数** | \`${result.successfulRetries}\``)
+    }
     lines.push(`| **执行耗时**   | \`${this.formatDuration(options.startTime, options.endTime)}\``)
     lines.push('')
     lines.push('---')
@@ -100,6 +104,12 @@ export class CleanerReportGenerator {
     lines.push('| ----------- | ---- | ------ |')
     lines.push(`| ✅ 成功订单 | ${stats.successCount} | ${stats.successRate.toFixed(1)}% |`)
     lines.push(`| ❌ 失败订单 | ${stats.failureCount} | ${(100 - stats.successRate).toFixed(1)}% |`)
+    if (result.retriedOrders > 0) {
+      const retrySuccessRate =
+        result.retriedOrders > 0 ? (result.successfulRetries / result.retriedOrders) * 100 : 0
+      lines.push(`| 🔄 重试订单 | ${result.retriedOrders} | 100% |`)
+      lines.push(`| ✅ 成功重试 | ${result.successfulRetries} | ${retrySuccessRate.toFixed(1)}% |`)
+    }
     lines.push('')
     lines.push('---')
     lines.push('')
@@ -111,10 +121,19 @@ export class CleanerReportGenerator {
 
     result.details.forEach((detail, index) => {
       const orderNum = index + 1
-      const status = detail.errors.length > 0 ? '❌ 失败' : '✅ 成功'
+      let status = detail.errors.length > 0 ? '❌ 失败' : '✅ 成功'
+
+      // Override status if retry was successful
+      if (detail.retrySuccess) {
+        status = '✅ 重试成功'
+      } else if (detail.retryCount > 0 && !detail.retrySuccess) {
+        status = '❌ 重试失败'
+      }
+
       const errorMsg = detail.errors.length > 0 ? detail.errors[0] : '-'
+      const retryInfo = detail.retryCount > 0 ? ` [重试${detail.retryCount}次]` : ''
       lines.push(
-        `| ${orderNum} | \`${detail.orderNumber}\` | ${detail.materialsDeleted} | ${detail.materialsSkipped} | ${status} | \`${errorMsg}\` |`
+        `| ${orderNum} | \`${detail.orderNumber}\` | ${detail.materialsDeleted} | ${detail.materialsSkipped} | ${status}${retryInfo} | \`${errorMsg}\` |`
       )
     })
 
@@ -172,6 +191,62 @@ export class CleanerReportGenerator {
         })
 
       lines.push('---')
+      lines.push('')
+    }
+
+    // Add retry details section
+    if (result.retriedOrders > 0) {
+      lines.push('## 重试执行详情')
+      lines.push('')
+      lines.push(
+        `**重试订单总数**: \`${result.retriedOrders}\` | **成功**: \`${result.successfulRetries}\` | **失败**: \`${result.retriedOrders - result.successfulRetries}\``
+      )
+      lines.push('')
+
+      const retriedDetails = result.details.filter((d) => d.retryCount > 0)
+
+      if (retriedDetails.length > 0) {
+        lines.push('### 重试订单列表')
+        lines.push('')
+        lines.push('| 订单号   | 重试次数 | 重试结果 | 重试时间     |')
+        lines.push('| -------- | -------- | -------- | ------------ |')
+
+        retriedDetails.forEach((detail) => {
+          const retryStatus = detail.retrySuccess ? '✅ 成功' : '❌ 失败'
+          const retryTime = detail.retriedAt ? this.formatDateTime(detail.retriedAt) : '-'
+          lines.push(
+            `| \`${detail.orderNumber}\` | ${detail.retryCount} | ${retryStatus} | ${retryTime} |`
+          )
+        })
+
+        lines.push('')
+        lines.push('### 重试尝试详细记录')
+        lines.push('')
+
+        retriedDetails.forEach((detail) => {
+          lines.push(`#### \`${detail.orderNumber}\``)
+          lines.push('')
+          lines.push(`- **重试次数**: ${detail.retryCount}`)
+          lines.push(`- **最终结果**: ${detail.retrySuccess ? '✅ 成功' : '❌ 失败'}`)
+
+          if (detail.retryAttempts && detail.retryAttempts.length > 0) {
+            lines.push('')
+            lines.push('**重试尝试记录**:')
+            lines.push('')
+            detail.retryAttempts.forEach((attempt, idx) => {
+              lines.push(
+                `${idx + 1}. **第${attempt.attempt}次尝试** - ${this.formatDateTime(attempt.timestamp)}`
+              )
+              lines.push(`   - 错误：${attempt.error}`)
+            })
+            lines.push('')
+          }
+
+          lines.push('---')
+          lines.push('')
+        })
+      }
+
       lines.push('')
     }
 

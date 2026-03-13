@@ -7,6 +7,12 @@ import { createLogger } from '../logger'
 
 const log = createLogger('CleanerService')
 
+interface RetryResult {
+  retriedOrders: number
+  successfulRetries: number
+  updatedDetails: OrderCleanDetail[]
+}
+
 /**
  * Cleaner Service Options
  */
@@ -102,7 +108,9 @@ export class CleanerService {
       materialsDeleted: 0,
       materialsSkipped: 0,
       errors: [],
-      details: []
+      details: [],
+      retriedOrders: 0,
+      successfulRetries: 0
     }
 
     const totalOrders = input.orderNumbers.length
@@ -158,7 +166,11 @@ export class CleanerService {
             materialsDeleted: 0,
             materialsSkipped: 0,
             errors: [message],
-            skippedMaterials: []
+            skippedMaterials: [],
+            retryCount: 0,
+            retryAttempts: [],
+            retriedAt: undefined,
+            retrySuccess: false
           })
         }
       }
@@ -171,6 +183,36 @@ export class CleanerService {
         materialsSkipped: result.materialsSkipped,
         errorCount: result.errors.length
       })
+
+      // Retry failed orders
+      const retryResult = await this.retryFailedOrders({
+        workFrame,
+        popupPage,
+        failedDetails: result.details.filter((d) => d.errors.length > 0),
+        deleteSet,
+        dryRun,
+        onProgress: input.onProgress
+      })
+
+      // Merge retry results
+      result.retriedOrders = retryResult.retriedOrders
+      result.successfulRetries = retryResult.successfulRetries
+
+      // Update details with retry information
+      retryResult.updatedDetails.forEach((updatedDetail) => {
+        const index = result.details.findIndex((d) => d.orderNumber === updatedDetail.orderNumber)
+        if (index !== -1) {
+          result.details[index] = updatedDetail
+        }
+      })
+
+      // Clear errors for successfully retried orders
+      const successfulRetryOrders = new Set(
+        retryResult.updatedDetails.filter((d) => d.retrySuccess).map((d) => d.orderNumber)
+      )
+      result.errors = result.errors.filter(
+        (err) => !successfulRetryOrders.has(err.split(':')[0].replace('Order ', ''))
+      )
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
       log.error('Cleaner failed', { error: message })
@@ -265,7 +307,11 @@ export class CleanerService {
       materialsDeleted: 0,
       materialsSkipped: 0,
       errors: [],
-      skippedMaterials: []
+      skippedMaterials: [],
+      retryCount: 0,
+      retryAttempts: [],
+      retriedAt: undefined,
+      retrySuccess: false
     }
 
     // Query the order (Python lines 187-189)
@@ -530,5 +576,122 @@ export class CleanerService {
    */
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  /**
+   * Retry failed orders from the initial execution
+   * Maximum 2 retry attempts per failed order
+   */
+  private async retryFailedOrders(params: {
+    workFrame: FrameLocator
+    popupPage: Page
+    failedDetails: OrderCleanDetail[]
+    deleteSet: Set<string>
+    dryRun: boolean
+    onProgress?: (
+      message: string,
+      progress?: number,
+      extra?: Partial<import('../../types/cleaner.types').CleanerProgress>
+    ) => void
+  }): Promise<RetryResult> {
+    const { workFrame, popupPage, failedDetails, deleteSet, dryRun, onProgress } = params
+
+    const result: RetryResult = {
+      retriedOrders: 0,
+      successfulRetries: 0,
+      updatedDetails: []
+    }
+
+    if (failedDetails.length === 0) {
+      return result
+    }
+
+    log.info('Starting retry for failed orders', { count: failedDetails.length })
+
+    const MAX_RETRIES = 2
+
+    for (const failedDetail of failedDetails) {
+      const orderNumber = failedDetail.orderNumber
+      const retryAttempts: import('../../types/cleaner.types').RetryAttempt[] = []
+
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          log.info(`Retrying order ${orderNumber} (attempt ${attempt}/${MAX_RETRIES})`)
+
+          // Create a new detail for retry
+          const retryDetail: OrderCleanDetail = {
+            orderNumber,
+            materialsDeleted: 0,
+            materialsSkipped: 0,
+            errors: [],
+            skippedMaterials: [],
+            retryCount: attempt,
+            retryAttempts: [],
+            retriedAt: undefined,
+            retrySuccess: false
+          }
+
+          // Re-run the order processing
+          await this.processOrder({
+            workFrame,
+            popupPage,
+            orderNumber,
+            orderIndex: 0, // Not used for retry
+            totalOrders: failedDetails.length,
+            deleteSet,
+            dryRun,
+            onProgress: (message, progress, extra) => {
+              onProgress?.(
+                `[重试 ${attempt}/${MAX_RETRIES}] ${message}`,
+                progress,
+                extra ? { ...extra, phase: 'processing' as const } : undefined
+              )
+            }
+          })
+
+          // If we reach here, retry succeeded
+          result.successfulRetries++
+          log.info(`Retry succeeded for order ${orderNumber}`)
+
+          // Merge the successful retry detail
+          result.updatedDetails.push({
+            ...retryDetail,
+            retriedAt: Date.now(),
+            retrySuccess: true
+          })
+          result.retriedOrders++
+          break // Exit retry loop for this order
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error'
+          log.warn(`Retry attempt ${attempt} failed for order ${orderNumber}: ${message}`)
+
+          retryAttempts.push({
+            attempt,
+            error: message,
+            timestamp: Date.now()
+          })
+
+          if (attempt === MAX_RETRIES) {
+            // All retries exhausted
+            log.error(`All retries failed for order ${orderNumber}`)
+            result.updatedDetails.push({
+              ...failedDetail,
+              retryCount: MAX_RETRIES,
+              retryAttempts,
+              retriedAt: Date.now(),
+              retrySuccess: false
+            })
+            result.retriedOrders++
+          }
+        }
+      }
+    }
+
+    log.info('Retry process completed', {
+      retriedOrders: result.retriedOrders,
+      successfulRetries: result.successfulRetries
+    })
+
+    return result
   }
 }
