@@ -169,16 +169,21 @@ export class OrderNumberResolver {
         return new Map()
       }
 
+      // P1: Deduplicate input productionIds to avoid redundant queries
+      const uniqueProductionIds = [...new Set(productionIds)]
+
       // Use parameterized query to prevent SQL injection
-      const placeholders = productionIds.map((_, i) => `@p${i}`).join(', ')
-      const params = productionIds
+      const placeholders = uniqueProductionIds.map((_, i) => `@p${i}`).join(', ')
+      const params = uniqueProductionIds
 
       let sql: string
       if (this.dbService.type === 'sqlserver') {
-        sql = `SELECT [${dbConfig.FIELD_PRODUCTION_ID}], [${dbConfig.FIELD_ORDER_NUMBER}] FROM ${tableName} WHERE [${dbConfig.FIELD_PRODUCTION_ID}] IN (${placeholders})`
+        // P0: Use DISTINCT to prevent duplicates from one-to-many relationships
+        sql = `SELECT DISTINCT [${dbConfig.FIELD_PRODUCTION_ID}], [${dbConfig.FIELD_ORDER_NUMBER}] FROM ${tableName} WHERE [${dbConfig.FIELD_PRODUCTION_ID}] IN (${placeholders})`
       } else {
-        const idPlaceholders = productionIds.map(() => '?').join(', ')
-        sql = `SELECT \`${dbConfig.FIELD_PRODUCTION_ID}\`, \`${dbConfig.FIELD_ORDER_NUMBER}\` FROM \`${tableName}\` WHERE \`${dbConfig.FIELD_PRODUCTION_ID}\` IN (${idPlaceholders})`
+        const idPlaceholders = uniqueProductionIds.map(() => '?').join(', ')
+        // P0: Use DISTINCT to prevent duplicates from one-to-many relationships
+        sql = `SELECT DISTINCT \`${dbConfig.FIELD_PRODUCTION_ID}\`, \`${dbConfig.FIELD_ORDER_NUMBER}\` FROM \`${tableName}\` WHERE \`${dbConfig.FIELD_PRODUCTION_ID}\` IN (${idPlaceholders})`
       }
 
       const result = await this.dbService.query(sql, params)
@@ -205,11 +210,47 @@ export class OrderNumberResolver {
 
   /**
    * Resolve order numbers from mixed input
+   *
+   * Optimized for batch processing with deduplication:
+   * - Multiple productionIDs mapping to the same order number are treated as valid (not errors)
+   * - Returns all mappings with duplicate tracking
    */
   async resolve(inputs: string[]): Promise<OrderMapping[]> {
-    const mappings: OrderMapping[] = []
+    // P1: Deduplicate inputs at the input layer to avoid redundant queries
+    const uniqueInputs = [...new Set(inputs)]
+
+    // Separate productionIds and order numbers
+    const productionIds: string[] = []
+    const orderNumbers: string[] = []
+
+    for (const input of uniqueInputs) {
+      if (this.isOrderNumber(input)) {
+        orderNumbers.push(input)
+      } else if (this.isProductionId(input)) {
+        productionIds.push(input)
+      }
+    }
+
+    // Batch query productionId to order number mappings
+    const mappings = new Map<string, string>()
+    if (productionIds.length > 0) {
+      const batchMappings = await this.mapProductionIdsToOrderNumbers(productionIds)
+      batchMappings.forEach((orderNum, prodId) => {
+        mappings.set(prodId, orderNum)
+      })
+    }
+
+    // Build results while preserving original input order
+    // Note: Multiple productionIDs mapping to the same order number is VALID (not an error)
+    const results: OrderMapping[] = []
 
     for (const input of inputs) {
+      // Skip if this exact input was already processed
+      const alreadyProcessed = results.some((r) => r.input === input)
+      if (alreadyProcessed) {
+        continue
+      }
+
       const mapping: OrderMapping = { input, resolved: false }
 
       if (this.isOrderNumber(input)) {
@@ -217,35 +258,35 @@ export class OrderNumberResolver {
         mapping.orderNumber = input
         mapping.resolved = true
       } else if (this.isProductionId(input)) {
-        // Is a productionID, need to lookup
+        // Is a productionID, lookup from batch mappings
         mapping.productionId = input
-        try {
-          const orderNumber = await this.mapProductionIdToOrderNumber(input)
-          if (orderNumber) {
-            mapping.orderNumber = orderNumber
-            mapping.resolved = true
-          } else {
-            mapping.error = '未在数据库中找到对应的订单号'
-          }
-        } catch (error) {
-          mapping.error = error instanceof Error ? error.message : '数据库查询失败'
-          log.warn('Failed to resolve productionID', { productionId: input, error })
+        const orderNumber = mappings.get(input)
+        if (orderNumber) {
+          mapping.orderNumber = orderNumber
+          mapping.resolved = true
+        } else {
+          mapping.error = '未在数据库中找到对应的订单号'
         }
       } else {
         mapping.error = '格式不识别：既不是有效的生产订单号也不是总排号格式'
       }
 
-      mappings.push(mapping)
+      results.push(mapping)
     }
 
-    return mappings
+    return results
   }
 
   /**
    * Get valid order numbers from mappings
+   * P2: Returns deduplicated order numbers
    */
   getValidOrderNumbers(mappings: OrderMapping[]): string[] {
-    return mappings.filter((m) => m.resolved && m.orderNumber).map((m) => m.orderNumber!)
+    const validNumbers = mappings
+      .filter((m) => m.resolved && m.orderNumber)
+      .map((m) => m.orderNumber!)
+    // P2: Deduplicate before returning
+    return [...new Set(validNumbers)]
   }
 
   /**
@@ -294,5 +335,48 @@ export class OrderNumberResolver {
     }
 
     return stats
+  }
+
+  /**
+   * Get deduplication summary for logging
+   * Returns a human-readable report showing:
+   * - Input count
+   * - Unique order numbers count
+   * - Mapping details (which productionIDs map to which order numbers)
+   */
+  getDeduplicationReport(mappings: OrderMapping[]): {
+    inputCount: number
+    uniqueOrderNumbersCount: number
+    orderNumberGroups: Map<string, string[]>
+    summary: string
+  } {
+    // Group productionIDs by their resolved order number
+    const orderNumberGroups = new Map<string, string[]>()
+
+    for (const mapping of mappings) {
+      if (mapping.resolved && mapping.orderNumber) {
+        const existing = orderNumberGroups.get(mapping.orderNumber) || []
+        existing.push(mapping.input)
+        orderNumberGroups.set(mapping.orderNumber, existing)
+      }
+    }
+
+    const inputCount = mappings.length
+    const uniqueOrderNumbersCount = orderNumberGroups.size
+
+    // Build summary string
+    let summary = `输入 ${inputCount} 个总排号 → 解析为 ${uniqueOrderNumbersCount} 个唯一订单号`
+
+    if (inputCount > uniqueOrderNumbersCount) {
+      const duplicateCount = inputCount - uniqueOrderNumbersCount
+      summary += `（${duplicateCount} 个重复已合并）`
+    }
+
+    return {
+      inputCount,
+      uniqueOrderNumbersCount,
+      orderNumberGroups,
+      summary
+    }
   }
 }

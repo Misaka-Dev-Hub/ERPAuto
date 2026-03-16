@@ -125,6 +125,9 @@ export function registerExtractorHandlers(): void {
           const validOrderNumbers = resolver.getValidOrderNumbers(mappings)
           const warnings = resolver.getWarnings(mappings)
 
+          // Get deduplication report for detailed logging
+          const dedupReport = resolver.getDeduplicationReport(mappings)
+
           if (warnings.length > 0) {
             log.warn('Resolution warnings', { warnings })
           }
@@ -137,7 +140,23 @@ export function registerExtractorHandlers(): void {
           }
 
           log.info('Resolved order numbers', { count: validOrderNumbers.length })
-          sendLog(sender, 'info', `已解析 ${validOrderNumbers.length} 个有效订单号`)
+
+          // Log deduplication summary
+          sendLog(sender, 'info', dedupReport.summary)
+
+          // Log only merged mappings (where multiple productionIDs map to the same order number)
+          if (dedupReport.inputCount > dedupReport.uniqueOrderNumbersCount) {
+            sendLog(sender, 'info', '重复合并详情：')
+            dedupReport.orderNumberGroups.forEach((productionIds, orderNumber) => {
+              if (productionIds.length > 1) {
+                sendLog(
+                  sender,
+                  'info',
+                  `  ${orderNumber} ← ${productionIds.join('、')} (共 ${productionIds.length} 个总排号)`
+                )
+              }
+            })
+          }
 
           // Create auth service and login
           authService = new ErpAuthService({
