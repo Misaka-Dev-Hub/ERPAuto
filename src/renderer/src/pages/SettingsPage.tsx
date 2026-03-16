@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Settings as SettingsIcon, Save, User, Key } from 'lucide-react'
+import { showSuccess, showError } from '../stores/useAppStore'
 
 interface ErpCredentials {
   username: string
@@ -13,10 +14,6 @@ const SettingsPage: React.FC = () => {
   })
   const [isModified, setIsModified] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [message, setMessage] = useState<{
-    type: 'success' | 'error' | 'info'
-    text: string
-  } | null>(null)
 
   useEffect(() => {
     loadCredentials()
@@ -38,19 +35,14 @@ const SettingsPage: React.FC = () => {
           password: config.erp.password || ''
         })
       } else if (!response.success) {
-        showMessage('error', response.error || '加载 ERP 配置失败')
+        showError(response.error || '加载 ERP 配置失败')
       }
       setIsModified(false)
     } catch (error) {
-      showMessage('error', '加载 ERP 配置失败')
+      showError('加载 ERP 配置失败')
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const showMessage = (type: 'success' | 'error' | 'info', text: string) => {
-    setMessage({ type, text })
-    setTimeout(() => setMessage(null), 3000)
   }
 
   const handleSaveCredentials = async () => {
@@ -68,12 +60,12 @@ const SettingsPage: React.FC = () => {
 
       if (result.success && saveData?.success !== false) {
         setIsModified(false)
-        showMessage('success', 'ERP 账号密码保存成功')
+        showSuccess('ERP 账号密码保存成功')
       } else {
-        showMessage('error', result.error || saveData?.error || '保存失败')
+        showError(result.error || saveData?.error || '保存失败')
       }
     } catch (error) {
-      showMessage('error', '保存配置时发生错误')
+      showError('保存配置时发生错误')
     }
   }
 
@@ -90,18 +82,6 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div className="flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-500 mt-6">
-      {message && (
-        <div
-          className={`fixed top-5 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-[10000] text-sm font-medium transition-all ${
-            message.type === 'success'
-              ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-              : 'bg-red-50 text-red-600 border border-red-200'
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
-
       <div className="w-full max-w-xl bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="border-b border-slate-100 bg-slate-50 px-6 py-5">
           <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-800">
