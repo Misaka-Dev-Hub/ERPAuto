@@ -62,7 +62,12 @@ export interface ShouldDeleteParams {
   deleteSet: Set<string>
 }
 
-function clampNumber(value: number | undefined, fallback: number, min: number, max: number): number {
+function clampNumber(
+  value: number | undefined,
+  fallback: number,
+  min: number,
+  max: number
+): number {
   if (!Number.isFinite(value)) {
     return fallback
   }
@@ -281,7 +286,9 @@ export class CleanerService {
       const retryResult = await this.retryFailedOrders({
         workFrame,
         popupPage,
-        failedDetails: result.details.filter((d) => d.errors.length > 0 && this.isOrderNumber(d.orderNumber)),
+        failedDetails: result.details.filter(
+          (d) => d.errors.length > 0 && this.isOrderNumber(d.orderNumber)
+        ),
         deleteSet,
         dryRun,
         onProgress: input.onProgress
@@ -482,7 +489,12 @@ export class CleanerService {
 
       onProgress?.(
         `开始处理订单: ${orderNumber}`,
-        this.calculateProgress(progressState.completedOrders, 0, detailCount, progressState.totalOrders),
+        this.calculateProgress(
+          progressState.completedOrders,
+          0,
+          detailCount,
+          progressState.totalOrders
+        ),
         {
           currentOrderIndex: progressState.completedOrders + 1,
           totalOrders: progressState.totalOrders,
@@ -530,13 +542,17 @@ export class CleanerService {
             progressState.totalOrders
           )
 
-          onProgress?.(`订单 ${orderNumber} - 物料 ${materialIdx}/${detailCount}: ${materialName}`, progress, {
-            currentOrderIndex: progressState.completedOrders + 1,
-            totalOrders: progressState.totalOrders,
-            currentMaterialIndex: materialIdx,
-            totalMaterialsInOrder: detailCount,
-            currentOrderNumber: orderNumber
-          })
+          onProgress?.(
+            `订单 ${orderNumber} - 物料 ${materialIdx}/${detailCount}: ${materialName}`,
+            progress,
+            {
+              currentOrderIndex: progressState.completedOrders + 1,
+              totalOrders: progressState.totalOrders,
+              currentMaterialIndex: materialIdx,
+              totalMaterialsInOrder: detailCount,
+              currentOrderNumber: orderNumber
+            }
+          )
 
           if (deleteSet.has(materialCode)) {
             const shouldDelete = this.shouldDeleteMaterial({
@@ -610,7 +626,10 @@ export class CleanerService {
 
   private async extractSourceOrderNumber(frame: FrameLocator): Promise<string> {
     try {
-      const sourceOrder = await frame.locator('.vsourcebillcode .code-detail-link').first().innerText()
+      const sourceOrder = await frame
+        .locator('.vsourcebillcode .code-detail-link')
+        .first()
+        .innerText()
       const match = sourceOrder.match(/SC\d{14}/)
       return match ? match[0] : sourceOrder.trim()
     } catch {
@@ -650,7 +669,10 @@ export class CleanerService {
     }
   }
 
-  private async getInputValue(container: FrameLocator | Locator, labelRegex: RegExp): Promise<string> {
+  private async getInputValue(
+    container: FrameLocator | Locator,
+    labelRegex: RegExp
+  ): Promise<string> {
     try {
       return await container
         .locator('div')

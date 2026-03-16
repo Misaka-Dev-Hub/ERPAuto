@@ -140,11 +140,7 @@ describe('Cleaner Service (Unit)', () => {
   describe('batch and concurrency helpers', () => {
     it('should split orders into batches', () => {
       const batches = createBatches(['A', 'B', 'C', 'D', 'E'], 2)
-      expect(batches).toEqual([
-        ['A', 'B'],
-        ['C', 'D'],
-        ['E']
-      ])
+      expect(batches).toEqual([['A', 'B'], ['C', 'D'], ['E']])
     })
 
     it('should identify missing orders', () => {

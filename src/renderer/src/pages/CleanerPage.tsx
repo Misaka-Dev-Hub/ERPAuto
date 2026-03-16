@@ -465,7 +465,9 @@ const CleanerPage: React.FC = () => {
                     <div className="border-t border-slate-100 pt-3 space-y-3">
                       <div>
                         <div className="text-sm font-medium text-slate-800">批量查询数量</div>
-                        <div className="text-xs text-slate-500 mt-0.5">每批查询订单数，范围 1-100</div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          每批查询订单数，范围 1-100
+                        </div>
                         <input
                           type="number"
                           min={1}
