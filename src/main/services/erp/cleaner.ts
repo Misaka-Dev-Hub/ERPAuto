@@ -7,6 +7,28 @@ import { createLogger } from '../logger'
 
 const log = createLogger('CleanerService')
 
+class Mutex {
+  private queue: (() => void)[] = []
+  private locked = false
+
+  async acquire(): Promise<void> {
+    if (!this.locked) {
+      this.locked = true
+      return
+    }
+    return new Promise((resolve) => this.queue.push(resolve))
+  }
+
+  release(): void {
+    if (this.queue.length > 0) {
+      const resolve = this.queue.shift()
+      resolve?.()
+    } else {
+      this.locked = false
+    }
+  }
+}
+
 interface RetryResult {
   retriedOrders: number
   successfulRetries: number
@@ -40,6 +62,7 @@ export interface ShouldDeleteParams {
 export class CleanerService {
   private authService: ErpAuthService
   private dryRun: boolean
+  private uiMutex = new Mutex()
 
   constructor(authService: ErpAuthService, options: CleanerOptions = {}) {
     this.authService = authService
@@ -134,45 +157,62 @@ export class CleanerService {
       // Setup query interface
       await this.setupQueryInterface(workFrame)
 
-      // Process each order
-      for (let i = 0; i < totalOrders; i++) {
-        const orderNumber = input.orderNumbers[i]
+      const BATCH_SIZE = 100
 
-        try {
-          log.debug('Processing order', { orderNumber, index: i + 1, total: totalOrders })
-          const detail = await this.processOrder({
-            workFrame,
-            popupPage,
-            orderNumber,
-            orderIndex: i,
-            totalOrders,
-            deleteSet,
-            dryRun: input.dryRun ?? this.dryRun,
-            onProgress: input.onProgress
+      // Process orders in batches
+      for (let batchStart = 0; batchStart < totalOrders; batchStart += BATCH_SIZE) {
+        const batchOrders = input.orderNumbers.slice(batchStart, batchStart + BATCH_SIZE)
+        const batchOrderString = batchOrders.join(',')
+
+        // Query the batch of orders
+        const textbox = workFrame.getByRole('textbox', { name: '生产订单号' })
+        await textbox.fill(batchOrderString)
+        await workFrame.locator('.search-component-searchBtn').click()
+
+        // Wait for results to load
+        await this.waitForLoading(workFrame)
+
+        // Process batch elements in parallel
+        await Promise.all(
+          batchOrders.map(async (orderNumber, batchIndex) => {
+            const globalIndex = batchStart + batchIndex
+            try {
+              log.debug('Processing order', { orderNumber, index: globalIndex + 1, total: totalOrders })
+              const detail = await this.processOrder({
+                workFrame,
+                popupPage,
+                orderNumber,
+                orderIndex: globalIndex,
+                totalOrders,
+                deleteSet,
+                dryRun: input.dryRun ?? this.dryRun,
+                onProgress: input.onProgress
+              })
+
+              result.details.push(detail)
+              result.ordersProcessed++
+              result.materialsDeleted += detail.materialsDeleted
+              result.materialsSkipped += detail.materialsSkipped
+            } catch (error) {
+              const message = error instanceof Error ? error.message : 'Unknown error'
+              log.error('Order processing failed', { orderNumber, error: message })
+              result.errors.push(`Order ${orderNumber}: ${message}`)
+
+              // Add error detail
+              result.details.push({
+                orderNumber,
+                materialsDeleted: 0,
+                materialsSkipped: 0,
+                errors: [message],
+                skippedMaterials: [],
+                retryCount: 0,
+                retryAttempts: [],
+                retriedAt: undefined,
+                retrySuccess: false
+              })
+            }
           })
-
-          result.details.push(detail)
-          result.ordersProcessed++
-          result.materialsDeleted += detail.materialsDeleted
-          result.materialsSkipped += detail.materialsSkipped
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error'
-          log.error('Order processing failed', { orderNumber, error: message })
-          result.errors.push(`Order ${orderNumber}: ${message}`)
-
-          // Add error detail
-          result.details.push({
-            orderNumber,
-            materialsDeleted: 0,
-            materialsSkipped: 0,
-            errors: [message],
-            skippedMaterials: [],
-            retryCount: 0,
-            retryAttempts: [],
-            retriedAt: undefined,
-            retrySuccess: false
-          })
-        }
+        )
       }
 
       // Close popup page
@@ -314,24 +354,67 @@ export class CleanerService {
       retrySuccess: false
     }
 
-    // Query the order (Python lines 187-189)
-    const textbox = workFrame.getByRole('textbox', { name: '生产订单号' })
-    await textbox.fill(orderNumber)
-    await workFrame.locator('.search-component-searchBtn').click()
+    // Find the row for this specific order
+    const row = workFrame.locator('tr').filter({ hasText: orderNumber }).first()
 
-    // Wait for loading (Python lines 192-197)
-    await this.waitForLoading(workFrame)
+    // Use mutex to serialize popup opening
+    await this.uiMutex.acquire()
 
-    // Click "更多" to open menu (Python line 200)
-    await workFrame.locator('#hot-key-head_list').getByText('更多').click()
+    let detailPage: Page
+    try {
+      // Click "更多" on the specific row
+      await row.locator('.row-more').click()
 
-    // Click "备料计划" and expect popup (Python lines 201-203)
-    const detailPagePromise = popupPage.waitForEvent('popup')
-    await workFrame.getByText('备料计划').click()
-    const detailPage = await detailPagePromise
+      // Click "备料计划" and expect popup
+      const detailPagePromise = popupPage.waitForEvent('popup')
+      await workFrame.getByText('备料计划').click()
+      detailPage = await detailPagePromise
+    } finally {
+      this.uiMutex.release()
+    }
+
+    return this.processOrderDetail({
+      detailPage,
+      orderNumber,
+      orderIndex,
+      totalOrders,
+      deleteSet,
+      dryRun,
+      onProgress,
+      detail // pass initial detail
+    })
+  }
+
+  /**
+   * Process the detail popup for a single order
+   */
+  private async processOrderDetail(params: {
+    detailPage: Page
+    orderNumber: string
+    orderIndex: number
+    totalOrders: number
+    deleteSet: Set<string>
+    dryRun: boolean
+    onProgress?: (
+      message: string,
+      progress?: number,
+      extra?: Partial<import('../../types/cleaner.types').CleanerProgress>
+    ) => void
+    detail: OrderCleanDetail
+  }): Promise<OrderCleanDetail> {
+    const {
+      detailPage,
+      orderNumber,
+      orderIndex,
+      totalOrders,
+      deleteSet,
+      dryRun,
+      onProgress,
+      detail
+    } = params
 
     try {
-      // Navigate nested frames in detail page (Python lines 206-207)
+      // Navigate nested frames in detail page
       const detailMainFrame = detailPage.locator('#forwardFrame')
       const dFrame = await detailMainFrame.contentFrame()
 
@@ -496,6 +579,43 @@ export class CleanerService {
   }
 
   /**
+   * Helper to process a single order, wrapping processOrder with a search step.
+   * Useful for retries.
+   */
+  private async processSingleOrderWithSearch(params: {
+    workFrame: FrameLocator
+    popupPage: Page
+    orderNumber: string
+    orderIndex: number
+    totalOrders: number
+    deleteSet: Set<string>
+    dryRun: boolean
+    onProgress?: (
+      message: string,
+      progress?: number,
+      extra?: Partial<import('../../types/cleaner.types').CleanerProgress>
+    ) => void
+  }): Promise<OrderCleanDetail> {
+    const { workFrame, orderNumber } = params
+
+    // Use mutex to prevent search conflict
+    await this.uiMutex.acquire()
+    try {
+      // Query the order
+      const textbox = workFrame.getByRole('textbox', { name: '生产订单号' })
+      await textbox.fill(orderNumber)
+      await workFrame.locator('.search-component-searchBtn').click()
+
+      // Wait for loading
+      await this.waitForLoading(workFrame)
+    } finally {
+      this.uiMutex.release()
+    }
+
+    return this.processOrder(params)
+  }
+
+  /**
    * Wait for loading overlay to disappear
    * Reference: Python lines 192-197
    */
@@ -632,7 +752,7 @@ export class CleanerService {
           }
 
           // Re-run the order processing
-          await this.processOrder({
+          await this.processSingleOrderWithSearch({
             workFrame,
             popupPage,
             orderNumber,
@@ -640,7 +760,11 @@ export class CleanerService {
             totalOrders: failedDetails.length,
             deleteSet,
             dryRun,
-            onProgress: (message, progress, extra) => {
+            onProgress: (
+              message: string,
+              progress?: number,
+              extra?: Partial<import('../../types/cleaner.types').CleanerProgress>
+            ) => {
               onProgress?.(
                 `[重试 ${attempt}/${MAX_RETRIES}] ${message}`,
                 progress,
