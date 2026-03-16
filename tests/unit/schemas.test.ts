@@ -138,6 +138,34 @@ describe('Cleaner Schema', () => {
 
       expect(result.success).toBe(false)
     })
+
+    it('should apply defaults for queryBatchSize and processConcurrency', () => {
+      const input = {
+        orderNumbers: ['SC12345678901234'],
+        materialCodes: ['MAT001'],
+        dryRun: false
+      }
+
+      const result = CleanerInputSchema.safeParse(input)
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.queryBatchSize).toBe(100)
+        expect(result.data.processConcurrency).toBe(1)
+      }
+    })
+
+    it('should reject out-of-range processConcurrency', () => {
+      const input = {
+        orderNumbers: ['SC12345678901234'],
+        materialCodes: ['MAT001'],
+        dryRun: false,
+        processConcurrency: 21
+      }
+
+      const result = CleanerInputSchema.safeParse(input)
+      expect(result.success).toBe(false)
+    })
   })
 
   describe('validateCleanerInput', () => {

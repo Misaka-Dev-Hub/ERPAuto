@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { CleanerService } from '../../src/main/services/erp/cleaner'
+import {
+  createBatches,
+  getMissingOrders,
+  runWithConcurrency
+} from '../../src/main/services/erp/cleaner'
 import type { ShouldDeleteParams } from '../../src/main/services/erp/cleaner'
 
 describe('Cleaner Service (Unit)', () => {
@@ -130,6 +134,37 @@ describe('Cleaner Service (Unit)', () => {
           deleteSet: new Set(['TEST001'])
         })
       ).toBe(false)
+    })
+  })
+
+  describe('batch and concurrency helpers', () => {
+    it('should split orders into batches', () => {
+      const batches = createBatches(['A', 'B', 'C', 'D', 'E'], 2)
+      expect(batches).toEqual([
+        ['A', 'B'],
+        ['C', 'D'],
+        ['E']
+      ])
+    })
+
+    it('should identify missing orders', () => {
+      const missing = getMissingOrders(['SC1', 'SC2', 'SC3'], new Set(['SC1', 'SC3']))
+      expect(missing).toEqual(['SC2'])
+    })
+
+    it('should respect concurrency limit', async () => {
+      const items = [1, 2, 3, 4, 5, 6]
+      let running = 0
+      let peak = 0
+      await runWithConcurrency(items, 2, async () => {
+        running += 1
+        peak = Math.max(peak, running)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        running -= 1
+        return true
+      })
+
+      expect(peak).toBeLessThanOrEqual(2)
     })
   })
 })

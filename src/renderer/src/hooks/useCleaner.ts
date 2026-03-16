@@ -78,6 +78,18 @@ export function useCleaner() {
     const saved = sessionStorage.getItem('cleaner_headless')
     return saved ? saved === 'true' : true
   })
+  const [queryBatchSize, setQueryBatchSize] = useState(() => {
+    const saved = sessionStorage.getItem('cleaner_queryBatchSize')
+    const value = saved ? Number(saved) : 100
+    if (!Number.isFinite(value)) return 100
+    return Math.min(100, Math.max(1, Math.trunc(value)))
+  })
+  const [processConcurrency, setProcessConcurrency] = useState(() => {
+    const saved = sessionStorage.getItem('cleaner_processConcurrency')
+    const value = saved ? Number(saved) : 1
+    if (!Number.isFinite(value)) return 1
+    return Math.min(20, Math.max(1, Math.trunc(value)))
+  })
   const [showSettingsMenu, setShowSettingsMenu] = useState(false)
 
   // Inline editing state for manager field (Admin only)
@@ -169,6 +181,14 @@ export function useCleaner() {
   useEffect(() => {
     sessionStorage.setItem('cleaner_headless', headless.toString())
   }, [headless])
+
+  useEffect(() => {
+    sessionStorage.setItem('cleaner_queryBatchSize', queryBatchSize.toString())
+  }, [queryBatchSize])
+
+  useEffect(() => {
+    sessionStorage.setItem('cleaner_processConcurrency', processConcurrency.toString())
+  }, [processConcurrency])
 
   useEffect(() => {
     sessionStorage.setItem('cleaner_validationMode', valMode)
@@ -419,7 +439,9 @@ export function useCleaner() {
         orderNumbers: orderNumberList,
         materialCodes: materialCodeList,
         dryRun,
-        headless
+        headless,
+        queryBatchSize,
+        processConcurrency
       })
       const cleanerRunData = response.success ? (response.data as any) : null
 
@@ -503,6 +525,10 @@ export function useCleaner() {
     setIsTypeDialogOpen,
     headless,
     setHeadless,
+    queryBatchSize,
+    setQueryBatchSize,
+    processConcurrency,
+    setProcessConcurrency,
     showSettingsMenu,
     setShowSettingsMenu,
     filteredResults,

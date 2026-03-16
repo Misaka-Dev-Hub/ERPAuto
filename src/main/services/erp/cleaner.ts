@@ -7,10 +7,41 @@ import { createLogger } from '../logger'
 
 const log = createLogger('CleanerService')
 
+const DEFAULT_QUERY_BATCH_SIZE = 100
+const MAX_QUERY_BATCH_SIZE = 100
+const DEFAULT_PROCESS_CONCURRENCY = 1
+const MAX_PROCESS_CONCURRENCY = 20
+
 interface RetryResult {
   retriedOrders: number
   successfulRetries: number
   updatedDetails: OrderCleanDetail[]
+}
+
+interface ProgressState {
+  completedOrders: number
+  totalOrders: number
+}
+
+class AsyncMutex {
+  private queue: Promise<void> = Promise.resolve()
+
+  async runExclusive<T>(task: () => Promise<T>): Promise<T> {
+    let release!: () => void
+    const next = new Promise<void>((resolve) => {
+      release = resolve
+    })
+
+    const previous = this.queue
+    this.queue = this.queue.then(() => next)
+
+    await previous
+    try {
+      return await task()
+    } finally {
+      release()
+    }
+  }
 }
 
 /**
@@ -31,11 +62,53 @@ export interface ShouldDeleteParams {
   deleteSet: Set<string>
 }
 
+function clampNumber(value: number | undefined, fallback: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback
+  }
+  return Math.min(max, Math.max(min, Math.trunc(value ?? fallback)))
+}
+
+export function createBatches<T>(items: T[], batchSize: number): T[][] {
+  const batches: T[][] = []
+  for (let i = 0; i < items.length; i += batchSize) {
+    batches.push(items.slice(i, i + batchSize))
+  }
+  return batches
+}
+
+export function getMissingOrders(inputOrders: string[], processedOrders: Set<string>): string[] {
+  const uniqueInputOrders = Array.from(new Set(inputOrders))
+  return uniqueInputOrders.filter((order) => !processedOrders.has(order))
+}
+
+export async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  const limit = Math.max(1, Math.trunc(concurrency))
+  let cursor = 0
+
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const current = cursor
+      cursor += 1
+      if (current >= items.length) {
+        return
+      }
+      results[current] = await worker(items[current], current)
+    }
+  })
+
+  await Promise.all(runners)
+  return results
+}
+
 /**
  * ERP Cleaner Service
  * Deletes specified materials from production orders in ERP system
- *
- * Reference: playwrite/utils/discrete_material_plan_cleaner.py
  */
 export class CleanerService {
   private authService: ErpAuthService
@@ -55,27 +128,18 @@ export class CleanerService {
 
   /**
    * Determine if a material should be deleted
-   * Reference: Python lines 284-406
-   *
-   * Deletion conditions:
-   * 1. Material code must be in the delete set
-   * 2. Row number must NOT be in range 7000-7999
-   * 3. Pending quantity must be empty
    */
   shouldDeleteMaterial(params: ShouldDeleteParams): boolean {
     const { rowNumber, pendingQty, materialCode, deleteSet } = params
 
-    // Check if material is in delete list
     if (!deleteSet.has(materialCode)) {
       return false
     }
 
-    // Check row number range (7000-7999 are protected)
     if (rowNumber >= 7000 && rowNumber < 8000) {
       return false
     }
 
-    // Check pending quantity (must be empty)
     if (pendingQty && pendingQty.trim() !== '') {
       return false
     }
@@ -98,10 +162,6 @@ export class CleanerService {
     return '未知原因'
   }
 
-  /**
-   * Execute the cleaning process
-   * Reference: Python clean() method lines 456-525
-   */
   async clean(input: CleanerInput): Promise<CleanerResult> {
     const result: CleanerResult = {
       ordersProcessed: 0,
@@ -115,90 +175,121 @@ export class CleanerService {
 
     const totalOrders = input.orderNumbers.length
     const dryRun = input.dryRun ?? this.dryRun
+    const queryBatchSize = clampNumber(
+      input.queryBatchSize,
+      DEFAULT_QUERY_BATCH_SIZE,
+      1,
+      MAX_QUERY_BATCH_SIZE
+    )
+    const processConcurrency = clampNumber(
+      input.processConcurrency,
+      DEFAULT_PROCESS_CONCURRENCY,
+      1,
+      MAX_PROCESS_CONCURRENCY
+    )
 
     log.info('Starting cleaner', {
       totalOrders,
       materialCount: input.materialCodes.length,
-      dryRun
+      dryRun,
+      queryBatchSize,
+      processConcurrency
     })
 
-    // Create delete set for O(1) lookup
     const deleteSet = new Set(input.materialCodes)
+
+    let popupPage: Page | null = null
 
     try {
       const session = this.authService.getSession()
+      const navigation = await this.navigateToCleanerPage(session)
+      popupPage = navigation.popupPage
+      const { workFrame } = navigation
 
-      // Navigate to cleaner page
-      const { popupPage, workFrame } = await this.navigateToCleanerPage(session)
-
-      // Setup query interface
       await this.setupQueryInterface(workFrame)
 
-      // Process each order
-      for (let i = 0; i < totalOrders; i++) {
-        const orderNumber = input.orderNumbers[i]
+      const orderBatches = createBatches(input.orderNumbers, queryBatchSize)
+      const popupMutex = new AsyncMutex()
+      const progressState: ProgressState = {
+        completedOrders: 0,
+        totalOrders
+      }
 
-        try {
-          log.debug('Processing order', { orderNumber, index: i + 1, total: totalOrders })
-          const detail = await this.processOrder({
-            workFrame,
-            popupPage,
-            orderNumber,
-            orderIndex: i,
-            totalOrders,
-            deleteSet,
-            dryRun: input.dryRun ?? this.dryRun,
-            onProgress: input.onProgress
+      for (let batchIndex = 0; batchIndex < orderBatches.length; batchIndex++) {
+        const batchOrders = orderBatches[batchIndex]
+
+        log.info('Processing cleaner batch', {
+          batchIndex: batchIndex + 1,
+          totalBatches: orderBatches.length,
+          batchSize: batchOrders.length
+        })
+
+        await this.queryOrders(workFrame, batchOrders)
+        await this.waitForLoading(workFrame)
+
+        const rows = workFrame.locator('tbody tr')
+        const rowCount = await rows.count()
+        const rowIndexes = Array.from({ length: rowCount }, (_, i) => i)
+
+        const processedOrderNumbersInBatch = new Set<string>()
+
+        await runWithConcurrency(rowIndexes, processConcurrency, async (rowIndex) => {
+          const openedDetailPage = await popupMutex.runExclusive(async () => {
+            return await this.openDetailPageFromRow(workFrame, popupPage!, rowIndex)
           })
+
+          let detail: OrderCleanDetail
+          try {
+            detail = await this.processDetailPage({
+              detailPage: openedDetailPage,
+              deleteSet,
+              dryRun,
+              progressState,
+              onProgress: input.onProgress
+            })
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error'
+            detail = this.createErrorDetail(`BATCH_ROW_${rowIndex + 1}`, message)
+          } finally {
+            progressState.completedOrders += 1
+          }
 
           result.details.push(detail)
-          result.ordersProcessed++
+
+          if (detail.errors.length > 0) {
+            result.errors.push(`Order ${detail.orderNumber}: ${detail.errors.join('; ')}`)
+            return
+          }
+
+          result.ordersProcessed += 1
           result.materialsDeleted += detail.materialsDeleted
           result.materialsSkipped += detail.materialsSkipped
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error'
-          log.error('Order processing failed', { orderNumber, error: message })
-          result.errors.push(`Order ${orderNumber}: ${message}`)
 
-          // Add error detail
-          result.details.push({
-            orderNumber,
-            materialsDeleted: 0,
-            materialsSkipped: 0,
-            errors: [message],
-            skippedMaterials: [],
-            retryCount: 0,
-            retryAttempts: [],
-            retriedAt: undefined,
-            retrySuccess: false
-          })
+          if (this.isOrderNumber(detail.orderNumber)) {
+            processedOrderNumbersInBatch.add(detail.orderNumber)
+          }
+        })
+
+        const missingOrders = getMissingOrders(batchOrders, processedOrderNumbersInBatch)
+        for (const missingOrder of missingOrders) {
+          const missingMessage = '订单未出现在查询结果中'
+          result.errors.push(`Order ${missingOrder}: ${missingMessage}`)
+          result.details.push(this.createErrorDetail(missingOrder, missingMessage))
         }
       }
 
-      // Close popup page
-      await popupPage.close()
-      log.info('Cleaner completed', {
-        ordersProcessed: result.ordersProcessed,
-        materialsDeleted: result.materialsDeleted,
-        materialsSkipped: result.materialsSkipped,
-        errorCount: result.errors.length
-      })
-
-      // Retry failed orders
       const retryResult = await this.retryFailedOrders({
         workFrame,
         popupPage,
-        failedDetails: result.details.filter((d) => d.errors.length > 0),
+        failedDetails: result.details.filter((d) => d.errors.length > 0 && this.isOrderNumber(d.orderNumber)),
         deleteSet,
         dryRun,
         onProgress: input.onProgress
       })
 
-      // Merge retry results
       result.retriedOrders = retryResult.retriedOrders
       result.successfulRetries = retryResult.successfulRetries
 
-      // Update details with retry information
       retryResult.updatedDetails.forEach((updatedDetail) => {
         const index = result.details.findIndex((d) => d.orderNumber === updatedDetail.orderNumber)
         if (index !== -1) {
@@ -206,40 +297,47 @@ export class CleanerService {
         }
       })
 
-      // Clear errors for successfully retried orders
       const successfulRetryOrders = new Set(
         retryResult.updatedDetails.filter((d) => d.retrySuccess).map((d) => d.orderNumber)
       )
       result.errors = result.errors.filter(
         (err) => !successfulRetryOrders.has(err.split(':')[0].replace('Order ', ''))
       )
+
+      log.info('Cleaner completed', {
+        ordersProcessed: result.ordersProcessed,
+        materialsDeleted: result.materialsDeleted,
+        materialsSkipped: result.materialsSkipped,
+        errorCount: result.errors.length
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
       log.error('Cleaner failed', { error: message })
       result.errors.push(`Clean failed: ${message}`)
+    } finally {
+      if (popupPage) {
+        try {
+          await popupPage.close()
+        } catch {
+          // Ignore close errors
+        }
+      }
     }
 
     return result
   }
 
-  /**
-   * Navigate to the discrete production order maintenance page
-   * Reference: Python lines 476-486
-   */
   async navigateToCleanerPage(
     session: ErpSession
   ): Promise<{ popupPage: Page; workFrame: FrameLocator }> {
     const { page, mainFrame } = session
 
-    // Click menu icon (Python line 476)
     await mainFrame.locator('i').first().click()
 
-    // Click discrete production order menu item and expect popup (Python lines 477-479)
     const popupPromise = page.waitForEvent('popup')
     await mainFrame.getByTitle('离散生产订单维护', { exact: true }).first().click()
     const popupPage = await popupPromise
 
-    // Get nested frame structure (Python lines 482-486)
     const forwardFrameLocator = popupPage.locator('#forwardFrame')
     const fFrame = forwardFrameLocator.contentFrame()
 
@@ -247,91 +345,99 @@ export class CleanerService {
     await innerFrameLocator.waitFor({ state: 'visible', timeout: 30000 })
     const workFrame = innerFrameLocator.contentFrame()
 
-    // Wait for hot-key-head_list to be visible (Python line 484-486)
     await workFrame.locator('#hot-key-head_list').waitFor({ state: 'visible', timeout: 30000 })
 
     return { popupPage, workFrame }
   }
 
-  /**
-   * Setup query interface
-   * Reference: Python setup_query_interface() lines 445-454
-   */
   private async setupQueryInterface(innerFrame: FrameLocator): Promise<void> {
-    // Click search icon (Python line 447)
     await innerFrame.locator('.search-name-wrapper > .iconfont').click()
-
-    // Click "订单号查询" menu item (Python line 448)
     await innerFrame.getByText('订单号查询').click()
-
-    // Click "全部" tab (Python line 449)
     await innerFrame.getByRole('tab', { name: '全部' }).click()
 
-    // Set limit to 5000 (Python lines 451-454)
     const inputEl = innerFrame.locator('#rc_select_0')
     await inputEl.fill('5000')
     await inputEl.press('Enter')
   }
 
-  /**
-   * Process a single order
-   * Reference: Python process_order() lines 171-443
-   */
-  private async processOrder(params: {
-    workFrame: FrameLocator
+  private async queryOrders(workFrame: FrameLocator, orderNumbers: string[]): Promise<void> {
+    const textbox = workFrame.getByRole('textbox', { name: '生产订单号' })
+    await textbox.fill(orderNumbers.join(','))
+    await workFrame.locator('.search-component-searchBtn').click()
+  }
+
+  private async openDetailPageFromRow(
+    workFrame: FrameLocator,
+    popupPage: Page,
+    rowIndex: number
+  ): Promise<Page> {
+    const row = workFrame.locator('tbody tr').nth(rowIndex)
+    await row.waitFor({ state: 'visible', timeout: 15000 })
+
+    const moreButton = row.locator('a.row-more').first()
+    await moreButton.scrollIntoViewIfNeeded()
+
+    const detailPagePromise = popupPage.waitForEvent('popup')
+    await moreButton.click()
+    await this.clickMaterialPlanMenu(workFrame)
+
+    return await detailPagePromise
+  }
+
+  private async openDetailPageFromCurrentQuery(
+    workFrame: FrameLocator,
     popupPage: Page
-    orderNumber: string
-    orderIndex: number
-    totalOrders: number
+  ): Promise<Page> {
+    const firstRow = workFrame.locator('tbody tr').first()
+    await firstRow.waitFor({ state: 'visible', timeout: 10000 })
+
+    const moreButton = firstRow.locator('a.row-more').first()
+    const detailPagePromise = popupPage.waitForEvent('popup')
+    await moreButton.click()
+    await this.clickMaterialPlanMenu(workFrame)
+
+    return await detailPagePromise
+  }
+
+  private async clickMaterialPlanMenu(workFrame: FrameLocator): Promise<void> {
+    const candidates = [
+      workFrame.locator('li:visible, a:visible, span:visible, div:visible').filter({
+        hasText: /^备料计划$/
+      }),
+      workFrame.getByRole('menuitem', { name: '备料计划' }),
+      workFrame.getByText('备料计划', { exact: true }),
+      workFrame.getByText('备料计划')
+    ]
+
+    for (const candidate of candidates) {
+      const target = candidate.last()
+      try {
+        await target.waitFor({ state: 'visible', timeout: 2000 })
+        await target.click()
+        return
+      } catch {
+        // Try next locator candidate
+      }
+    }
+
+    throw new Error('无法定位“备料计划”菜单项（可能菜单结构已变化）')
+  }
+
+  private async processDetailPage(params: {
+    detailPage: Page
     deleteSet: Set<string>
     dryRun: boolean
+    progressState: ProgressState
+    expectedOrderNumber?: string
     onProgress?: (
       message: string,
       progress?: number,
       extra?: Partial<import('../../types/cleaner.types').CleanerProgress>
     ) => void
   }): Promise<OrderCleanDetail> {
-    const {
-      workFrame,
-      popupPage,
-      orderNumber,
-      orderIndex,
-      totalOrders,
-      deleteSet,
-      dryRun,
-      onProgress
-    } = params
-
-    const detail: OrderCleanDetail = {
-      orderNumber,
-      materialsDeleted: 0,
-      materialsSkipped: 0,
-      errors: [],
-      skippedMaterials: [],
-      retryCount: 0,
-      retryAttempts: [],
-      retriedAt: undefined,
-      retrySuccess: false
-    }
-
-    // Query the order (Python lines 187-189)
-    const textbox = workFrame.getByRole('textbox', { name: '生产订单号' })
-    await textbox.fill(orderNumber)
-    await workFrame.locator('.search-component-searchBtn').click()
-
-    // Wait for loading (Python lines 192-197)
-    await this.waitForLoading(workFrame)
-
-    // Click "更多" to open menu (Python line 200)
-    await workFrame.locator('#hot-key-head_list').getByText('更多').click()
-
-    // Click "备料计划" and expect popup (Python lines 201-203)
-    const detailPagePromise = popupPage.waitForEvent('popup')
-    await workFrame.getByText('备料计划').click()
-    const detailPage = await detailPagePromise
+    const { detailPage, deleteSet, dryRun, progressState, expectedOrderNumber, onProgress } = params
 
     try {
-      // Navigate nested frames in detail page (Python lines 206-207)
       const detailMainFrame = detailPage.locator('#forwardFrame')
       const dFrame = await detailMainFrame.contentFrame()
 
@@ -347,47 +453,53 @@ export class CleanerService {
         throw new Error('Failed to access detail inner frame')
       }
 
-      // Wait for plan code (Python lines 210-213)
       await detailInnerFrame
         .getByText(/^离散备料计划维护：/)
         .waitFor({ state: 'visible', timeout: 30000 })
 
-      // Extract detail count (Python lines 215-218)
+      const sourceOrderNumber = await this.extractSourceOrderNumber(detailInnerFrame)
+      const orderNumber = sourceOrderNumber || expectedOrderNumber || 'UNKNOWN_ORDER'
+
+      const detail: OrderCleanDetail = {
+        orderNumber,
+        materialsDeleted: 0,
+        materialsSkipped: 0,
+        errors: [],
+        skippedMaterials: [],
+        retryCount: 0,
+        retryAttempts: [],
+        retriedAt: undefined,
+        retrySuccess: false
+      }
+
       const detailCountText = await detailInnerFrame.getByText(/^详细信息 \(\d+\)$/).innerText()
       const detailCountMatch = detailCountText.match(/\((\d+)\)/)
       const detailCount = detailCountMatch ? parseInt(detailCountMatch[1], 10) : 0
 
-      // Extract status (Python lines 220-225)
       const statusText = await detailInnerFrame.getByText(/^备料状态:.+$/).innerText()
       const statusMatch = statusText.replace(/\n/g, '').match(/备料状态:(.+)$/)
       const detailStatus = statusMatch ? statusMatch[1].trim() : ''
 
-      // Send progress for order start
       onProgress?.(
-        `开始处理订单 ${orderIndex + 1}/${totalOrders}: ${orderNumber}`,
-        ((1 + orderIndex) / (1 + totalOrders)) * 100,
+        `开始处理订单: ${orderNumber}`,
+        this.calculateProgress(progressState.completedOrders, 0, detailCount, progressState.totalOrders),
         {
-          currentOrderIndex: orderIndex + 1,
-          totalOrders,
+          currentOrderIndex: progressState.completedOrders + 1,
+          totalOrders: progressState.totalOrders,
           currentMaterialIndex: 0,
           totalMaterialsInOrder: detailCount,
           currentOrderNumber: orderNumber
         }
       )
 
-      // Process based on status (Python lines 228-441)
       if (detailStatus === '审批通过' && detailCount > 0) {
-        // Click modify button (Python line 235)
         await detailInnerFrame.getByRole('button', { name: '修改' }).click()
 
-        // Wait for save button (Python lines 238-242)
         const saveButtonLocator = detailInnerFrame.getByRole('button', { name: '保存' })
         await saveButtonLocator.waitFor({ state: 'visible', timeout: 30000 })
 
-        // Expand the form (Python line 245)
         await detailInnerFrame.getByText('展开').first().click()
 
-        // Get form elements (Python lines 247-253)
         const childForm = detailInnerFrame.locator('.card-table-side-box')
         const buttonWrapper = childForm.locator('.button-wrapper')
         const deleteRowBtn = buttonWrapper.getByRole('button', { name: '删行' })
@@ -397,11 +509,9 @@ export class CleanerService {
         let lastRowNumber = ''
         let materialIdx = 0
 
-        // Process each material row (Python lines 257-423)
         while (true) {
-          materialIdx++
+          materialIdx += 1
 
-          // Wait for row number to stabilize (Python lines 262-265)
           const currentRow = await this.getInputValue(childForm, /^行号$/)
           const rowNumInt = parseInt(currentRow, 10)
 
@@ -409,28 +519,25 @@ export class CleanerService {
             await this.delay(500)
           }
 
-          // Get material data (Python lines 267-271)
           const materialCode = await this.getInputValue(childForm, /^材料编码/)
           const materialName = await this.getInputValue(childForm, /^材料名称/)
           const pendingQty = await this.getInputValue(childForm, /^累计待发数量$/)
 
-          // Report progress using formula: (1 + i + j/Mᵢ) / (1 + N) × 100
-          // where i = orderIndex (0-based), j = materialIdx (1-based), Mᵢ = detailCount, N = totalOrders
-          const progress = ((1 + orderIndex + materialIdx / detailCount) / (1 + totalOrders)) * 100
-
-          onProgress?.(
-            `订单 ${orderIndex + 1}/${totalOrders} - 物料 ${materialIdx}/${detailCount}: ${materialName}`,
-            progress,
-            {
-              currentOrderIndex: orderIndex + 1,
-              totalOrders,
-              currentMaterialIndex: materialIdx,
-              totalMaterialsInOrder: detailCount,
-              currentOrderNumber: orderNumber
-            }
+          const progress = this.calculateProgress(
+            progressState.completedOrders,
+            materialIdx,
+            detailCount,
+            progressState.totalOrders
           )
 
-          // Check if should delete (Python lines 284-406)
+          onProgress?.(`订单 ${orderNumber} - 物料 ${materialIdx}/${detailCount}: ${materialName}`, progress, {
+            currentOrderIndex: progressState.completedOrders + 1,
+            totalOrders: progressState.totalOrders,
+            currentMaterialIndex: materialIdx,
+            totalMaterialsInOrder: detailCount,
+            currentOrderNumber: orderNumber
+          })
+
           if (deleteSet.has(materialCode)) {
             const shouldDelete = this.shouldDeleteMaterial({
               rowNumber: rowNumInt,
@@ -440,19 +547,19 @@ export class CleanerService {
             })
 
             if (shouldDelete && !dryRun) {
-              // Delete the material (Python lines 302-340)
               const oldRowNumber = currentRow
               await deleteRowBtn.click()
 
-              // Wait for row number to change (Python lines 306-324)
               const deleteSuccess = await this.waitForRowChange(childForm, oldRowNumber, 10000)
 
               if (deleteSuccess) {
-                detail.materialsDeleted++
+                detail.materialsDeleted += 1
               }
               continue
-            } else if (!shouldDelete) {
-              detail.materialsSkipped++
+            }
+
+            if (!shouldDelete) {
+              detail.materialsSkipped += 1
               const reason = this.getSkipReason({
                 rowNumber: rowNumInt,
                 pendingQty,
@@ -468,7 +575,6 @@ export class CleanerService {
             }
           }
 
-          // Move to next row (Python lines 419-423)
           const isNextEnabled = await this.isButtonEnabled(nextBtn)
           if (isNextEnabled) {
             lastRowNumber = currentRow
@@ -478,27 +584,58 @@ export class CleanerService {
           }
         }
 
-        // Collapse form (Python line 424)
         await collapseBtn.click()
 
-        // Save changes (Python lines 427-435)
         if (!dryRun && detail.materialsDeleted > 0) {
           await saveButtonLocator.click()
           await saveButtonLocator.waitFor({ state: 'hidden', timeout: 60000 })
         }
       }
+
+      return detail
     } finally {
-      // Close detail page (Python lines 442-443)
       await detailPage.close()
     }
-
-    return detail
   }
 
-  /**
-   * Wait for loading overlay to disappear
-   * Reference: Python lines 192-197
-   */
+  private calculateProgress(
+    completedOrders: number,
+    materialIdx: number,
+    detailCount: number,
+    totalOrders: number
+  ): number {
+    const materialRatio = detailCount > 0 ? materialIdx / detailCount : 0
+    return ((1 + completedOrders + materialRatio) / (1 + totalOrders)) * 100
+  }
+
+  private async extractSourceOrderNumber(frame: FrameLocator): Promise<string> {
+    try {
+      const sourceOrder = await frame.locator('.vsourcebillcode .code-detail-link').first().innerText()
+      const match = sourceOrder.match(/SC\d{14}/)
+      return match ? match[0] : sourceOrder.trim()
+    } catch {
+      return ''
+    }
+  }
+
+  private isOrderNumber(value: string): boolean {
+    return /^SC\d{14}$/.test(value)
+  }
+
+  private createErrorDetail(orderNumber: string, message: string): OrderCleanDetail {
+    return {
+      orderNumber,
+      materialsDeleted: 0,
+      materialsSkipped: 0,
+      errors: [message],
+      skippedMaterials: [],
+      retryCount: 0,
+      retryAttempts: [],
+      retriedAt: undefined,
+      retrySuccess: false
+    }
+  }
+
   private async waitForLoading(frame: FrameLocator): Promise<void> {
     const loadingLocator = frame
       .locator('div')
@@ -513,14 +650,7 @@ export class CleanerService {
     }
   }
 
-  /**
-   * Get input value by label regex
-   * Reference: Python _get_input_value() lines 141-148
-   */
-  private async getInputValue(
-    container: FrameLocator | Locator,
-    labelRegex: RegExp
-  ): Promise<string> {
+  private async getInputValue(container: FrameLocator | Locator, labelRegex: RegExp): Promise<string> {
     try {
       return await container
         .locator('div')
@@ -533,10 +663,6 @@ export class CleanerService {
     }
   }
 
-  /**
-   * Check if button is enabled
-   * Reference: Python _is_button_enabled() lines 133-139
-   */
   private async isButtonEnabled(button: Locator): Promise<boolean> {
     try {
       return await button.isEnabled()
@@ -545,10 +671,6 @@ export class CleanerService {
     }
   }
 
-  /**
-   * Wait for row number to change after deletion
-   * Reference: Python lines 306-324
-   */
   private async waitForRowChange(
     childForm: FrameLocator | Locator,
     oldRowNumber: string,
@@ -571,17 +693,10 @@ export class CleanerService {
     return false
   }
 
-  /**
-   * Delay helper
-   */
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
   }
 
-  /**
-   * Retry failed orders from the initial execution
-   * Maximum 2 retry attempts per failed order
-   */
   private async retryFailedOrders(params: {
     workFrame: FrameLocator
     popupPage: Page
@@ -610,7 +725,8 @@ export class CleanerService {
 
     const MAX_RETRIES = 2
 
-    for (const failedDetail of failedDetails) {
+    for (let detailIndex = 0; detailIndex < failedDetails.length; detailIndex++) {
+      const failedDetail = failedDetails[detailIndex]
       const orderNumber = failedDetail.orderNumber
       const retryAttempts: import('../../types/cleaner.types').RetryAttempt[] = []
 
@@ -618,28 +734,25 @@ export class CleanerService {
         try {
           log.info(`Retrying order ${orderNumber} (attempt ${attempt}/${MAX_RETRIES})`)
 
-          // Create a new detail for retry
-          const retryDetail: OrderCleanDetail = {
-            orderNumber,
-            materialsDeleted: 0,
-            materialsSkipped: 0,
-            errors: [],
-            skippedMaterials: [],
-            retryCount: attempt,
-            retryAttempts: [],
-            retriedAt: undefined,
-            retrySuccess: false
+          await this.queryOrders(workFrame, [orderNumber])
+          await this.waitForLoading(workFrame)
+
+          const rows = workFrame.locator('tbody tr')
+          const rowCount = await rows.count()
+          if (rowCount === 0) {
+            throw new Error('订单重试查询无结果')
           }
 
-          // Re-run the order processing
-          await this.processOrder({
-            workFrame,
-            popupPage,
-            orderNumber,
-            orderIndex: 0, // Not used for retry
-            totalOrders: failedDetails.length,
+          const detailPage = await this.openDetailPageFromCurrentQuery(workFrame, popupPage)
+          const retryDetail = await this.processDetailPage({
+            detailPage,
             deleteSet,
             dryRun,
+            expectedOrderNumber: orderNumber,
+            progressState: {
+              completedOrders: detailIndex,
+              totalOrders: failedDetails.length
+            },
             onProgress: (message, progress, extra) => {
               onProgress?.(
                 `[重试 ${attempt}/${MAX_RETRIES}] ${message}`,
@@ -649,18 +762,16 @@ export class CleanerService {
             }
           })
 
-          // If we reach here, retry succeeded
-          result.successfulRetries++
-          log.info(`Retry succeeded for order ${orderNumber}`)
-
-          // Merge the successful retry detail
+          result.successfulRetries += 1
           result.updatedDetails.push({
             ...retryDetail,
+            retryCount: attempt,
             retriedAt: Date.now(),
-            retrySuccess: true
+            retrySuccess: true,
+            retryAttempts
           })
-          result.retriedOrders++
-          break // Exit retry loop for this order
+          result.retriedOrders += 1
+          break
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error'
           log.warn(`Retry attempt ${attempt} failed for order ${orderNumber}: ${message}`)
@@ -672,8 +783,6 @@ export class CleanerService {
           })
 
           if (attempt === MAX_RETRIES) {
-            // All retries exhausted
-            log.error(`All retries failed for order ${orderNumber}`)
             result.updatedDetails.push({
               ...failedDetail,
               retryCount: MAX_RETRIES,
@@ -681,7 +790,7 @@ export class CleanerService {
               retriedAt: Date.now(),
               retrySuccess: false
             })
-            result.retriedOrders++
+            result.retriedOrders += 1
           }
         }
       }

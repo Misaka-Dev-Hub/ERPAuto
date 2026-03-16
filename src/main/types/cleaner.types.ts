@@ -16,6 +16,8 @@ export interface CleanerInput {
   materialCodes: string[]
   dryRun: boolean
   headless?: boolean
+  queryBatchSize?: number
+  processConcurrency?: number
   onProgress?: (message: string, progress?: number, extra?: Partial<CleanerProgress>) => void
 }
 

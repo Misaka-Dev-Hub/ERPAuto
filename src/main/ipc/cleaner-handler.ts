@@ -210,7 +210,11 @@ export function registerCleanerHandlers(): void {
             }
           }
 
-          log.info('Starting cleaning', { orderCount: validOrderNumbers.length })
+          log.info('Starting cleaning', {
+            orderCount: validOrderNumbers.length,
+            queryBatchSize: input.queryBatchSize ?? 100,
+            processConcurrency: input.processConcurrency ?? 1
+          })
           const result = await cleaner.clean(modifiedInput)
 
           if (warnings.length > 0) {
@@ -249,6 +253,8 @@ export function registerCleanerHandlers(): void {
               metadata: {
                 orderCount: validOrderNumbers.length,
                 dryRun: input.dryRun ?? false,
+                queryBatchSize: input.queryBatchSize ?? 100,
+                processConcurrency: input.processConcurrency ?? 1,
                 materialsDeleted: result.materialsDeleted,
                 materialsSkipped: result.materialsSkipped,
                 errorCount: result.errors.length
