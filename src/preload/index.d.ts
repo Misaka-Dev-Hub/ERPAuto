@@ -46,6 +46,7 @@ export interface ValidationAPI {
   validate: (request: ValidationRequest) => Promise<IpcResult<ValidationResponse>>
   setSharedProductionIds: (productionIds: string[]) => Promise<IpcResult<void>>
   getSharedProductionIds: () => Promise<IpcResult<{ productionIds: string[] }>>
+  clearSharedProductionIds: () => Promise<IpcResult<void>>
   getCleanerData: () => Promise<
     IpcResult<{
       orderNumbers: string[]
