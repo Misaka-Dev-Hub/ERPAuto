@@ -332,12 +332,17 @@ function App(): React.JSX.Element {
           </div>
 
           <div
-            className="flex items-center gap-2 text-white font-bold text-lg cursor-pointer"
+            className="flex flex-col cursor-pointer"
             onClick={() => setCurrentPage('home')}
             style={{ WebkitAppRegion: 'no-drag' } as any}
           >
-            <LayoutDashboard size={22} className="text-blue-500" />
-            <span>ERP Auto</span>
+            <div className="flex items-center gap-2 text-white font-bold text-lg">
+              <LayoutDashboard size={22} className="text-blue-500" />
+              <span>ERP Auto</span>
+            </div>
+            <span className="text-xs text-slate-400 ml-7">
+              {__APP_VERSION__}({__GIT_HASH__})
+            </span>
           </div>
         </div>
 

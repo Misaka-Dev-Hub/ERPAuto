@@ -27,7 +27,7 @@ win:
     - nsis
     - portable
 portable:
-  artifactName: ${name}-${version}-portable.${ext}
+  artifactName: ${name}-portable.${ext}
   # Portable app uses user data directory (AppData), not exe directory
   # This ensures config persists across app updates
 nsis:

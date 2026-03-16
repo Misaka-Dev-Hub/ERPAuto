@@ -10,8 +10,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev              # Start development server with hot reload
 npm run build            # Full build with type checking
 npm run build:win        # Build Windows executable
-npm run build:mac        # Build macOS DMG
-npm run build:linux      # Build Linux AppImage
 ```
 
 ### Code Quality
