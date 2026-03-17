@@ -10,6 +10,7 @@ import type { UserType, ConnectionTestResult, SaveSettingsResult } from '../type
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { ValidationError } from '../types/errors'
 import { withErrorHandling, type IpcResult } from './index'
+import type { CleanerConfig } from '../types/config.schema'
 
 const log = createLogger('SettingsHandler')
 
@@ -172,6 +173,28 @@ export function registerSettingsHandlers(): void {
           }
         }
       }, 'settings:testDbConnection')
+    }
+  )
+
+  ipcMain.handle(IPC_CHANNELS.CONFIG_GET_CLEANER, async (): Promise<IpcResult<CleanerConfig>> => {
+    return withErrorHandling(async () => {
+      const configManager = ConfigManager.getInstance()
+      const config = configManager.getConfig()
+      return config.cleaner
+    }, 'config:getCleaner')
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.CONFIG_UPDATE_CLEANER,
+    async (_event, updates: Partial<CleanerConfig>): Promise<IpcResult<CleanerConfig>> => {
+      return withErrorHandling(async () => {
+        const configManager = ConfigManager.getInstance()
+        const result = await configManager.updateConfig({ cleaner: updates as CleanerConfig })
+        if (!result.success) {
+          throw new Error(result.error)
+        }
+        return configManager.getConfig().cleaner
+      }, 'config:updateCleaner')
     }
   )
 }

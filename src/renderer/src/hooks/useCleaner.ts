@@ -78,18 +78,8 @@ export function useCleaner() {
     const saved = sessionStorage.getItem('cleaner_headless')
     return saved ? saved === 'true' : true
   })
-  const [queryBatchSize, setQueryBatchSize] = useState(() => {
-    const saved = sessionStorage.getItem('cleaner_queryBatchSize')
-    const value = saved ? Number(saved) : 100
-    if (!Number.isFinite(value)) return 100
-    return Math.min(100, Math.max(1, Math.trunc(value)))
-  })
-  const [processConcurrency, setProcessConcurrency] = useState(() => {
-    const saved = sessionStorage.getItem('cleaner_processConcurrency')
-    const value = saved ? Number(saved) : 1
-    if (!Number.isFinite(value)) return 1
-    return Math.min(20, Math.max(1, Math.trunc(value)))
-  })
+  const [queryBatchSize, setQueryBatchSize] = useState(100)
+  const [processConcurrency, setProcessConcurrency] = useState(1)
   const [showSettingsMenu, setShowSettingsMenu] = useState(false)
 
   // Inline editing state for manager field (Admin only)
@@ -174,6 +164,22 @@ export function useCleaner() {
     }
   }, [])
 
+  // Load cleaner config from config.yaml on mount
+  useEffect(() => {
+    const loadCleanerConfig = async () => {
+      try {
+        const result = await window.electron.config.getCleaner()
+        if (result.success && result.data) {
+          setQueryBatchSize(result.data.queryBatchSize)
+          setProcessConcurrency(result.data.processConcurrency)
+        }
+      } catch (err) {
+        console.error('Failed to load cleaner config:', err)
+      }
+    }
+    loadCleanerConfig()
+  }, [])
+
   useEffect(() => {
     sessionStorage.setItem('cleaner_dryRun', dryRun.toString())
   }, [dryRun])
@@ -182,13 +188,15 @@ export function useCleaner() {
     sessionStorage.setItem('cleaner_headless', headless.toString())
   }, [headless])
 
-  useEffect(() => {
-    sessionStorage.setItem('cleaner_queryBatchSize', queryBatchSize.toString())
-  }, [queryBatchSize])
-
-  useEffect(() => {
-    sessionStorage.setItem('cleaner_processConcurrency', processConcurrency.toString())
-  }, [processConcurrency])
+  const updateProcessConcurrency = async (value: number) => {
+    const clamped = Math.max(1, Math.min(20, value))
+    setProcessConcurrency(clamped)
+    try {
+      await window.electron.config.updateCleaner({ processConcurrency: clamped })
+    } catch (err) {
+      console.error('Failed to update cleaner config:', err)
+    }
+  }
 
   useEffect(() => {
     sessionStorage.setItem('cleaner_validationMode', valMode)
@@ -529,6 +537,7 @@ export function useCleaner() {
     setQueryBatchSize,
     processConcurrency,
     setProcessConcurrency,
+    updateProcessConcurrency,
     showSettingsMenu,
     setShowSettingsMenu,
     filteredResults,

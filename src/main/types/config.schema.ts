@@ -98,6 +98,15 @@ export const validationConfigSchema = z.object({
 })
 
 /**
+ * 清理配置 Schema
+ */
+export const cleanerConfigSchema = z.object({
+  queryBatchSize: z.number().int().min(1).max(100).default(100),
+  processConcurrency: z.number().int().min(1).max(20).default(1)
+})
+export type CleanerConfig = z.infer<typeof cleanerConfigSchema>
+
+/**
  * 订单号解析配置 Schema
  */
 export const orderResolutionSchema = z.object({
@@ -131,6 +140,7 @@ export const fullConfigSchema = z.object({
   paths: pathsConfigSchema,
   extraction: extractionConfigSchema,
   validation: validationConfigSchema,
+  cleaner: cleanerConfigSchema,
   orderResolution: orderResolutionSchema,
   logging: loggingConfigSchema
 })

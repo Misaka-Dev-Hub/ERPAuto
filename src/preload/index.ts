@@ -12,6 +12,7 @@ import type {
 } from '../main/types/validation.types'
 import type { IpcResult } from '../main/ipc'
 import { IPC_CHANNELS, type LogLevel } from '../shared/ipc-channels'
+import type { CleanerConfig } from '../main/types/config.schema'
 
 type ErpSettingsPayload = {
   erp?: {
@@ -193,6 +194,12 @@ const api = {
       password: string
     }): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.USER_ERP_CONFIG_TEST_CONNECTION, config),
     getAll: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.USER_ERP_CONFIG_GET_ALL)
+  },
+
+  config: {
+    getCleaner: (): Promise<IpcResult<CleanerConfig>> => invokeIpc(IPC_CHANNELS.CONFIG_GET_CLEANER),
+    updateCleaner: (updates: Partial<CleanerConfig>): Promise<IpcResult<CleanerConfig>> =>
+      invokeIpc(IPC_CHANNELS.CONFIG_UPDATE_CLEANER, updates)
   },
 
   logger: {

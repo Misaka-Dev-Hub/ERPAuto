@@ -81,6 +81,10 @@ const DEFAULT_CONFIG: FullConfig = {
     enableCrud: false,
     defaultManager: ''
   },
+  cleaner: {
+    queryBatchSize: 100,
+    processConcurrency: 1
+  },
   orderResolution: {
     tableName: '',
     productionIdField: '',
