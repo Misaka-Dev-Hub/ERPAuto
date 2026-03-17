@@ -138,6 +138,7 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
       triggerRef={triggerRef}
       isAlertDialog={isProgressing}
       disableEscapeKey={isProgressing}
+      disableBackdropClick={isProgressing}
       ariaDescribedBy={isProgressing ? 'execution-dialog-progress-desc' : undefined}
       initialFocusSelector={!isProgressing ? '.btn-report-close' : undefined}
     >
