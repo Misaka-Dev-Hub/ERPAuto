@@ -31,6 +31,7 @@
     "test:rustfs": "tsx src/main/tools/rustfs-test.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.929.0",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@tailwindcss/vite": "^4.2.1",
@@ -45,14 +46,15 @@
     "playwright": "^1.58.2",
     "playwright-core": "^1.58.2",
     "react-focus-lock": "^2.13.7",
+    "react-markdown": "^10.1.0",
     "reflect-metadata": "^0.2.2",
+    "remark-gfm": "^4.0.1",
     "typeorm": "^0.3.28",
     "uuid": "^13.0.0",
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",
     "zod": "^4.3.6",
-    "zustand": "^5.0.11",
-    "@aws-sdk/client-s3": "^3.929.0"
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",

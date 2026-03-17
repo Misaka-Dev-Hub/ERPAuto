@@ -211,6 +211,13 @@ const api = {
         timestamp: Date.now()
       })
     }
+  },
+
+  report: {
+    listAll: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.REPORT_LIST_ALL),
+    listByUser: (username: string): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.REPORT_LIST_BY_USER, username),
+    download: (key: string): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.REPORT_DOWNLOAD, key)
   }
 } as const
 

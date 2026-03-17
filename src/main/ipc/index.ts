@@ -14,6 +14,7 @@ import { registerSettingsHandlers } from './settings-handler'
 import { registerMaterialTypeHandlers } from './material-type-handler'
 import { registerUserErpConfigHandlers } from './user-erp-config-handler'
 import { registerLoggerHandlers } from './logger-handler'
+import { registerReportHandlers } from './report-handler'
 import { createLogger, logError } from '../services/logger'
 import { serializeError, sanitizeError } from '../services/logger/error-utils'
 import { getErrorMessage, getErrorCode, isBaseError } from '../types/errors'
@@ -103,5 +104,6 @@ export function registerIpcHandlers(): void {
   registerMaterialTypeHandlers()
   registerUserErpConfigHandlers()
   registerLoggerHandlers()
+  registerReportHandlers()
   log.info('All IPC handlers registered')
 }

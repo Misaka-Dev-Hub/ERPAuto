@@ -91,7 +91,12 @@ export const IPC_CHANNELS = {
   CONFIG_UPDATE_CLEANER: 'config:updateCleaner',
 
   // Logger
-  LOGGER_FORWARD: 'logger:forward'
+  LOGGER_FORWARD: 'logger:forward',
+
+  // Report
+  REPORT_LIST_ALL: 'report:listAll',
+  REPORT_LIST_BY_USER: 'report:listByUser',
+  REPORT_DOWNLOAD: 'report:download'
 } as const
 
 /**

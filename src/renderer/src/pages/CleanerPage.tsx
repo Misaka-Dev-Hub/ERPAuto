@@ -13,10 +13,12 @@ import {
   Eye,
   HardDrive,
   Settings2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  FileText
 } from 'lucide-react'
 import MaterialTypeManagementDialog from '../components/MaterialTypeManagementDialog'
 import ExecutionReportDialog from '../components/ExecutionReportDialog'
+import ReportViewerDialog from '../components/ReportViewerDialog'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { useCleaner } from '../hooks/useCleaner'
 
@@ -72,6 +74,8 @@ const CleanerPage: React.FC = () => {
     handleExportResults,
     confirmDialog
   } = useCleaner()
+
+  const [isReportViewerOpen, setIsReportViewerOpen] = React.useState(false)
 
   return (
     <div className="h-full flex flex-col xl:flex-row gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -268,6 +272,12 @@ const CleanerPage: React.FC = () => {
               className="text-xs bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded shadow-sm hover:bg-blue-100 flex items-center gap-1.5 font-medium disabled:opacity-50"
             >
               <FileSpreadsheet size={14} /> {isExporting ? '导出中...' : '导出结果'}
+            </button>
+            <button
+              onClick={() => setIsReportViewerOpen(true)}
+              className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1.5 rounded shadow-sm hover:bg-emerald-100 flex items-center gap-1.5 font-medium transition-colors"
+            >
+              <FileText size={14} /> 查看报告
             </button>
           </div>
         </div>
@@ -525,6 +535,14 @@ const CleanerPage: React.FC = () => {
         triggerRef={executeButtonRef}
         retriedOrders={reportData?.retriedOrders}
         successfulRetries={reportData?.successfulRetries}
+      />
+
+      {/* Report Viewer Dialog */}
+      <ReportViewerDialog
+        isOpen={isReportViewerOpen}
+        onClose={() => setIsReportViewerOpen(false)}
+        isAdmin={isAdmin}
+        currentUsername={currentUsername}
       />
 
       {/* Confirmation Dialog */}

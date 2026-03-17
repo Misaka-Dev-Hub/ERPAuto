@@ -168,3 +168,25 @@ export interface DatabaseAPI {
     params?: Record<string, unknown>
   ) => Promise<IpcResult<SqlServerQueryResult>>
 }
+
+/**
+ * Report service APIs
+ */
+export interface ReportAPI {
+  /**
+   * List all reports across all users (Admin only typically)
+   */
+  listAll: () => Promise<IpcResult<{ key: string; filename: string; username: string; lastModified?: Date; size?: number }[]>>
+
+  /**
+   * List reports for a specific user
+   * @param username - Username to list reports for
+   */
+  listByUser: (username: string) => Promise<IpcResult<{ key: string; filename: string; username: string; lastModified?: Date; size?: number }[]>>
+
+  /**
+   * Download a specific report by key
+   * @param key - Report object key in RustFS
+   */
+  download: (key: string) => Promise<IpcResult<string>>
+}
