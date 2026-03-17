@@ -61,6 +61,7 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
   const showProgress = isExecuting && progress
   const isProgressing = !!showProgress
 
+  // Update timer during progress
   React.useEffect(() => {
     if (!showProgress || !startTime) return
 
@@ -70,6 +71,27 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
 
     return () => clearInterval(interval)
   }, [showProgress, startTime])
+
+  // Update time when execution completes
+  React.useEffect(() => {
+    if (showProgress === false && startTime && isExecuting === false) {
+      setNow(Date.now())
+    }
+  }, [showProgress, isExecuting, startTime])
+
+  const elapsedTime = React.useMemo(() => {
+    if (!startTime) return null
+
+    const elapsedMs = now - startTime
+    const elapsedSeconds = Math.floor(elapsedMs / 1000)
+    const minutes = Math.floor(elapsedSeconds / 60)
+    const seconds = elapsedSeconds % 60
+
+    return {
+      totalSeconds: elapsedSeconds,
+      formatted: minutes > 0 ? `${minutes}分${seconds}秒` : `${seconds}秒`
+    }
+  }, [startTime, now])
 
   const estimatedTime = React.useMemo(() => {
     if (!showProgress || !startTime || !progress) return null
@@ -204,6 +226,15 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
             </div>
           )}
 
+          {elapsedTime && (
+            <div className="flex flex-col items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200 mb-2">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-600">已运行</span>
+                <span className="font-semibold text-blue-600">{elapsedTime.formatted}</span>
+              </div>
+            </div>
+          )}
+
           {estimatedTime && (
             <div className="flex flex-col items-center gap-2 p-3 bg-green-50 rounded-lg border border-green-200">
               <div className="flex items-center gap-2 text-sm">
@@ -306,6 +337,29 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
               </>
             )}
           </div>
+
+          {elapsedTime && (
+            <div className="flex items-center justify-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200 text-blue-700 text-sm mb-3">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="flex-shrink-0"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span>
+                总耗时：<span className="font-semibold">{elapsedTime.formatted}</span>
+              </span>
+            </div>
+          )}
 
           {hasErrors && (
             <div className="mt-4 pt-4 border-t border-gray-200">

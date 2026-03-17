@@ -471,9 +471,14 @@ export function useCleaner() {
       setIsRunning(false)
       setIsExecuting(false)
       setProgress(null)
-      setStartTime(null)
+      // Note: Don't clear startTime here - it's needed for the execution report dialog
+      // startTime will be reset when the dialog closes and a new execution starts
     }
   }
+
+  const resetStartTime = useCallback(() => {
+    setStartTime(null)
+  }, [])
 
   const handleExportResults = async () => {
     if (filteredResults.length === 0) {
@@ -554,6 +559,7 @@ export function useCleaner() {
     handleAssignManagerOnSelect,
     progress,
     startTime,
+    resetStartTime,
     handleValidation,
     handleCheckboxToggle,
     handleConfirmDeletion,

@@ -64,6 +64,7 @@ const CleanerPage: React.FC = () => {
     handleAssignManagerOnSelect,
     progress,
     startTime,
+    resetStartTime,
     handleValidation,
     handleCheckboxToggle,
     handleConfirmDeletion,
@@ -509,7 +510,10 @@ const CleanerPage: React.FC = () => {
       {/* Execution Report Dialog */}
       <ExecutionReportDialog
         isOpen={isReportDialogOpen}
-        onClose={() => setIsReportDialogOpen(false)}
+        onClose={() => {
+          setIsReportDialogOpen(false)
+          resetStartTime()
+        }}
         ordersProcessed={reportData?.ordersProcessed}
         materialsDeleted={reportData?.materialsDeleted}
         materialsSkipped={reportData?.materialsSkipped}
