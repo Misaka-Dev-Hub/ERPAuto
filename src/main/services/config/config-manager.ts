@@ -94,6 +94,14 @@ const DEFAULT_CONFIG: FullConfig = {
     level: 'info',
     auditRetention: 30,
     appRetention: 14
+  },
+  rustfs: {
+    enabled: false,
+    endpoint: '',
+    accessKey: '',
+    secretKey: '',
+    bucket: 'erpauto',
+    region: 'us-east-1'
   }
 }
 

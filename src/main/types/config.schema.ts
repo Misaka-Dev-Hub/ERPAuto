@@ -132,6 +132,18 @@ export const loggingConfigSchema = z.object({
 })
 
 /**
+ * RustFS 对象存储配置 Schema
+ */
+export const rustfsConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  endpoint: z.string().min(1, 'RustFS endpoint is required'),
+  accessKey: z.string().min(1, 'RustFS access key is required'),
+  secretKey: z.string().min(1, 'RustFS secret key is required'),
+  bucket: z.string().min(1, 'RustFS bucket is required'),
+  region: z.string().default('us-east-1')
+})
+
+/**
  * 完整应用配置 Schema
  */
 export const fullConfigSchema = z.object({
@@ -142,7 +154,8 @@ export const fullConfigSchema = z.object({
   validation: validationConfigSchema,
   cleaner: cleanerConfigSchema,
   orderResolution: orderResolutionSchema,
-  logging: loggingConfigSchema
+  logging: loggingConfigSchema,
+  rustfs: rustfsConfigSchema.optional()
 })
 
 /**
@@ -154,6 +167,7 @@ export type MySqlConfig = z.infer<typeof mysqlConfigSchema>
 export type SqlServerConfig = z.infer<typeof sqlServerConfigSchema>
 export type ErpSystemConfig = z.infer<typeof erpSystemConfigSchema>
 export type LoggingConfig = z.infer<typeof loggingConfigSchema>
+export type RustfsConfig = z.infer<typeof rustfsConfigSchema>
 
 /**
  * 验证并解析配置
