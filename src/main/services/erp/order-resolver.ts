@@ -132,10 +132,12 @@ export class OrderNumberResolver {
       let params: any[]
 
       if (this.dbService.type === 'sqlserver') {
-        sql = `SELECT TOP 1 [${dbConfig.FIELD_ORDER_NUMBER}] FROM ${tableName} WHERE [${dbConfig.FIELD_PRODUCTION_ID}] = @p0`
+        // 使用 COLLATE 指定不区分大小写的排序规则
+        sql = `SELECT TOP 1 [${dbConfig.FIELD_ORDER_NUMBER}] FROM ${tableName} WHERE [${dbConfig.FIELD_PRODUCTION_ID}] COLLATE SQL_Latin1_General_CP1_CI_AS = @p0`
         params = [productionId]
       } else {
-        sql = `SELECT \`${dbConfig.FIELD_ORDER_NUMBER}\` FROM \`${tableName}\` WHERE \`${dbConfig.FIELD_PRODUCTION_ID}\` = ? LIMIT 1`
+        // MySQL 默认不区分大小写，但显式使用 UPPER 确保一致性
+        sql = `SELECT \`${dbConfig.FIELD_ORDER_NUMBER}\` FROM \`${tableName}\` WHERE UPPER(\`${dbConfig.FIELD_PRODUCTION_ID}\`) = UPPER(?) LIMIT 1`
         params = [productionId]
       }
 
@@ -179,11 +181,13 @@ export class OrderNumberResolver {
       let sql: string
       if (this.dbService.type === 'sqlserver') {
         // P0: Use DISTINCT to prevent duplicates from one-to-many relationships
-        sql = `SELECT DISTINCT [${dbConfig.FIELD_PRODUCTION_ID}], [${dbConfig.FIELD_ORDER_NUMBER}] FROM ${tableName} WHERE [${dbConfig.FIELD_PRODUCTION_ID}] IN (${placeholders})`
+        // 使用 COLLATE 指定不区分大小写的排序规则
+        sql = `SELECT DISTINCT [${dbConfig.FIELD_PRODUCTION_ID}], [${dbConfig.FIELD_ORDER_NUMBER}] FROM ${tableName} WHERE [${dbConfig.FIELD_PRODUCTION_ID}] COLLATE SQL_Latin1_General_CP1_CI_AS IN (${placeholders})`
       } else {
-        const idPlaceholders = uniqueProductionIds.map(() => '?').join(', ')
+        const idPlaceholders = uniqueProductionIds.map(() => 'UPPER(?)').join(', ')
         // P0: Use DISTINCT to prevent duplicates from one-to-many relationships
-        sql = `SELECT DISTINCT \`${dbConfig.FIELD_PRODUCTION_ID}\`, \`${dbConfig.FIELD_ORDER_NUMBER}\` FROM \`${tableName}\` WHERE \`${dbConfig.FIELD_PRODUCTION_ID}\` IN (${idPlaceholders})`
+        // MySQL: 使用 UPPER 确保不区分大小写
+        sql = `SELECT DISTINCT \`${dbConfig.FIELD_PRODUCTION_ID}\`, \`${dbConfig.FIELD_ORDER_NUMBER}\` FROM \`${tableName}\` WHERE UPPER(\`${dbConfig.FIELD_PRODUCTION_ID}\`) IN (${idPlaceholders})`
       }
 
       const result = await this.dbService.query(sql, params)
@@ -232,11 +236,12 @@ export class OrderNumberResolver {
     }
 
     // Batch query productionId to order number mappings
+    // 使用小写 key 存储映射，以支持忽略大小写查找
     const mappings = new Map<string, string>()
     if (productionIds.length > 0) {
       const batchMappings = await this.mapProductionIdsToOrderNumbers(productionIds)
       batchMappings.forEach((orderNum, prodId) => {
-        mappings.set(prodId, orderNum)
+        mappings.set(prodId.toLowerCase(), orderNum)
       })
     }
 
@@ -258,9 +263,9 @@ export class OrderNumberResolver {
         mapping.orderNumber = input
         mapping.resolved = true
       } else if (this.isProductionId(input)) {
-        // Is a productionID, lookup from batch mappings
+        // Is a productionID, lookup from batch mappings (使用小写查找以忽略大小写)
         mapping.productionId = input
-        const orderNumber = mappings.get(input)
+        const orderNumber = mappings.get(input.toLowerCase())
         if (orderNumber) {
           mapping.orderNumber = orderNumber
           mapping.resolved = true
