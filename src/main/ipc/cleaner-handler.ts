@@ -7,6 +7,7 @@ import { SqlServerService } from '../services/database/sql-server'
 import { ConfigManager } from '../services/config/config-manager'
 import { ResultExporter } from '../services/excel/result-exporter'
 import { CleanerReportGenerator } from '../services/report/cleaner-report-generator'
+import { RustfsService } from '../services/rustfs'
 import { SessionManager } from '../services/user/session-manager'
 import { createLogger } from '../services/logger'
 import { logAudit } from '../services/logger/audit-logger'
@@ -262,7 +263,7 @@ export function registerCleanerHandlers(): void {
             }).catch((err) => log.warn('Failed to write audit log', { err }))
           }
 
-          // Generate report (silent, user unaware)
+          // Generate report and upload to RustFS (silent, user unaware)
           try {
             const endTime = Date.now()
             const currentUser = SessionManager.getInstance().getUserInfo()
@@ -276,6 +277,47 @@ export function registerCleanerHandlers(): void {
               endTime
             })
             log.info('Report generated', { path: reportPath })
+
+            // Upload to RustFS if enabled
+            const configManager = ConfigManager.getInstance()
+            const config = configManager.getConfig()
+
+            if (config.rustfs?.enabled && config.rustfs.endpoint) {
+              try {
+                const rustfs = new RustfsService({ config: config.rustfs })
+                const reportFileName = reportPath.split(/[\\/]/).pop() || 'report.md'
+                const storageKey = rustfs.generateReportKey(reportFileName, username)
+
+                log.info('Uploading report to RustFS', {
+                  localPath: reportPath,
+                  storageKey
+                })
+
+                const uploadResult = await rustfs.uploadFile(
+                  reportPath,
+                  storageKey,
+                  'text/markdown; charset=utf-8'
+                )
+
+                if (uploadResult.success) {
+                  log.info('Report uploaded to RustFS successfully', {
+                    key: storageKey,
+                    etag: uploadResult.etag
+                  })
+                } else {
+                  log.warn('Failed to upload report to RustFS', {
+                    error: uploadResult.error,
+                    key: storageKey
+                  })
+                }
+              } catch (rustfsError) {
+                log.error('RustFS upload failed', {
+                  error: rustfsError instanceof Error ? rustfsError.message : String(rustfsError)
+                })
+              }
+            } else {
+              log.debug('RustFS is not enabled, skipping upload')
+            }
           } catch (reportError) {
             log.warn('Failed to generate report', {
               error: reportError instanceof Error ? reportError.message : String(reportError)
