@@ -84,6 +84,12 @@ export const IPC_CHANNELS = {
   USER_ERP_CONFIG_TEST_CONNECTION: 'user-erp-config:testConnection',
   USER_ERP_CONFIG_GET_ALL: 'user-erp-config:getAll',
 
+  // Config
+  CONFIG_GET: 'config:get',
+  CONFIG_UPDATE: 'config:update',
+  CONFIG_GET_CLEANER: 'config:getCleaner',
+  CONFIG_UPDATE_CLEANER: 'config:updateCleaner',
+
   // Logger
   LOGGER_FORWARD: 'logger:forward'
 } as const

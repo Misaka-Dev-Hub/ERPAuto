@@ -28,6 +28,8 @@ interface ModalProps {
   isAlertDialog?: boolean
   /** Whether to disable escape key handling (e.g., during execution) */
   disableEscapeKey?: boolean
+  /** Whether to disable closing when clicking on backdrop (e.g., during execution) */
+  disableBackdropClick?: boolean
 }
 
 const sizeStyles: Record<string, string> = {
@@ -51,7 +53,8 @@ export function Modal({
   initialFocusSelector,
   ariaDescribedBy,
   isAlertDialog = false,
-  disableEscapeKey = false
+  disableEscapeKey = false,
+  disableBackdropClick = false
 }: ModalProps): React.JSX.Element | null {
   const dialogRef = useRef<HTMLDivElement>(null)
   const [generatedId] = useState(
@@ -87,7 +90,7 @@ export function Modal({
         {/* Backdrop */}
         <div
           className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-          onClick={onClose}
+          onClick={disableBackdropClick ? undefined : onClose}
           aria-hidden="true"
         />
 

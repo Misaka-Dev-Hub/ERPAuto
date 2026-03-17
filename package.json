@@ -27,7 +27,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
     "debug:erp-login": "tsx src/main/tools/erp-login-debug.ts",
-    "debug:config-path": "tsx src/main/tools/config-path-debug.ts"
+    "debug:config-path": "tsx src/main/tools/config-path-debug.ts",
+    "test:rustfs": "tsx src/main/tools/rustfs-test.ts"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -50,7 +51,8 @@
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",
     "zod": "^4.3.6",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.11",
+    "@aws-sdk/client-s3": "^3.929.0"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",

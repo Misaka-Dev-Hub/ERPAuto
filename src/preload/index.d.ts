@@ -21,6 +21,7 @@ import type {
 } from '../main/types/settings.types'
 import type { IpcResult } from '../main/ipc'
 import type { LogLevel } from '../shared/ipc-channels'
+import type { CleanerConfig } from '../main/types/config.schema'
 
 export interface ResolverAPI {
   resolve: (input: ResolverInput) => Promise<IpcResult<ResolverResponse>>
@@ -110,6 +111,11 @@ export interface UserErpConfigAPI {
   getAll: () => Promise<IpcResult<Array<{ username: string; erpUrl: string; erpUsername: string }>>>
 }
 
+export interface ConfigAPI {
+  getCleaner: () => Promise<IpcResult<CleanerConfig>>
+  updateCleaner: (updates: Partial<CleanerConfig>) => Promise<IpcResult<CleanerConfig>>
+}
+
 export interface LoggerAPI {
   log: (level: LogLevel, message: string, context?: Record<string, unknown>) => void
 }
@@ -137,6 +143,7 @@ declare global {
       settings: SettingsAPI
       materialType: MaterialTypeAPI
       userErpConfig: UserErpConfigAPI
+      config: ConfigAPI
       logger: LoggerAPI
     }
     api: unknown

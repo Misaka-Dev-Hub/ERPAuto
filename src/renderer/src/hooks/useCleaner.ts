@@ -78,6 +78,8 @@ export function useCleaner() {
     const saved = sessionStorage.getItem('cleaner_headless')
     return saved ? saved === 'true' : true
   })
+  const [queryBatchSize, setQueryBatchSize] = useState(100)
+  const [processConcurrency, setProcessConcurrency] = useState(1)
   const [showSettingsMenu, setShowSettingsMenu] = useState(false)
 
   // Inline editing state for manager field (Admin only)
@@ -162,6 +164,22 @@ export function useCleaner() {
     }
   }, [])
 
+  // Load cleaner config from config.yaml on mount
+  useEffect(() => {
+    const loadCleanerConfig = async () => {
+      try {
+        const result = await window.electron.config.getCleaner()
+        if (result.success && result.data) {
+          setQueryBatchSize(result.data.queryBatchSize)
+          setProcessConcurrency(result.data.processConcurrency)
+        }
+      } catch (err) {
+        console.error('Failed to load cleaner config:', err)
+      }
+    }
+    loadCleanerConfig()
+  }, [])
+
   useEffect(() => {
     sessionStorage.setItem('cleaner_dryRun', dryRun.toString())
   }, [dryRun])
@@ -169,6 +187,16 @@ export function useCleaner() {
   useEffect(() => {
     sessionStorage.setItem('cleaner_headless', headless.toString())
   }, [headless])
+
+  const updateProcessConcurrency = async (value: number) => {
+    const clamped = Math.max(1, Math.min(20, value))
+    setProcessConcurrency(clamped)
+    try {
+      await window.electron.config.updateCleaner({ processConcurrency: clamped })
+    } catch (err) {
+      console.error('Failed to update cleaner config:', err)
+    }
+  }
 
   useEffect(() => {
     sessionStorage.setItem('cleaner_validationMode', valMode)
@@ -419,7 +447,9 @@ export function useCleaner() {
         orderNumbers: orderNumberList,
         materialCodes: materialCodeList,
         dryRun,
-        headless
+        headless,
+        queryBatchSize,
+        processConcurrency
       })
       const cleanerRunData = response.success ? (response.data as any) : null
 
@@ -441,9 +471,14 @@ export function useCleaner() {
       setIsRunning(false)
       setIsExecuting(false)
       setProgress(null)
-      setStartTime(null)
+      // Note: Don't clear startTime here - it's needed for the execution report dialog
+      // startTime will be reset when the dialog closes and a new execution starts
     }
   }
+
+  const resetStartTime = useCallback(() => {
+    setStartTime(null)
+  }, [])
 
   const handleExportResults = async () => {
     if (filteredResults.length === 0) {
@@ -503,6 +538,11 @@ export function useCleaner() {
     setIsTypeDialogOpen,
     headless,
     setHeadless,
+    queryBatchSize,
+    setQueryBatchSize,
+    processConcurrency,
+    setProcessConcurrency,
+    updateProcessConcurrency,
     showSettingsMenu,
     setShowSettingsMenu,
     filteredResults,
@@ -519,6 +559,7 @@ export function useCleaner() {
     handleAssignManagerOnSelect,
     progress,
     startTime,
+    resetStartTime,
     handleValidation,
     handleCheckboxToggle,
     handleConfirmDeletion,

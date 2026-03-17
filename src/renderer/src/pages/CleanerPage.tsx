@@ -46,6 +46,8 @@ const CleanerPage: React.FC = () => {
     setIsTypeDialogOpen,
     headless,
     setHeadless,
+    processConcurrency,
+    updateProcessConcurrency,
     showSettingsMenu,
     setShowSettingsMenu,
     filteredResults,
@@ -62,6 +64,7 @@ const CleanerPage: React.FC = () => {
     handleAssignManagerOnSelect,
     progress,
     startTime,
+    resetStartTime,
     handleValidation,
     handleCheckboxToggle,
     handleConfirmDeletion,
@@ -458,6 +461,27 @@ const CleanerPage: React.FC = () => {
                         </button>
                       </div>
                     </div>
+                    <div className="border-t border-slate-100 pt-3 space-y-3">
+                      <div>
+                        <div className="text-sm font-medium text-slate-800">并行处理数量</div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          同时处理详情页数量，范围 1-20
+                        </div>
+                        <div className="mt-2 flex items-center gap-3">
+                          <input
+                            type="range"
+                            min={1}
+                            max={20}
+                            value={processConcurrency}
+                            onChange={(e) => updateProcessConcurrency(Number(e.target.value))}
+                            className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                          />
+                          <span className="text-sm font-medium text-slate-700 w-8 text-center">
+                            {processConcurrency}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -486,7 +510,10 @@ const CleanerPage: React.FC = () => {
       {/* Execution Report Dialog */}
       <ExecutionReportDialog
         isOpen={isReportDialogOpen}
-        onClose={() => setIsReportDialogOpen(false)}
+        onClose={() => {
+          setIsReportDialogOpen(false)
+          resetStartTime()
+        }}
         ordersProcessed={reportData?.ordersProcessed}
         materialsDeleted={reportData?.materialsDeleted}
         materialsSkipped={reportData?.materialsSkipped}
