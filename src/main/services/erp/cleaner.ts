@@ -23,6 +23,11 @@ interface ProgressState {
   totalOrders: number
 }
 
+interface QueryResultRow {
+  rowIndex: number
+  orderNumber: string
+}
+
 class AsyncMutex {
   private queue: Promise<void> = Promise.resolve()
 
@@ -232,13 +237,11 @@ export class CleanerService {
         await this.queryOrders(workFrame, batchOrders)
         await this.waitForLoading(workFrame)
 
-        const rows = workFrame.locator('tbody tr')
-        const rowCount = await rows.count()
-        const rowIndexes = Array.from({ length: rowCount }, (_, i) => i)
+        const queriedRows = await this.collectQueryResultRows(workFrame)
+        const queriedOrderNumbersInBatch = new Set(queriedRows.map((row) => row.orderNumber))
 
-        const processedOrderNumbersInBatch = new Set<string>()
-
-        await runWithConcurrency(rowIndexes, processConcurrency, async (rowIndex) => {
+        await runWithConcurrency(queriedRows, processConcurrency, async (row) => {
+          const { rowIndex, orderNumber } = row
           const openedDetailPage = await popupMutex.runExclusive(async () => {
             return await this.openDetailPageFromRow(workFrame, popupPage!, rowIndex)
           })
@@ -249,12 +252,13 @@ export class CleanerService {
               detailPage: openedDetailPage,
               deleteSet,
               dryRun,
+              expectedOrderNumber: orderNumber,
               progressState,
               onProgress: input.onProgress
             })
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error'
-            detail = this.createErrorDetail(`BATCH_ROW_${rowIndex + 1}`, message)
+            detail = this.createErrorDetail(orderNumber, message)
           } finally {
             progressState.completedOrders += 1
           }
@@ -269,13 +273,9 @@ export class CleanerService {
           result.ordersProcessed += 1
           result.materialsDeleted += detail.materialsDeleted
           result.materialsSkipped += detail.materialsSkipped
-
-          if (this.isOrderNumber(detail.orderNumber)) {
-            processedOrderNumbersInBatch.add(detail.orderNumber)
-          }
         })
 
-        const missingOrders = getMissingOrders(batchOrders, processedOrderNumbersInBatch)
+        const missingOrders = getMissingOrders(batchOrders, queriedOrderNumbersInBatch)
         for (const missingOrder of missingOrders) {
           const missingMessage = '订单未出现在查询结果中'
           result.errors.push(`Order ${missingOrder}: ${missingMessage}`)
@@ -300,6 +300,12 @@ export class CleanerService {
       retryResult.updatedDetails.forEach((updatedDetail) => {
         const index = result.details.findIndex((d) => d.orderNumber === updatedDetail.orderNumber)
         if (index !== -1) {
+          const previousDetail = result.details[index]
+          if (updatedDetail.retrySuccess && previousDetail.errors.length > 0) {
+            result.ordersProcessed += 1
+            result.materialsDeleted += updatedDetail.materialsDeleted
+            result.materialsSkipped += updatedDetail.materialsSkipped
+          }
           result.details[index] = updatedDetail
         }
       })
@@ -371,6 +377,36 @@ export class CleanerService {
     const textbox = workFrame.getByRole('textbox', { name: '生产订单号' })
     await textbox.fill(orderNumbers.join(','))
     await workFrame.locator('.search-component-searchBtn').click()
+  }
+
+  private async collectQueryResultRows(workFrame: FrameLocator): Promise<QueryResultRow[]> {
+    const rows = workFrame.locator('tbody tr')
+    const rowCount = await rows.count()
+    const result: QueryResultRow[] = []
+
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+      const row = rows.nth(rowIndex)
+      const orderNumber = await this.extractOrderNumberFromQueryRow(row)
+      if (!this.isOrderNumber(orderNumber)) {
+        continue
+      }
+      result.push({ rowIndex, orderNumber })
+    }
+
+    return result
+  }
+
+  private async extractOrderNumberFromQueryRow(row: Locator): Promise<string> {
+    try {
+      const cell = row.locator('td[colkey="vbillcode"]')
+      const codeLink = cell.locator('.code-detail-link').first()
+      const rawValue = (await codeLink.count()) > 0 ? await codeLink.innerText() : await cell.innerText()
+      const value = rawValue.trim()
+      const match = value.match(/SC\d{14}/)
+      return match ? match[0] : value
+    } catch {
+      return ''
+    }
   }
 
   private async openDetailPageFromRow(
