@@ -52,3 +52,21 @@ orderResolution:
   tableName: ''
   productionIdField: ''
   orderNumberField: ''
+
+cleaner:
+  queryBatchSize: 100
+  processConcurrency: 1
+
+logging:
+  level: info
+  auditRetention: 30
+  appRetention: 14
+
+# RustFS 对象存储配置（用于持久化报告）
+rustfs:
+  enabled: false # 设置为 true 启用 RustFS 上传
+  endpoint: 'http://192.168.110.114:9000' # RustFS 服务器地址
+  accessKey: '<YOUR_ACCESS_KEY>' # 访问密钥
+  secretKey: '<YOUR_SECRET_KEY>' # 密钥
+  bucket: 'erpauto' # 存储桶名称
+  region: 'us-east-1' # 区域（S3 兼容，默认即可）
