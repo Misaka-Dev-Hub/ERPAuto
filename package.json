@@ -91,10 +91,6 @@
     "vite": "^7.2.6",
     "vitest": "^4.0.18"
   },
-  "directories": {
-    "doc": "docs",
-    "test": "tests"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Misaka-Dev-Hub/ERPAuto.git"
