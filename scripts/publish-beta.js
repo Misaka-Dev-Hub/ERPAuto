@@ -8,7 +8,8 @@ const {
   createGitTag,
   pushGitTag,
   tagExists,
-  execCommand
+  execCommand,
+  sanitizeTagName
 } = require('./publish-utils')
 
 async function main() {
@@ -25,6 +26,13 @@ async function main() {
   // Step 2: 获取版本号
   const version = process.argv[2] || '1.3.1-beta.0'
   const tagName = `v${version}`
+
+  // Validate beta version format
+  if (!version.includes('-beta.') && !version.includes('-alpha.')) {
+    console.error('❌ Beta version must contain "-beta." or "-alpha." (e.g., 1.3.1-beta.0)')
+    console.error('   This script is for pre-release versions only.')
+    process.exit(1)
+  }
 
   console.log(`📦 Version info:`)
   console.log(`   Version: ${version}`)
@@ -105,7 +113,18 @@ async function main() {
     // 删除本地标签
     if (tagExists(tagName)) {
       console.log('🔄 Deleting local tag...')
-      execCommand(`git tag -d ${tagName}`, { stdio: 'pipe' })
+      const sanitized = sanitizeTagName(tagName)
+      execCommand(`git tag -d ${sanitized}`, { stdio: 'pipe' })
+    }
+
+    // 删除远程标签
+    console.log('🔄 Deleting remote tag...')
+    try {
+      const sanitized = sanitizeTagName(tagName)
+      execCommand(`git push origin :refs/tags/${sanitized}`, { stdio: 'pipe' })
+      console.log('✅ Remote tag deleted')
+    } catch (e) {
+      console.log('⚠️  Warning: Could not delete remote tag (may not have been pushed)')
     }
 
     console.error('❌ Release aborted. Please fix the errors and try again.')
