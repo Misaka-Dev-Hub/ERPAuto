@@ -3,6 +3,7 @@ import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { execSync } from 'child_process'
+import { createRequire } from 'module'
 
 // Get git hash (first 7 characters)
 const getGitHash = (): string => {
@@ -14,6 +15,7 @@ const getGitHash = (): string => {
 }
 
 // Get version from package.json
+const require = createRequire(import.meta.url)
 const version = require('./package.json').version
 const gitHash = getGitHash()
 
@@ -30,6 +32,18 @@ export default defineConfig({
         '@renderer': resolve('src/renderer/src')
       }
     },
-    plugins: [react(), tailwindcss()]
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        name: 'update-title',
+        transformIndexHtml(html) {
+          return html.replace(
+            '<title>ERP Auto Tool</title>',
+            `<title>ERPAuto - v${version}(${gitHash})</title>`
+          )
+        }
+      }
+    ]
   }
 })
