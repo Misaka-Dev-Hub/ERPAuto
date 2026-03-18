@@ -24,8 +24,19 @@ asarUnpack:
 win:
   executableName: erpauto
   target:
-    - nsis
+    - target: nsis
+      arch:
+        - x64
+        - arm64
     - portable
+  publish:
+    provider: s3
+    bucket: erpauto
+    endpoint: http://192.168.110.114:9000
+    forcePathStyle: true
+    region: us-east-1
+    acl: public-read
+    channel: stable
 portable:
   artifactName: ${name}-portable.${ext}
   # Portable app uses user data directory (AppData), not exe directory
@@ -34,8 +45,20 @@ nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
-  createDesktopShortcut: always
+  createDesktopShortcut: true
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createStartMenuShortcut: true
 mac:
+  target:
+    - dmg
+    - zip
+  publish:
+    provider: s3
+    bucket: erpauto
+    endpoint: http://192.168.110.114:9000
+    forcePathStyle: true
+    region: us-east-1
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
@@ -48,13 +71,14 @@ dmg:
 linux:
   target:
     - AppImage
-    - snap
-    - deb
+  publish:
+    provider: s3
+    bucket: erpauto
+    endpoint: http://192.168.110.114:9000
+    forcePathStyle: true
+    region: us-east-1
   maintainer: electronjs.org
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
-publish:
-  provider: generic
-  url: https://example.com/auto-updates

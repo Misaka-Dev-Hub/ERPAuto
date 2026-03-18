@@ -19,6 +19,8 @@ import { Toast } from './components/ui/Toast'
 import ExtractorPage from './pages/ExtractorPage'
 import CleanerPage from './pages/CleanerPage'
 import SettingsPage from './pages/SettingsPage'
+import { UpdateNotification } from './components/updater/UpdateNotification'
+import { UpdateProgress } from './components/updater/UpdateProgress'
 
 type Page = 'home' | 'extractor' | 'cleaner' | 'settings'
 
@@ -139,6 +141,7 @@ function App(): React.JSX.Element {
         } else {
           setIsAuthenticated(true)
           setShowLoginDialog(false)
+          window.electron.updater.check()
         }
         return true
       }
@@ -169,6 +172,7 @@ function App(): React.JSX.Element {
         setShowUserSelection(false)
         // Mark as switched by Admin
         setIsSwitchedByAdmin(true)
+        window.electron.updater.check()
       }
     } catch (error) {
       logger.error('User selection error', {
@@ -415,6 +419,10 @@ function App(): React.JSX.Element {
           {currentPage === 'settings' && <SettingsPage />}
         </main>
       </div>
+
+      {/* Auto Updater Notifications & Progress */}
+      <UpdateNotification />
+      <UpdateProgress />
 
       {/* Toast Notifications */}
       <Toast />

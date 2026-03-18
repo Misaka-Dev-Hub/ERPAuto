@@ -14,6 +14,23 @@ import type { IpcResult } from '../main/ipc'
 import { IPC_CHANNELS, type LogLevel } from '../shared/ipc-channels'
 import type { CleanerConfig } from '../main/types/config.schema'
 
+// Need type definition for Updater Status in frontend API
+type ProgressInfo = {
+  total: number
+  delta: number
+  transferred: number
+  percent: number
+  bytesPerSecond: number
+}
+
+export type UpdaterStatus = {
+  status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error'
+  version?: string
+  progress?: ProgressInfo
+  error?: string
+  channel: 'stable' | 'beta'
+}
+
 type ErpSettingsPayload = {
   erp?: {
     username?: string
@@ -25,7 +42,8 @@ const processApi = {
   versions: {
     electron: process.versions.electron,
     chrome: process.versions.chrome,
-    node: process.versions.node
+    node: process.versions.node,
+    app: process.env.npm_package_version || '1.3.0' // Temporary fallback; ideally exposed via ipc or env
   }
 }
 
@@ -218,6 +236,55 @@ const api = {
     listByUser: (username: string): Promise<IpcResult> =>
       invokeIpc(IPC_CHANNELS.REPORT_LIST_BY_USER, username),
     download: (key: string): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.REPORT_DOWNLOAD, key)
+  },
+
+  updater: {
+    check: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.UPDATE_CHECK),
+    getStatus: (): Promise<IpcResult<UpdaterStatus>> => invokeIpc(IPC_CHANNELS.UPDATE_GET_STATUS),
+    getChannelInfo: (): Promise<IpcResult<{ channel: string; available: string[] }>> =>
+      invokeIpc(IPC_CHANNELS.UPDATE_GET_CHANNEL),
+    setChannel: (channel: 'stable' | 'beta'): Promise<IpcResult> =>
+      invokeIpc(IPC_CHANNELS.UPDATE_SET_CHANNEL, { channel }),
+    download: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.UPDATE_DOWNLOAD),
+    install: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.UPDATE_INSTALL),
+    cancel: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.UPDATE_CANCEL),
+    onChecking: (callback: (data: { channel: string }) => void) => {
+      const sub = (_: any, data: { channel: string }) => callback(data)
+      ipcRenderer.on('update:checking', sub)
+      return () => ipcRenderer.removeListener('update:checking', sub)
+    },
+    onAvailable: (
+      callback: (data: { version: string; releaseNotes: string; channel: string }) => void
+    ) => {
+      const sub = (_: any, data: any) => callback(data)
+      ipcRenderer.on('update:available', sub)
+      return () => ipcRenderer.removeListener('update:available', sub)
+    },
+    onNotAvailable: (callback: (data: { message: string }) => void) => {
+      const sub = (_: any, data: any) => callback(data)
+      ipcRenderer.on('update:not-available', sub)
+      return () => ipcRenderer.removeListener('update:not-available', sub)
+    },
+    onProgress: (callback: (data: ProgressInfo) => void) => {
+      const sub = (_: any, data: any) => callback(data)
+      ipcRenderer.on('update:download-progress', sub)
+      return () => ipcRenderer.removeListener('update:download-progress', sub)
+    },
+    onDownloaded: (callback: (data: { version: string }) => void) => {
+      const sub = (_: any, data: any) => callback(data)
+      ipcRenderer.on('update:downloaded', sub)
+      return () => ipcRenderer.removeListener('update:downloaded', sub)
+    },
+    onError: (callback: (data: { error: string }) => void) => {
+      const sub = (_: any, data: any) => callback(data)
+      ipcRenderer.on('update:error', sub)
+      return () => ipcRenderer.removeListener('update:error', sub)
+    },
+    onChannelChanged: (callback: (data: { channel: string }) => void) => {
+      const sub = (_: any, data: any) => callback(data)
+      ipcRenderer.on('update:channel-changed', sub)
+      return () => ipcRenderer.removeListener('update:channel-changed', sub)
+    }
   }
 } as const
 

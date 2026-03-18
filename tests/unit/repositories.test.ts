@@ -16,7 +16,11 @@ vi.mock('typeorm', () => ({
     destroy: vi.fn()
   })),
   Repository: vi.fn(),
-  In: vi.fn((arr) => arr)
+  In: vi.fn((arr) => arr),
+  Entity: vi.fn(),
+  PrimaryGeneratedColumn: vi.fn(),
+  Column: vi.fn(),
+  Index: vi.fn()
 }))
 
 vi.mock('../../src/main/services/logger', () => ({

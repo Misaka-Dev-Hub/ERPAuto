@@ -1,4 +1,10 @@
-import type { FileAPI, ExtractorAPI, CleanerAPI, DatabaseAPI, ReportAPI } from '../main/types/ipc-api.types'
+import type {
+  FileAPI,
+  ExtractorAPI,
+  CleanerAPI,
+  DatabaseAPI,
+  ReportAPI
+} from '../main/types/ipc-api.types'
 import type { ResolverInput, ResolverResponse } from '../main/ipc/resolver-handler'
 import type { UserInfo } from '../main/types/user.types'
 import type {
@@ -120,11 +126,33 @@ export interface LoggerAPI {
   log: (level: LogLevel, message: string, context?: Record<string, unknown>) => void
 }
 
+export interface UpdaterAPI {
+  check: () => Promise<IpcResult>
+  getStatus: () => Promise<
+    IpcResult<{ status: string; version?: string; progress?: any; channel: string }>
+  >
+  getChannelInfo: () => Promise<IpcResult<{ channel: string; available: string[] }>>
+  setChannel: (channel: 'stable' | 'beta') => Promise<IpcResult>
+  download: () => Promise<IpcResult>
+  install: () => Promise<IpcResult>
+  cancel: () => Promise<IpcResult>
+  onChecking: (callback: (data: { channel: string }) => void) => () => void
+  onAvailable: (
+    callback: (data: { version: string; releaseNotes: string; channel: string }) => void
+  ) => () => void
+  onNotAvailable: (callback: (data: { message: string }) => void) => () => void
+  onProgress: (callback: (data: any) => void) => () => void
+  onDownloaded: (callback: (data: { version: string }) => void) => () => void
+  onError: (callback: (data: { error: string }) => void) => () => void
+  onChannelChanged: (callback: (data: { channel: string }) => void) => () => void
+}
+
 export interface ProcessAPI {
   versions: {
     electron: string
     chrome: string
     node: string
+    app: string
   }
 }
 
@@ -146,6 +174,7 @@ declare global {
       config: ConfigAPI
       logger: LoggerAPI
       report: ReportAPI
+      updater: UpdaterAPI
     }
     api: unknown
   }

@@ -19,6 +19,8 @@
     "build:win": "chcp 65001 && set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 && npm run prebuild && npm run build && electron-builder --win",
     "build:mac": "chcp 65001 && npm run prebuild && electron-vite build && electron-builder --mac",
     "build:linux": "chcp 65001 && npm run prebuild && electron-vite build && electron-builder --linux",
+    "publish:stable": "chcp 65001 && set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 && npm run prebuild && npm run build && electron-builder -p always --win",
+    "publish:beta": "chcp 65001 && set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 && npm run prebuild && npm run build && electron-builder -p always --config.publish.channel=beta --win",
     "prebuild": "node -e \"const fs=require('fs');['dist','out'].forEach(d=>{try{fs.rmSync(d,{recursive:true})}catch(e){}})\"",
     "test": "vitest",
     "test:run": "vitest run",
@@ -38,6 +40,8 @@
     "@types/js-yaml": "^4.0.9",
     "chromium-bidi": "^15.0.0",
     "date-fns": "^4.1.0",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.8.3",
     "exceljs": "^4.4.0",
     "js-yaml": "^4.1.1",
     "lucide-react": "^0.575.0",
@@ -85,5 +89,19 @@
     "typescript": "^5.9.3",
     "vite": "^7.2.6",
     "vitest": "^4.0.18"
+  },
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Misaka-Dev-Hub/ERPAuto.git"
+  },
+  "keywords": [],
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Misaka-Dev-Hub/ERPAuto/issues"
   }
 }

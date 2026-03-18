@@ -132,6 +132,40 @@ export const loggingConfigSchema = z.object({
 })
 
 /**
+ * Updater Channel Configuration Schema
+ */
+export const updaterChannelConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  path: z.string().min(1),
+  adminOnly: z.boolean().optional()
+})
+
+/**
+ * Updater Configuration Schema
+ */
+export const updaterConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  checkOnStartup: z.boolean().default(true),
+  autoDownload: z.boolean().default(true),
+  defaultChannelForAdmin: z.enum(['stable', 'beta']).default('stable'),
+  S3: z.object({
+    endpoint: z.string().min(1),
+    accessKey: z.string().min(1),
+    secretKey: z.string().min(1),
+    bucket: z.string().min(1),
+    region: z.string().default('us-east-1')
+  }),
+  channels: z.object({
+    stable: updaterChannelConfigSchema.default({ enabled: true, path: 'updates/stable' }),
+    beta: updaterChannelConfigSchema.default({
+      enabled: true,
+      path: 'updates/beta',
+      adminOnly: true
+    })
+  })
+})
+
+/**
  * RustFS 对象存储配置 Schema
  */
 export const rustfsConfigSchema = z.object({
@@ -155,7 +189,8 @@ export const fullConfigSchema = z.object({
   cleaner: cleanerConfigSchema,
   orderResolution: orderResolutionSchema,
   logging: loggingConfigSchema,
-  rustfs: rustfsConfigSchema.optional()
+  rustfs: rustfsConfigSchema.optional(),
+  updater: updaterConfigSchema.optional()
 })
 
 /**
@@ -168,6 +203,8 @@ export type SqlServerConfig = z.infer<typeof sqlServerConfigSchema>
 export type ErpSystemConfig = z.infer<typeof erpSystemConfigSchema>
 export type LoggingConfig = z.infer<typeof loggingConfigSchema>
 export type RustfsConfig = z.infer<typeof rustfsConfigSchema>
+export type UpdaterConfig = z.infer<typeof updaterConfigSchema>
+export type UpdaterChannelConfig = z.infer<typeof updaterChannelConfigSchema>
 
 /**
  * 验证并解析配置

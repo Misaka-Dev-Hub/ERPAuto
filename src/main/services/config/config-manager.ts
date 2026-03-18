@@ -102,6 +102,23 @@ const DEFAULT_CONFIG: FullConfig = {
     secretKey: '',
     bucket: 'erpauto',
     region: 'us-east-1'
+  },
+  updater: {
+    enabled: true,
+    checkOnStartup: true,
+    autoDownload: true,
+    defaultChannelForAdmin: 'stable',
+    S3: {
+      endpoint: 'http://192.168.110.114:9000',
+      accessKey: '',
+      secretKey: '',
+      bucket: 'erpauto',
+      region: 'us-east-1'
+    },
+    channels: {
+      stable: { enabled: true, path: 'updates/stable' },
+      beta: { enabled: true, path: 'updates/beta', adminOnly: true }
+    }
   }
 }
 

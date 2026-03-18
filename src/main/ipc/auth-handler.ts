@@ -18,6 +18,7 @@ import type { UserInfo } from '../types/user.types'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { ValidationError } from '../types/errors'
 import { withErrorHandling, type IpcResult } from './index'
+import { AutoUpdaterService } from '../services/updater/auto-updater-service'
 
 const log = createLogger('AuthHandler')
 
@@ -93,6 +94,9 @@ export function registerAuthHandlers(): void {
         const userInfo = sessionManager.getUserInfo()
 
         if (success && userInfo) {
+          // Initialize updater context
+          AutoUpdaterService.getInstance().setUserContext(userInfo.username, userInfo.userType)
+
           // Check if admin needs user selection
           const requiresUserSelection = userInfo.userType === 'Admin'
 
@@ -144,6 +148,9 @@ export function registerAuthHandlers(): void {
 
         if (success && userInfo) {
           log.info('Login successful', { username, userType: userInfo.userType })
+
+          // Initialize updater context
+          AutoUpdaterService.getInstance().setUserContext(userInfo.username, userInfo.userType)
 
           // Audit log: LOGIN success (non-blocking)
           const os = await import('os')
@@ -240,6 +247,12 @@ export function registerAuthHandlers(): void {
 
         if (success) {
           const newUser = sessionManager.getUserInfo()
+
+          if (newUser) {
+            // Re-initialize updater context for the new user
+            AutoUpdaterService.getInstance().setUserContext(newUser.username, newUser.userType)
+          }
+
           log.info('User switch successful', { newUsername: newUser?.username })
           return {
             success: true,

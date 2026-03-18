@@ -400,7 +400,8 @@ export class CleanerService {
     try {
       const cell = row.locator('td[colkey="vbillcode"]')
       const codeLink = cell.locator('.code-detail-link').first()
-      const rawValue = (await codeLink.count()) > 0 ? await codeLink.innerText() : await cell.innerText()
+      const rawValue =
+        (await codeLink.count()) > 0 ? await codeLink.innerText() : await cell.innerText()
       const value = rawValue.trim()
       const match = value.match(/SC\d{14}/)
       return match ? match[0] : value

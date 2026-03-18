@@ -51,13 +51,16 @@ vi.mock('winston', () => {
   return {
     default: {
       createLogger: vi.fn(() => createLoggerInstance),
-      format: {
-        combine: vi.fn((...args) => args),
-        timestamp: vi.fn(() => ({ type: 'timestamp' })),
-        colorize: vi.fn(() => ({ type: 'colorize' })),
-        printf: vi.fn((fn) => fn),
-        json: vi.fn(() => ({ type: 'json' }))
-      },
+      format: Object.assign(
+        vi.fn().mockImplementation((fn) => fn({})),
+        {
+          combine: vi.fn((...args) => args),
+          timestamp: vi.fn(() => ({ type: 'timestamp' })),
+          colorize: vi.fn(() => ({ type: 'colorize' })),
+          printf: vi.fn((fn) => fn),
+          json: vi.fn(() => ({ type: 'json' }))
+        }
+      ),
       transports: {
         Console: vi.fn()
       }

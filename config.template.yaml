@@ -62,6 +62,30 @@ logging:
   auditRetention: 30
   appRetention: 14
 
+# 自动更新配置
+updater:
+  enabled: true
+  checkOnStartup: true
+  autoDownload: true
+  defaultChannelForAdmin: 'stable'
+
+  S3:
+    endpoint: 'http://192.168.110.114:9000'
+    accessKey: '<YOUR_ACCESS_KEY>'
+    secretKey: '<YOUR_SECRET_KEY>'
+    bucket: 'erpauto'
+    region: 'us-east-1'
+
+  channels:
+    stable:
+      enabled: true
+      path: 'updates/stable'
+
+    beta:
+      enabled: true
+      path: 'updates/beta'
+      adminOnly: true
+
 # RustFS 对象存储配置（用于持久化报告）
 rustfs:
   enabled: false # 设置为 true 启用 RustFS 上传

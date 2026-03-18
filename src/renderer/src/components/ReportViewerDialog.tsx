@@ -157,7 +157,11 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
             </div>
             {isLoadingList && <Loader2 size={16} className="text-blue-500 animate-spin" />}
           </div>
-          {error && <div className="mt-3 text-sm text-red-600 flex items-center gap-1.5 bg-red-50 p-2 rounded">{error}</div>}
+          {error && (
+            <div className="mt-3 text-sm text-red-600 flex items-center gap-1.5 bg-red-50 p-2 rounded">
+              {error}
+            </div>
+          )}
         </div>
 
         {/* Content */}
