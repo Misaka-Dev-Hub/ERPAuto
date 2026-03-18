@@ -18,8 +18,8 @@ describe('Cleaner Service (Unit)', () => {
           return false
         }
 
-        // Check row number range (7000-7999 are protected)
-        if (rowNumber >= 7000 && rowNumber < 8000) {
+        // Check row number range (2000-7999 are protected)
+        if (rowNumber >= 2000 && rowNumber < 8000) {
           return false
         }
 
@@ -32,12 +32,12 @@ describe('Cleaner Service (Unit)', () => {
       }
     }
 
-    it('should skip materials with row number 7000-7999', () => {
+    it('should skip materials with row number 2000-7999', () => {
       const testCases = [
-        { rowNumber: 7000, pendingQty: '', materialCode: 'TEST001', expected: false },
-        { rowNumber: 7500, pendingQty: '', materialCode: 'TEST001', expected: false },
+        { rowNumber: 2000, pendingQty: '', materialCode: 'TEST001', expected: false },
+        { rowNumber: 5000, pendingQty: '', materialCode: 'TEST001', expected: false },
         { rowNumber: 7999, pendingQty: '', materialCode: 'TEST001', expected: false },
-        { rowNumber: 6999, pendingQty: '', materialCode: 'TEST001', expected: true },
+        { rowNumber: 1999, pendingQty: '', materialCode: 'TEST001', expected: true },
         { rowNumber: 8000, pendingQty: '', materialCode: 'TEST001', expected: true }
       ]
 
@@ -78,7 +78,7 @@ describe('Cleaner Service (Unit)', () => {
       const testCases = [
         { rowNumber: 1, pendingQty: '', materialCode: 'TEST001', expected: true },
         { rowNumber: 100, pendingQty: '', materialCode: 'TEST001', expected: true },
-        { rowNumber: 6999, pendingQty: '', materialCode: 'TEST001', expected: true },
+        { rowNumber: 1999, pendingQty: '', materialCode: 'TEST001', expected: true },
         { rowNumber: 8000, pendingQty: '', materialCode: 'TEST001', expected: true },
         { rowNumber: 10000, pendingQty: '', materialCode: 'TEST001', expected: true }
       ]
