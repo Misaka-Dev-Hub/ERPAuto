@@ -1,7 +1,5 @@
 appId: com.electron.app
 productName: erpauto
-directories:
-  buildResources: build
 files:
   - '!**/.vscode/*'
   - '!src/*'
@@ -23,6 +21,8 @@ asarUnpack:
   - '**/node_modules/playwright-core/**'
 win:
   executableName: erpauto
+  directories:
+    buildResources: build
   target:
     - target: nsis
       arch:
