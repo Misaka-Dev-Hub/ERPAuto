@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const path = require('path')
+const fs = require('fs')
 const {
   checkGitStatus,
   getCurrentVersion,
@@ -11,6 +12,34 @@ const {
   execCommand,
   sanitizeTagName
 } = require('./publish-utils')
+
+const BUILDER_CONFIG_PATH = path.join(__dirname, '..', 'electron-builder.yml')
+const BACKUP_CONFIG_PATH = path.join(__dirname, '..', 'electron-builder.yml.backup')
+
+function modifyBuilderConfigForBeta() {
+  console.log('🔧 Modifying electron-builder.yml for beta channel...')
+
+  let config = fs.readFileSync(BUILDER_CONFIG_PATH, 'utf8')
+
+  // Backup original config
+  fs.writeFileSync(BACKUP_CONFIG_PATH, config)
+
+  // Replace all instances of channel: stable with channel: beta
+  config = config.replace(/channel: stable/g, 'channel: beta')
+
+  fs.writeFileSync(BUILDER_CONFIG_PATH, config)
+  console.log('✅ Builder config modified for beta\n')
+}
+
+function restoreBuilderConfig() {
+  console.log('🔧 Restoring electron-builder.yml...')
+
+  if (fs.existsSync(BACKUP_CONFIG_PATH)) {
+    fs.copyFileSync(BACKUP_CONFIG_PATH, BUILDER_CONFIG_PATH)
+    fs.unlinkSync(BACKUP_CONFIG_PATH)
+    console.log('✅ Builder config restored\n')
+  }
+}
 
 async function main() {
   console.log('🚀 Starting Beta release process...\n')
@@ -75,10 +104,18 @@ async function main() {
     execCommand('npm run build')
     console.log('✅ Build completed\n')
 
-    // Step 10: 发布到S3
+    // Step 10: 修改配置为beta channel
+    modifyBuilderConfigForBeta()
+
+    // Step 11: 发布到S3
     console.log('📤 Publishing to S3 (beta channel)...')
-    execCommand('npm run publish:beta')
-    console.log('✅ Published to S3\n')
+    try {
+      execCommand('npm run publish:beta')
+      console.log('✅ Published to S3\n')
+    } finally {
+      // Always restore the config, even if publish fails
+      restoreBuilderConfig()
+    }
 
     // Step 11: 显示成功信息
     console.log('🎉 Release successful!\n')

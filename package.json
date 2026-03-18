@@ -20,7 +20,7 @@
     "build:mac": "chcp 65001 && npm run prebuild && electron-vite build && electron-builder --mac",
     "build:linux": "chcp 65001 && npm run prebuild && electron-vite build && electron-builder --linux",
     "publish:stable": "chcp 65001 && set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 && npm run prebuild && npm run build && electron-builder -p always --win",
-    "publish:beta": "chcp 65001 && set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 && npm run prebuild && npm run build && electron-builder -p always --config.publish.channel=beta --win",
+    "publish:beta": "chcp 65001 && set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 && npm run prebuild && npm run build && electron-builder -p always --win",
     "release:beta": "node scripts/publish-beta.js",
     "prebuild": "node -e \"const fs=require('fs');['dist','out'].forEach(d=>{try{fs.rmSync(d,{recursive:true})}catch(e){}})\"",
     "test": "vitest",
