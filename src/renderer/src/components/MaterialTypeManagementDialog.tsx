@@ -75,6 +75,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
     }
   }, [editingCell])
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const loadData = async () => {
     setLoading(true)
     try {
@@ -229,6 +230,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
   )
 
   // Save all changes
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleSave = async () => {
     const toInsert: MaterialTypeRecord[] = []
     const toUpdate: { old: MaterialTypeRecord; new: MaterialTypeRecord }[] = []
@@ -288,6 +290,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
   }
 
   // Reset changes
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleReset = async () => {
     if (pendingCount === 0) return
     const confirmed = await confirm({
@@ -301,6 +304,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
   }
 
   // Handle close with unsaved changes warning
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleClose = async () => {
     if (pendingCount > 0) {
       const confirmed = await confirm({
@@ -443,7 +447,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
                 {filteredRows.filter((r) => r.state !== 'deleted').length === 0 ? (
                   <tr>
                     <td colSpan={2} className="px-4 py-8 text-center text-slate-400">
-                      暂无数据，点击"新增"按钮添加物料类型关键词
+                      暂无数据，点击&quot;新增&quot;按钮添加物料类型关键词
                     </td>
                   </tr>
                 ) : (
@@ -495,6 +499,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
                             {isEditingManager ? (
                               isAdmin ? (
                                 <select
+                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                   ref={inputRef as any}
                                   value={editValue}
                                   onChange={(e) => setEditValue(e.target.value)}

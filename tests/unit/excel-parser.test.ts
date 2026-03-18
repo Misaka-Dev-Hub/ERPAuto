@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { ExcelParser } from '../../src/main/services/excel/excel-parser'
-import type { DiscreteMaterialPlan } from '../../src/main/types/excel.types'
+import type { _DiscreteMaterialPlan } from '../../src/main/types/excel.types'
 import path from 'path'
 
 describe('Excel Parser', () => {

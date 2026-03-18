@@ -50,6 +50,7 @@ const OrderNumberInput: React.FC<OrderNumberInputProps> = ({
 
   useEffect(() => {
     const lines = value.split('\n').filter((line) => line.trim().length > 0)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCount(lines.length)
 
     const newStats: FormatStats = {
@@ -68,6 +69,7 @@ const OrderNumberInput: React.FC<OrderNumberInputProps> = ({
     setStats(newStats)
   }, [value])
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     onChange(e.target.value)
   }

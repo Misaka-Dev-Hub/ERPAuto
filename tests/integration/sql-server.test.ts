@@ -32,7 +32,7 @@ describe('SqlServerService Integration Tests', () => {
     // Try to connect, skip tests if SQL Server is not available
     try {
       await service.connect()
-    } catch (error) {
+    } catch {
       console.warn('SQL Server not available, skipping integration tests')
       isSqlServerAvailable = false
     }

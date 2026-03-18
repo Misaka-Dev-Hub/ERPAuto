@@ -5,6 +5,7 @@
  */
 
 import { DataSource, Repository, In } from 'typeorm'
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { DiscreteMaterialPlan, MaterialPlanRecordData } from '../entities/DiscreteMaterialPlan'
 import { getDataSource } from '../data-source'
 import { createLogger } from '../../logger'

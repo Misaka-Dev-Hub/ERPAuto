@@ -17,6 +17,7 @@ export function isError(value: unknown): value is Error | ErrorLike {
       value !== null &&
       'name' in value &&
       'message' in value &&
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       typeof (value as any).message === 'string')
   )
 }
@@ -38,6 +39,7 @@ export function serializeError(error: unknown): SerializedError {
     const props = Object.getOwnPropertyNames(error)
     for (const prop of props) {
       if (!['name', 'message', 'stack', 'cause'].includes(prop)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const value = (error as any)[prop]
         if (value !== undefined) {
           serialized[prop] = isError(value) ? serializeError(value) : value
@@ -50,9 +52,13 @@ export function serializeError(error: unknown): SerializedError {
 
   if (isError(error)) {
     return {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       name: (error as any).name || 'UnknownError',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       message: (error as any).message || String(error),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       stack: (error as any).stack,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       cause: (error as any).cause ? serializeError((error as any).cause) : undefined
     }
   }

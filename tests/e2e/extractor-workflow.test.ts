@@ -12,7 +12,7 @@ import { join } from 'path'
 
 describe('Extractor E2E Workflow', () => {
   let electronApp: ElectronApplication
-  let window: BrowserWindow
+  let _testWindow: BrowserWindow
   let page: Page
 
   beforeAll(async () => {
@@ -25,7 +25,7 @@ describe('Extractor E2E Workflow', () => {
     })
 
     // Get the main window
-    window = await electronApp.firstWindow()
+    _testWindow = await electronApp.firstWindow()
     page = await electronApp.firstWindow()
 
     // Wait for app to load

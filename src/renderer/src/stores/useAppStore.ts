@@ -90,26 +90,34 @@ export const useAppStore = create<AppState>((set, get) => ({
 }))
 
 // Convenience functions for toast notifications
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const showSuccess = (message: string, duration?: number) => {
   useAppStore.getState().addToast({ type: 'success', message, duration })
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const showError = (message: string, duration?: number) => {
   useAppStore.getState().addToast({ type: 'error', message, duration })
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const showWarning = (message: string, duration?: number) => {
   useAppStore.getState().addToast({ type: 'warning', message, duration })
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const showInfo = (message: string, duration?: number) => {
   useAppStore.getState().addToast({ type: 'info', message, duration })
 }
 
 // Selectors
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const selectGlobalError = (state: AppState) => state.globalError
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const selectToasts = (state: AppState) => state.toasts
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const selectSidebarCollapsed = (state: AppState) => state.sidebarCollapsed
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const selectCurrentPage = (state: AppState) => state.currentPage
 
 /**

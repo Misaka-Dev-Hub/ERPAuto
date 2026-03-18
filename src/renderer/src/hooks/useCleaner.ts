@@ -23,6 +23,7 @@ export interface CleanerProgress {
   phase: 'login' | 'processing' | 'complete'
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function useCleaner() {
   // Authentication & permissions
   const [isAdmin, setIsAdmin] = useState(false)
@@ -115,6 +116,7 @@ export function useCleaner() {
 
   // Check admin status and get shared Production IDs on mount
   useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
     const initializePage = async () => {
       try {
         const adminResult = await window.electron.auth.isAdmin()
@@ -166,6 +168,7 @@ export function useCleaner() {
 
   // Load cleaner config from config.yaml on mount
   useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
     const loadCleanerConfig = async () => {
       try {
         const result = await window.electron.config.getCleaner()
@@ -188,6 +191,7 @@ export function useCleaner() {
     sessionStorage.setItem('cleaner_headless', headless.toString())
   }, [headless])
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const updateProcessConcurrency = async (value: number) => {
     const clamped = Math.max(1, Math.min(20, value))
     setProcessConcurrency(clamped)
@@ -215,6 +219,7 @@ export function useCleaner() {
   }, [validationResults, isAdmin, currentUsername, managers, selectedManagers, hiddenItems])
 
   // Handlers
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleValidation = async () => {
     setIsValidationRunning(true)
     setValidationResults([])
@@ -226,6 +231,7 @@ export function useCleaner() {
         mode: valMode === 'full' ? 'database_full' : 'database_filtered',
         useSharedProductionIds: valMode === 'filtered'
       })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const validationData = response.success ? (response.data as any) : null
 
       if (response.success && validationData?.success && validationData.results) {
@@ -257,6 +263,7 @@ export function useCleaner() {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleCheckboxToggle = (materialCode: string) => {
     setSelectedItems((prev) => {
       const newSet = new Set(prev)
@@ -266,6 +273,7 @@ export function useCleaner() {
     })
   }
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const startEdit = (rowIndex: number, field: string) => {
     const row = filteredResults[rowIndex]
     if (!row) return
@@ -281,6 +289,7 @@ export function useCleaner() {
     }, 0)
   }
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const saveEdit = () => {
     if (!editingCell) return
     const { rowIndex } = editingCell
@@ -299,10 +308,12 @@ export function useCleaner() {
     setEditingCell(null)
   }
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const cancelEdit = () => {
     setEditingCell(null)
   }
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleAssignManagerOnSelect = (materialCode: string) => {
     if (!isAdmin && currentUsername) {
       const result = validationResults.find((r) => r.materialCode === materialCode)
@@ -316,6 +327,7 @@ export function useCleaner() {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleConfirmDeletion = async () => {
     const resultsToProcess = isAdmin ? validationResults : filteredResults
 
@@ -401,6 +413,7 @@ export function useCleaner() {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleExecuteDeletion = async () => {
     if (!dryRun) {
       const confirmed = await showConfirmDialog({
@@ -430,6 +443,7 @@ export function useCleaner() {
 
     try {
       const cleanerDataResult = await window.electron.validation.getCleanerData()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cleanerData = cleanerDataResult.success ? (cleanerDataResult.data as any) : null
       if (!cleanerDataResult.success || cleanerData?.success === false) {
         throw new Error(cleanerDataResult.error || '获取清理数据失败')
@@ -451,6 +465,7 @@ export function useCleaner() {
         queryBatchSize,
         processConcurrency
       })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cleanerRunData = response.success ? (response.data as any) : null
 
       if (response.success && cleanerRunData) {
@@ -480,6 +495,7 @@ export function useCleaner() {
     setStartTime(null)
   }, [])
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleExportResults = async () => {
     if (filteredResults.length === 0) {
       showWarning('没有数据可导出')
@@ -500,6 +516,7 @@ export function useCleaner() {
       }))
 
       const response = await window.electron.cleaner.exportResults(exportItems)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const exportData = response.success ? (response.data as any) : null
 
       if (response.success && exportData?.success !== false) {

@@ -64,6 +64,7 @@ const ORDER_NUMBER_PATTERN = /^SC\d{14}$/i
  * Database table and field names
  * Loaded from config.yaml via ConfigManager
  */
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function getDbConfig() {
   const configManager = ConfigManager.getInstance()
   const config = configManager.getConfig()
@@ -129,7 +130,7 @@ export class OrderNumberResolver {
       const tableName = this.getTableName(dbConfig.TABLE_NAME)
 
       let sql: string
-      let params: any[]
+      let params: unknown[]
 
       if (this.dbService.type === 'sqlserver') {
         // 使用 COLLATE 指定不区分大小写的排序规则

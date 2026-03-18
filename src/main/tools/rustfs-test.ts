@@ -19,10 +19,13 @@ import * as path from 'path'
 import * as fs from 'fs'
 
 // Simple console logger (standalone mode)
-const log = {
+const _log = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   info: (msg: string, data?: any) => console.log(`[INFO] ${msg}`, data ? JSON.stringify(data) : ''),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   error: (msg: string, data?: any) =>
     console.error(`[ERROR] ${msg}`, data ? JSON.stringify(data) : ''),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   warn: (msg: string, data?: any) => console.warn(`[WARN] ${msg}`, data ? JSON.stringify(data) : '')
 }
 
@@ -36,6 +39,7 @@ const TEST_CONFIG = {
   region: 'us-east-1'
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function createS3Client(config: typeof TEST_CONFIG) {
   return new S3Client({
     region: config.region,
@@ -66,6 +70,7 @@ function generateReportKey(reportFileName: string, username: string): string {
   return `reports/cleaner/${username}/${reportFileName}`
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 async function runTests() {
   console.log('='.repeat(50))
   console.log('RustFS Integration Test')
@@ -126,6 +131,7 @@ This is a test report to verify RustFS integration.
     })
     const response = await client.send(command)
     const chunks: Buffer[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for await (const chunk of response.Body as any) {
       chunks.push(Buffer.from(chunk))
     }

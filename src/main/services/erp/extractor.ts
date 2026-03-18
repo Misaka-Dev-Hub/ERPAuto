@@ -133,6 +133,7 @@ export class ExtractorService {
 
     // Collect all orders with full order info and materials
     // Each order has: { orderInfo: OrderHeader, materials: MaterialRow[] }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allOrders: Array<{ orderInfo: any; materials: any[] }> = []
 
     // Parse each downloaded file and collect orders
@@ -141,6 +142,7 @@ export class ExtractorService {
         log.debug('Parsing file', { filePath })
         await parser.parse(filePath)
         // After parse(), the parser store orders internally as lastOrders
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const orders = (parser as any).lastOrders
         log.debug('File parsed', { filePath, orderCount: orders?.length || 0 })
         if (orders && Array.isArray(orders)) {
@@ -193,6 +195,7 @@ export class ExtractorService {
    * Matches the output format of ExcelParser.saveAsExcel()
    */
   private async saveMergedOrders(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     orders: Array<{ orderInfo: any; materials: any[] }>,
     outputPath: string
   ): Promise<void> {

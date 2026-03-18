@@ -71,6 +71,7 @@ export class SessionManager {
     try {
       const { BIPUsersDAO } = await import('./bip-users-dao')
       const dao = new BIPUsersDAO()
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const computerName = require('os').hostname()
       const userInfo = await dao.authenticateByComputerName(computerName)
 

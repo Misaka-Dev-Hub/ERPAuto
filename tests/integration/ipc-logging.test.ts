@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
-import { ipcMain, ipcRenderer } from 'electron'
-import { IPC_CHANNELS, type LogLevel } from '../../src/shared/ipc-channels'
+import { _ipcMain, _ipcRenderer } from 'electron'
+import { _IPC_CHANNELS, type LogLevel } from '../../src/shared/ipc-channels'
 import { state } from '../../src/main/ipc/logger-handler'
 import fs from 'fs/promises'
 import path from 'path'
@@ -217,7 +217,7 @@ describe('IPC Logging Integration', () => {
 
     it('should flush immediately when batch reaches 50', async () => {
       let flushCount = 0
-      const flushPromises: Promise<void>[] = []
+      const _flushPromises: Promise<void>[] = []
 
       // Track flushes
       const originalFlush = state.flush.bind(state)
@@ -267,7 +267,9 @@ describe('IPC Logging Integration', () => {
     it('should track discarded count correctly', () => {
       // Test the discard logic by directly manipulating buffer state
       // Simulate buffer overflow scenario
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const testState = new (class extends (state.constructor as any) {
+        // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
         testDiscardLogic() {
           // Simulate buffer at threshold
           this.buffer = Array(500).fill({ level: 'info', message: 'test', timestamp: 0 })
@@ -295,7 +297,9 @@ describe('IPC Logging Integration', () => {
   describe('Error Bypass', () => {
     it('should allow error logs to bypass circuit breaker', () => {
       // Test that error logs bypass circuit breaker
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const testState = new (class extends (state.constructor as any) {
+        // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
         testErrorBypass() {
           // Simulate buffer at threshold (circuit breaker active)
           this.buffer = Array(500).fill({ level: 'info', message: 'test', timestamp: 0 })

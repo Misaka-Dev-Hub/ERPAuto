@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 import type { LogLevel } from '../../../shared/ipc-channels'
 
 /**
@@ -52,7 +52,10 @@ export interface RendererLogger {
 export function useLogger(context: string): RendererLogger {
   // Use ref to store context to avoid recreating logger on re-renders
   const contextRef = useRef(context)
-  contextRef.current = context
+
+  useEffect(() => {
+    contextRef.current = context
+  }, [context])
 
   // Create stable logger instance using useCallback
   const logger = useCallback((level: LogLevel, message: string, meta?: Record<string, unknown>) => {
@@ -115,12 +118,15 @@ export function useLogger(context: string): RendererLogger {
  * }, [logger])
  * ```
  */
+
 export function monitorFps(threshold: number = 30, logger: RendererLogger): () => void {
   let frames = 0
   let lastFpsCheck = 0
+
   let warningCooldown = 0
   let animationFrameId: number
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const measureFps = (currentTime: number) => {
     frames++
 

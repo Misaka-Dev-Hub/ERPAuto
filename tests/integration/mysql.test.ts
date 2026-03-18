@@ -27,7 +27,7 @@ describe('MySqlService Integration Tests', () => {
     // Try to connect, skip tests if MySQL is not available
     try {
       await service.connect()
-    } catch (error) {
+    } catch {
       console.warn('MySQL not available, skipping integration tests')
       isMysqlAvailable = false
     }

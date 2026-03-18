@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, _beforeAll, _afterAll } from 'vitest'
 import { ExtractorService } from '../../src/main/services/erp/extractor'
 import { ErpAuthService } from '../../src/main/services/erp/erp-auth'
 import type { ErpConfig } from '../../src/main/types/erp.types'
 import fs from 'fs/promises'
-import path from 'path'
+import _path from 'path'
 
 describe('Extractor Service (Integration)', () => {
   // For integration tests, use fixed test credentials or configure via config.yaml

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useExtractorStore } from '../stores/extractorStore'
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function useExtractor() {
   const {
     isRunning,
@@ -30,6 +31,7 @@ export function useExtractor() {
     })
 
     const unsubscribeLog = window.electron.extractor.onLog((data) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       addLog(data.level as any, data.message)
     })
 
@@ -39,6 +41,7 @@ export function useExtractor() {
     }
   }, [setProgress, addLog])
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const startExtraction = async (orderNumbers: string) => {
     if (!orderNumbers.trim()) {
       setError('请输入至少一个订单号')

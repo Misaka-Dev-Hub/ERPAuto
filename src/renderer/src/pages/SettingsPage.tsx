@@ -19,6 +19,7 @@ const SettingsPage: React.FC = () => {
     loadCredentials()
   }, [])
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const loadCredentials = async () => {
     try {
       setIsLoading(true)
@@ -38,13 +39,14 @@ const SettingsPage: React.FC = () => {
         showError(response.error || '加载 ERP 配置失败')
       }
       setIsModified(false)
-    } catch (error) {
+    } catch {
       showError('加载 ERP 配置失败')
     } finally {
       setIsLoading(false)
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleSaveCredentials = async () => {
     try {
       // Save ERP credentials to database (current user's config)
@@ -64,7 +66,7 @@ const SettingsPage: React.FC = () => {
       } else {
         showError(result.error || saveData?.error || '保存失败')
       }
-    } catch (error) {
+    } catch {
       showError('保存配置时发生错误')
     }
   }

@@ -104,7 +104,7 @@ async function testFocusTrap(page: Page, dialogSelector: string): Promise<void> 
  * @param triggerSelector - CSS selector for the element that opens the dialog
  * @param dialogSelector - CSS selector for the dialog element
  */
-async function testFocusRestoration(
+async function _testFocusRestoration(
   page: Page,
   triggerSelector: string,
   dialogSelector: string
@@ -148,7 +148,7 @@ async function testFocusRestoration(
  *
  * @param dialogSelector - CSS selector for the dialog element
  */
-async function testEscapeKey(page: Page, dialogSelector: string): Promise<void> {
+async function _testEscapeKey(page: Page, dialogSelector: string): Promise<void> {
   await test.step('Escape key closes dialog', async () => {
     const dialog = page.locator(dialogSelector)
     await expect(dialog).toBeVisible()
@@ -166,7 +166,7 @@ async function testEscapeKey(page: Page, dialogSelector: string): Promise<void> 
  *
  * @param dialogSelector - CSS selector for the dialog element
  */
-async function testAriaAttributes(page: Page, dialogSelector: string): Promise<void> {
+async function _testAriaAttributes(page: Page, dialogSelector: string): Promise<void> {
   await test.step('Dialog has role="dialog" or role="alertdialog"', async () => {
     const dialog = page.locator(dialogSelector)
     const role = await dialog.getAttribute('role')
@@ -211,9 +211,10 @@ test.beforeAll(async () => {
     page = await electronApp.firstWindow({ timeout: 15000 })
     // Wait for app to load
     await page.waitForLoadState('domcontentloaded', { timeout: 30000 })
-  } catch (error) {
+  } catch {
     console.warn('Could not launch Electron app for E2E tests - tests will be skipped')
     console.warn('This is expected in headless environments without display')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     page = undefined as any
   }
 })
@@ -230,7 +231,7 @@ test.afterAll(async () => {
 
 test.describe('Login Dialog', () => {
   const DIALOG_SELECTOR = '[role="dialog"][aria-labelledby="login-dialog-title"]'
-  const TRIGGER_SELECTOR = '[data-testid="login-trigger"], .login-button'
+  const _TRIGGER_SELECTOR = '[data-testid="login-trigger"], .login-button'
 
   test('should trap focus within dialog - Tab key cycles', async () => {
     test.skip(!page, 'Electron app not available - skipping focus trap test')
@@ -267,7 +268,7 @@ test.describe('Login Dialog', () => {
 
 test.describe('User Selection Dialog', () => {
   const DIALOG_SELECTOR = '[role="dialog"][aria-labelledby="user-selection-dialog-title"]'
-  const TRIGGER_SELECTOR = '[data-testid="user-selection-trigger"], .user-switch-button'
+  const _TRIGGER_SELECTOR = '[data-testid="user-selection-trigger"], .user-switch-button'
 
   test('should trap focus within dialog - Tab key cycles', async () => {
     test.skip(!page, 'Page not available - skipping focus trap test')
@@ -311,7 +312,7 @@ test.describe('User Selection Dialog', () => {
 
 test.describe('Execution Report Dialog', () => {
   const DIALOG_SELECTOR = '[role="dialog"][aria-labelledby*="execution-dialog"]'
-  const TRIGGER_SELECTOR = '[data-testid="execution-report-trigger"], .execution-report-button'
+  const _TRIGGER_SELECTOR = '[data-testid="execution-report-trigger"], .execution-report-button'
 
   test('should trap focus within dialog - Tab key cycles', async () => {
     test.skip(!page, 'Page not available - skipping focus trap test')
@@ -355,7 +356,7 @@ test.describe('Execution Report Dialog', () => {
 
 test.describe('Material Type Management Dialog', () => {
   const DIALOG_SELECTOR = '[role="dialog"][aria-labelledby*="material-type-dialog"]'
-  const TRIGGER_SELECTOR = '[data-testid="material-type-trigger"], .material-type-button'
+  const _TRIGGER_SELECTOR = '[data-testid="material-type-trigger"], .material-type-button'
 
   test('should trap focus within dialog - Tab key cycles', async () => {
     test.skip(!page, 'Page not available - skipping focus trap test')
@@ -399,7 +400,7 @@ test.describe('Material Type Management Dialog', () => {
 
 test.describe('Modal Component', () => {
   const DIALOG_SELECTOR = '[role="dialog"][aria-modal="true"]'
-  const TRIGGER_SELECTOR = '[data-testid="modal-trigger"], .modal-trigger'
+  const _TRIGGER_SELECTOR = '[data-testid="modal-trigger"], .modal-trigger'
 
   test('should trap focus within dialog - Tab key cycles', async () => {
     test.skip(!page, 'Page not available - skipping focus trap test')

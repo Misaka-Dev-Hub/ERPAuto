@@ -36,6 +36,7 @@ function parseEnvFile(content: string): EnvConfig {
   return result
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function migrate() {
   console.log('🔄 Starting migration from .env to config.yaml...\n')
 

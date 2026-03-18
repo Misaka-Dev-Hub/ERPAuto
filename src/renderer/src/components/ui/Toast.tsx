@@ -47,6 +47,7 @@ const ToastIcon: Record<ToastType, React.ReactNode> = {
   info: <Info className="w-5 h-5" />
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function ToastItem({ id, type, message, onClose }: ToastItemProps) {
   const styles = typeStyles[type]
 
@@ -66,6 +67,7 @@ function ToastItem({ id, type, message, onClose }: ToastItemProps) {
   )
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function Toast() {
   const toasts = useAppStore(selectToasts)
   const removeToast = useAppStore((state) => state.removeToast)

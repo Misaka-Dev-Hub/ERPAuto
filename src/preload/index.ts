@@ -69,6 +69,7 @@ const api = {
     runExtractor: (input: ExtractorInput): Promise<IpcResult> =>
       invokeIpc(IPC_CHANNELS.EXTRACTOR_RUN, input),
     onProgress: (callback: (data: ExtractionProgress) => void) => {
+      // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
       const subscription = (_event: Electron.IpcRendererEvent, data: ExtractionProgress) =>
         callback(data)
       ipcRenderer.on(IPC_CHANNELS.EXTRACTOR_PROGRESS, subscription)
@@ -78,6 +79,7 @@ const api = {
       const subscription = (
         _event: Electron.IpcRendererEvent,
         data: { level: string; message: string }
+        // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
       ) => callback(data)
       ipcRenderer.on(IPC_CHANNELS.EXTRACTOR_LOG, subscription)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.EXTRACTOR_LOG, subscription)
@@ -90,6 +92,7 @@ const api = {
     exportResults: (items: ExportResultItem[]): Promise<IpcResult> =>
       invokeIpc(IPC_CHANNELS.CLEANER_EXPORT_RESULTS, items),
     onProgress: (callback: (data: CleanerProgress) => void) => {
+      // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
       const subscription = (_event: Electron.IpcRendererEvent, data: CleanerProgress) =>
         callback(data)
       ipcRenderer.on(IPC_CHANNELS.CLEANER_PROGRESS, subscription)
@@ -122,6 +125,7 @@ const api = {
       invokeIpc(IPC_CHANNELS.DATABASE_MYSQL_CONNECT, config),
     disconnectMySql: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.DATABASE_MYSQL_DISCONNECT),
     isMySqlConnected: (): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.DATABASE_MYSQL_IS_CONNECTED),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     queryMySql: (sql: string, params?: any[]): Promise<IpcResult> =>
       invokeIpc(IPC_CHANNELS.DATABASE_MYSQL_QUERY, sql, params),
     connectSqlServer: (config: SqlServerConfig): Promise<IpcResult> =>

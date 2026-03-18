@@ -11,14 +11,14 @@
  *   npx tsx src/main/services/user/migration/add-erp-params-migration.ts
  */
 
-import * as fs from 'fs'
+import * as _fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import { ConfigManager } from '../../config/config-manager'
 import { MySqlService } from '../../database/mysql'
 import { SqlServerService } from '../../database/sql-server'
-import yaml from 'js-yaml'
+import _yaml from 'js-yaml'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -95,7 +95,7 @@ async function addColumnSqlServer(
 /**
  * Initialize ERP credentials for all users in MySQL
  */
-async function initializeErpCredentialsMySQL(
+async function _initializeErpCredentialsMySQL(
   mysqlService: MySqlService,
   tableName: string,
   erpUrl: string,
@@ -123,7 +123,7 @@ async function initializeErpCredentialsMySQL(
 /**
  * Initialize ERP credentials for all users in SQL Server
  */
-async function initializeErpCredentialsSqlServer(
+async function _initializeErpCredentialsSqlServer(
   sqlServerService: SqlServerService,
   tableName: string,
   erpUrl: string,

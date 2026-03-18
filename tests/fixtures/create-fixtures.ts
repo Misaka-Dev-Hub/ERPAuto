@@ -5,6 +5,7 @@ import path from 'path'
  * Create test fixture Excel files for unit tests
  */
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 async function createTestFixture() {
   const workbook = new ExcelJS.Workbook()
   const worksheet = workbook.addWorksheet('Sheet1')
@@ -99,6 +100,7 @@ async function createTestFixture() {
   console.log('Created test fixture:', filePath)
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 async function createEmptyOrdersFixture() {
   const workbook = new ExcelJS.Workbook()
   const worksheet = workbook.addWorksheet('Sheet1')
@@ -146,6 +148,7 @@ async function createEmptyOrdersFixture() {
   console.log('Created empty orders fixture:', filePath)
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 async function main() {
   console.log('Creating test fixture Excel files...')
   await createTestFixture()

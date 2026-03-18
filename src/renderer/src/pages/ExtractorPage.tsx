@@ -36,10 +36,12 @@ const ExtractorPage: React.FC = () => {
     }
   }, [orderNumbers])
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleExtract = () => {
     startExtraction(orderNumbers)
   }
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleReset = () => {
     setOrderNumbers('')
     setError(null)

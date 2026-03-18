@@ -132,6 +132,7 @@ export class DiscreteMaterialPlanDAO {
    * Query all records from DiscreteMaterialPlanData table
    * @returns List of all records
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async queryAll(): Promise<any[]> {
     try {
       const dbService = await this.getDatabaseService()
@@ -155,6 +156,7 @@ export class DiscreteMaterialPlanDAO {
    * Order: CreateDate ASC, SequenceNumber ASC
    * @returns List of deduplicated records
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async queryAllDistinctByMaterialCode(): Promise<any[]> {
     try {
       const dbService = await this.getDatabaseService()
@@ -199,6 +201,7 @@ export class DiscreteMaterialPlanDAO {
    * @param sourceNumbers - List of SourceNumber values
    * @returns List of records
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async queryBySourceNumbers(sourceNumbers: string[]): Promise<any[]> {
     if (!sourceNumbers || sourceNumbers.length === 0) {
       return []
@@ -209,6 +212,7 @@ export class DiscreteMaterialPlanDAO {
       const tableName = this.getTableName()
       const isSqlServer = dbService.type === 'sqlserver'
       const batchSize = 1500
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const allResults: any[] = []
 
       for (let i = 0; i < sourceNumbers.length; i += batchSize) {
@@ -241,6 +245,7 @@ export class DiscreteMaterialPlanDAO {
    * @param sourceNumbers - List of SourceNumber values
    * @returns List of deduplicated records
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async queryBySourceNumbersDistinct(sourceNumbers: string[]): Promise<any[]> {
     if (!sourceNumbers || sourceNumbers.length === 0) {
       return []
@@ -251,6 +256,7 @@ export class DiscreteMaterialPlanDAO {
       const tableName = this.getTableName()
       const isSqlServer = dbService.type === 'sqlserver'
       const batchSize = 1500
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const allResults: any[] = []
 
       for (let i = 0; i < sourceNumbers.length; i += batchSize) {
@@ -298,6 +304,7 @@ export class DiscreteMaterialPlanDAO {
    * @param sourceNumber - SourceNumber value
    * @returns List of records
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async queryBySourceNumber(sourceNumber: string): Promise<any[]> {
     try {
       const dbService = await this.getDatabaseService()
@@ -328,6 +335,7 @@ export class DiscreteMaterialPlanDAO {
    * @param planNumber - PlanNumber value
    * @returns List of records
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async queryByPlanNumber(planNumber: string): Promise<any[]> {
     try {
       const dbService = await this.getDatabaseService()
@@ -356,6 +364,7 @@ export class DiscreteMaterialPlanDAO {
    * @param planNumbers - List of PlanNumber values
    * @returns List of records
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async queryByPlanNumbers(planNumbers: string[]): Promise<any[]> {
     if (!planNumbers || planNumbers.length === 0) {
       return []
@@ -366,6 +375,7 @@ export class DiscreteMaterialPlanDAO {
       const tableName = this.getTableName()
       const isSqlServer = dbService.type === 'sqlserver'
       const batchSize = 1500
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const allResults: any[] = []
 
       for (let i = 0; i < planNumbers.length; i += batchSize) {
@@ -554,6 +564,7 @@ export class DiscreteMaterialPlanDAO {
     ]
 
     // Build parameterized insert
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const values: any[] = []
     const rowPlaceholders: string[] = []
 
@@ -579,6 +590,7 @@ export class DiscreteMaterialPlanDAO {
     columns: string[],
     _rowIndex: number,
     isSqlServer: boolean,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     values: any[]
   ): string[] {
     return columns.map((col) => {
@@ -596,6 +608,7 @@ export class DiscreteMaterialPlanDAO {
   /**
    * Get the value for a specific column from the record
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getColumnValue(record: MaterialPlanRecord, column: string): any {
     const columnMapping: Record<string, keyof MaterialPlanRecord> = {
       Factory: 'factory',
@@ -752,6 +765,7 @@ export class DiscreteMaterialPlanDAO {
    * Get statistics
    * @returns Statistics object
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getStatistics(): Promise<any> {
     try {
       const dbService = await this.getDatabaseService()

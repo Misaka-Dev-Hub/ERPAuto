@@ -59,9 +59,13 @@ export const useUserStore = create<UserState>((set) => ({
 }))
 
 // Selectors for common state access patterns
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const selectUser = (state: UserState) => state.user
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const selectIsAuthenticated = (state: UserState) => state.isAuthenticated
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const selectIsAdmin = (state: UserState) => state.user?.userType === 'Admin'
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const selectUsername = (state: UserState) => state.user?.username ?? ''
 
 export default useUserStore

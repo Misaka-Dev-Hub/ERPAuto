@@ -84,7 +84,7 @@ app.whenReady().then(async () => {
           }
         }
       }
-    } catch (e) {
+    } catch {
       // Ignore
     }
 
@@ -163,7 +163,7 @@ process.on('uncaughtException', async (err) => {
   setTimeout(() => process.exit(1), 1000)
 })
 
-process.on('unhandledRejection', async (reason, promise) => {
+process.on('unhandledRejection', async (reason, _promise) => {
   logger.error('Unhandled Rejection', { reason: String(reason) })
   await logAudit('SYSTEM_ERROR', 'system', {
     username: 'system',

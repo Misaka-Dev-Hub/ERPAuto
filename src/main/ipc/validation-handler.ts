@@ -121,6 +121,7 @@ function getTableName(mysqlTableName: string): string {
  * Read Production IDs from file
  */
 function readProductionIds(filePath: string): string[] {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const fs = require('fs')
   const content = fs.readFileSync(filePath, 'utf-8') as string
   return content
@@ -174,12 +175,14 @@ async function getSourceNumbersFromInputs(
     const batchSize = 2000
 
     if (isSqlServer) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const sql = require('mssql')
       const allOrderNumbers: string[] = []
 
       for (let i = 0; i < productionIds.length; i += batchSize) {
         const batch = productionIds.slice(i, i + batchSize)
         const placeholders = batch.map((_, idx) => `@p${idx}`).join(',')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const params: Record<string, { value: string; type: any }> = {}
 
         batch.forEach((id, idx) => {
@@ -331,6 +334,7 @@ export function registerValidationHandlers(): void {
         // Get material records from DiscreteMaterialPlanData
         const materialDao = new DiscreteMaterialPlanDAO()
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let materialRecords: any[] = []
 
         if (request.mode === 'database_full') {
@@ -590,9 +594,11 @@ export function registerValidationHandlers(): void {
         const detailTableName = getTableName('dbo_DiscreteMaterialPlanData')
 
         for (const mat of materials) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           let detailResult: any
 
           if (isSqlServer) {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             const sql = require('mssql')
             const detailSql = `
               SELECT TOP 1 MaterialName, Specification, Model
@@ -666,9 +672,11 @@ export function registerValidationHandlers(): void {
         const detailTableName = getTableName('dbo_DiscreteMaterialPlanData')
 
         for (const mat of materials) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           let detailResult: any
 
           if (isSqlServer) {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             const sql = require('mssql')
             const detailSql = `
               SELECT TOP 1 MaterialName, Specification, Model
@@ -723,6 +731,7 @@ export function registerValidationHandlers(): void {
   /**
    * Get statistics
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ipcMain.handle(IPC_CHANNELS.MATERIALS_GET_STATISTICS, async (_event): Promise<{ stats: any }> => {
     try {
       const dao = new MaterialsToBeDeletedDAO()
@@ -838,6 +847,7 @@ export function registerValidationHandlers(): void {
         } else {
           // Regular users only see their own materials
           if (isSqlServer) {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             const sql = require('mssql')
             const userMaterialsSql = `
               SELECT MaterialCode

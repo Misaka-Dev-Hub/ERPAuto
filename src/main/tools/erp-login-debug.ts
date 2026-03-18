@@ -16,7 +16,7 @@
  */
 
 import { chromium } from 'playwright'
-import path from 'path'
+import _path from 'path'
 
 // ==================== 配置区域 ====================
 const ERP_CONFIG = {
@@ -60,8 +60,11 @@ async function debugErpLogin(): Promise<void> {
     })
   })
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let browser: any = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let context: any = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let page: any = null
 
   try {
@@ -84,10 +87,12 @@ async function debugErpLogin(): Promise<void> {
     page = await context.newPage()
 
     // 启用详细的控制台日志
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     page.on('console', (msg: any) => {
       console.log(`[Page Console] ${msg.type()}: ${msg.text()}`)
     })
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     page.on('pageerror', (error: any) => {
       console.error(`[Page Error] ${error.message}`)
     })
@@ -119,6 +124,7 @@ async function debugErpLogin(): Promise<void> {
       await usernameInput.waitFor({ state: 'visible', timeout: 5000 })
       await usernameInput.fill(ERP_CONFIG.username)
       console.log('用户名已输入')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       console.error('找不到用户名输入框:', e.message)
       throw new Error('找不到用户名输入框，请检查页面结构是否改变')
@@ -131,6 +137,7 @@ async function debugErpLogin(): Promise<void> {
       await passwordInput.waitFor({ state: 'visible', timeout: 5000 })
       await passwordInput.fill(ERP_CONFIG.password)
       console.log('密码已输入')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       console.error('找不到密码输入框:', e.message)
       throw new Error('找不到密码输入框，请检查页面结构是否改变')
@@ -143,6 +150,7 @@ async function debugErpLogin(): Promise<void> {
       await loginButton.waitFor({ state: 'visible', timeout: 5000 })
       await loginButton.click()
       console.log('已点击登录按钮')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       console.error('找不到登录按钮:', e.message)
       throw new Error('找不到登录按钮，请检查页面结构是否改变')
@@ -197,6 +205,7 @@ async function debugErpLogin(): Promise<void> {
     // 保持浏览器打开，等待用户调试
     // 使用 pause 可以让用户手动恢复或使用 Inspector
     await page.pause()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error()
     console.error('='.repeat(60))

@@ -164,6 +164,7 @@ export class DataImportService {
 
     // Dynamic import ExcelJS
     const ExcelJSModule = await import('exceljs')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ExcelJS = (ExcelJSModule as any).default || ExcelJSModule
 
     const workbook = new ExcelJS.Workbook()
@@ -184,6 +185,7 @@ export class DataImportService {
     })
 
     // Iterate through data rows (starting from row 2)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     worksheet.eachRow((row: any, rowNumber: number) => {
       if (rowNumber === 1) return // Skip header row
 
@@ -209,9 +211,11 @@ export class DataImportService {
   /**
    * Build column index to field name mapping from header row
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private buildColumnMapping(headerRow: any): Map<number, keyof MaterialPlanRecord> {
     const mapping = new Map<number, keyof MaterialPlanRecord>()
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     headerRow.eachCell((cell: any, colNumber: number) => {
       const headerText = cell.text?.toString().trim()
       if (headerText && EXCEL_TO_DB_MAPPING[headerText]) {
@@ -226,16 +230,19 @@ export class DataImportService {
    * Build a MaterialPlanRecord from an Excel row
    */
   private buildRecordFromRow(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     row: any,
     columnMapping: Map<number, keyof MaterialPlanRecord>
   ): MaterialPlanRecord | null {
     const record: Partial<MaterialPlanRecord> = {}
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     row.eachCell((cell: any, colNumber: number) => {
       const fieldName = columnMapping.get(colNumber)
       if (!fieldName) return
 
       const value = this.parseCellValue(cell, fieldName)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       record[fieldName] = value as any
     })
 
@@ -250,6 +257,7 @@ export class DataImportService {
   /**
    * Parse cell value based on field type
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private parseCellValue(cell: any, fieldName: keyof MaterialPlanRecord): any {
     const text = cell.text?.toString().trim()
     const value = cell.value

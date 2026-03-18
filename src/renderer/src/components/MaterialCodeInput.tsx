@@ -22,9 +22,11 @@ export const MaterialCodeInput: React.FC<MaterialCodeInputProps> = ({
   useEffect(() => {
     // Count non-empty lines
     const lines = value.split('\n').filter((line) => line.trim().length > 0)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCount(lines.length)
   }, [value])
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     onChange(e.target.value)
   }

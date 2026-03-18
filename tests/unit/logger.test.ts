@@ -48,16 +48,40 @@ vi.mock('winston', () => {
     })
   }
 
+  // Actually, format is used as winston.format((info) => info) which returns a function that formats
+  // In the real winston, it returns an instance of Format.
+  // Our mock fn returns the function passed to it, so when it is called `customFileFormatter()`,
+  // it is actually calling the callback! But the callback expects `info` object, and we pass nothing.
+  // Let's fix the mock to return a function that ignores its arguments or passes a dummy info.
+  const formatMockFactory = Object.assign(
+    vi.fn((fn) => {
+      // Returns a formatter function that just returns what it is given
+      return vi.fn((info = {}) => {
+        try {
+          return fn(info)
+        } catch {
+          return info
+        }
+      })
+    }),
+    {
+      combine: vi.fn((...args) => args),
+      timestamp: vi.fn(() => ({ type: 'timestamp' })),
+      colorize: vi.fn(() => ({ type: 'colorize' })),
+      printf: vi.fn((fn) => fn),
+      json: vi.fn(() => ({ type: 'json' }))
+    }
+  )
+
   return {
+    createLogger: vi.fn(() => createLoggerInstance),
+    format: formatMockFactory,
+    transports: {
+      Console: vi.fn()
+    },
     default: {
       createLogger: vi.fn(() => createLoggerInstance),
-      format: {
-        combine: vi.fn((...args) => args),
-        timestamp: vi.fn(() => ({ type: 'timestamp' })),
-        colorize: vi.fn(() => ({ type: 'colorize' })),
-        printf: vi.fn((fn) => fn),
-        json: vi.fn(() => ({ type: 'json' }))
-      },
+      format: formatMockFactory,
       transports: {
         Console: vi.fn()
       }
@@ -344,6 +368,10 @@ describe('ConfigManager Logging Integration', () => {
         level: 'info' as const,
         auditRetention: 30,
         appRetention: 14
+      },
+      cleaner: {
+        batchSize: 50,
+        maxRetries: 3
       }
     })
 

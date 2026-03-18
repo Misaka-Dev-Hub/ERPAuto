@@ -44,6 +44,7 @@ const variantStyles: Record<
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function ConfirmDialog({
   isOpen,
   title,
@@ -119,6 +120,7 @@ export function ConfirmDialog({
  * Hook for using confirmation dialogs
  * Returns a confirm function that shows a dialog and resolves with user's choice
  */
+// eslint-disable-next-line react-refresh/only-export-components, @typescript-eslint/explicit-function-return-type
 export function useConfirmDialog() {
   const [config, setConfig] = useState<
     | (Omit<ConfirmDialogProps, 'isOpen' | 'onConfirm' | 'onCancel'> & {

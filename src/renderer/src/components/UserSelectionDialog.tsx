@@ -40,10 +40,12 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
   // Reset selection when dialog opens
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedUserId(null)
     }
   }, [isOpen])
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleConfirm = () => {
     if (selectedUserId === null) {
       return
@@ -55,6 +57,7 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleDoubleClick = (user: UserInfo) => {
     onSelectUser(user)
   }

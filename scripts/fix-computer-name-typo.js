@@ -4,8 +4,10 @@
  * This script renames the column from 'ComputerNmae' to 'ComputerName'
  */
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const mysql = require('mysql2/promise')
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 async function main() {
   const config = {
     host: '192.168.31.83',

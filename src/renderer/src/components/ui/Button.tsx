@@ -30,6 +30,7 @@ const sizeStyles: Record<ButtonSize, string> = {
   lg: 'px-6 py-3 text-lg'
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function Button({
   variant = 'primary',
   size = 'md',

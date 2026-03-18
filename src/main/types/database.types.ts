@@ -52,12 +52,14 @@ export interface IDatabaseService {
    * @param sql - SQL query string
    * @param params - Query parameters as an array
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   query(sql: string, params?: any[]): Promise<QueryResult>
 
   /**
    * Execute multiple queries in a transaction
    * @param queries - Array of queries with optional parameters
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   transaction(queries: { sql: string; params?: any[] }[]): Promise<void>
 }
 

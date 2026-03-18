@@ -43,6 +43,7 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
     }
   }, [isOpen, isAdmin, currentUsername])
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const loadReports = async () => {
     setIsLoadingList(true)
     setError(null)
@@ -59,13 +60,14 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
       } else {
         setError(result.error || '无法获取报告列表')
       }
-    } catch (err) {
+    } catch {
       setError('获取报告列表时发生错误')
     } finally {
       setIsLoadingList(false)
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleReportChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const key = e.target.value
     setSelectedReportKey(key)
@@ -85,7 +87,7 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
         setError(result.error || '无法获取报告内容')
         setReportContent('')
       }
-    } catch (err) {
+    } catch {
       setError('获取报告内容时发生错误')
       setReportContent('')
     } finally {
@@ -96,6 +98,7 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
   if (!isOpen) return null
 
   // Format date to local string
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const formatDate = (dateString?: Date | string) => {
     if (!dateString) return '未知时间'
     const date = typeof dateString === 'string' ? new Date(dateString) : dateString
@@ -157,7 +160,11 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
             </div>
             {isLoadingList && <Loader2 size={16} className="text-blue-500 animate-spin" />}
           </div>
-          {error && <div className="mt-3 text-sm text-red-600 flex items-center gap-1.5 bg-red-50 p-2 rounded">{error}</div>}
+          {error && (
+            <div className="mt-3 text-sm text-red-600 flex items-center gap-1.5 bg-red-50 p-2 rounded">
+              {error}
+            </div>
+          )}
         </div>
 
         {/* Content */}

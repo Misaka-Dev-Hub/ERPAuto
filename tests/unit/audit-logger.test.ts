@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'fs'
 import path from 'path'
-import { app } from 'electron'
+import { _app } from 'electron'
 
 // Isolated test log directory
 const TEST_LOG_DIR = path.join(process.cwd(), 'test-logs')
@@ -105,7 +105,7 @@ describe('Audit Logger - Real File Integration', () => {
 
     // Find the audit log file (should be today's file)
     const today = new Date().toISOString().split('T')[0]
-    const auditFile = path.join(TEST_LOG_DIR, `audit-${today}.jsonl`)
+    const _auditFile = path.join(TEST_LOG_DIR, `audit-${today}.jsonl`)
 
     // Check if file exists (it may be in a different location due to electron mock)
     // The actual file location depends on how electron's app.getPath('logs') is mocked

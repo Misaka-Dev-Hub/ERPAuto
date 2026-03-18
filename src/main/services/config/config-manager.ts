@@ -178,6 +178,7 @@ export class ConfigManager {
       log.info('Configuration loaded and validated successfully')
     } catch (error) {
       if (error instanceof z.ZodError) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const messages = error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`)
         log.error('Configuration validation failed', { errors: messages })
         throw new Error(`配置文件验证失败:\n${messages.join('\n')}`)
@@ -288,6 +289,7 @@ export class ConfigManager {
       return { success: true }
     } catch (error) {
       if (error instanceof z.ZodError) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const messages = error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`)
         return { success: false, error: `配置验证失败:\n${messages.join('\n')}` }
       }
@@ -298,6 +300,7 @@ export class ConfigManager {
   /**
    * 深合并工具函数
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private deepMerge<T extends Record<string, any>>(source: T, target: Partial<T>): T {
     const result = { ...source }
     for (const key in target) {
@@ -307,8 +310,10 @@ export class ConfigManager {
           target[key] !== null &&
           !Array.isArray(target[key])
         ) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           result[key] = this.deepMerge(result[key] as any, target[key] as any)
         } else {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           result[key] = target[key] as any
         }
       }

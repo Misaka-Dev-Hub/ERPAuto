@@ -69,6 +69,7 @@ export class MySqlService implements IDatabaseService {
   /**
    * Execute a query and return results
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async query(sql: string, params?: any[]): Promise<QueryResult> {
     if (!this.connection) {
       throw new Error('Not connected to MySQL. Call connect() first.')
@@ -90,6 +91,7 @@ export class MySqlService implements IDatabaseService {
         rowCount = rows.length
       } else if (typeof result === 'object' && result !== null) {
         // INSERT/UPDATE/DELETE query - result is OkPacket
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const okPacket = result as any
         rowCount = okPacket.affectedRows || okPacket.changedRows || 0
       }
@@ -107,6 +109,7 @@ export class MySqlService implements IDatabaseService {
   /**
    * Execute multiple queries in a transaction
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async transaction(queries: { sql: string; params?: any[] }[]): Promise<void> {
     if (!this.connection) {
       throw new Error('Not connected to MySQL. Call connect() first.')

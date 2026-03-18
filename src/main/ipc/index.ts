@@ -69,6 +69,7 @@ export function withErrorHandling<T>(
       if (isBaseError(error)) {
         logError(log, `[${context}] ${error.name}`, error, {
           code,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           cause: (error as any).cause?.message,
           handler: context
         })

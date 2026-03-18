@@ -79,6 +79,7 @@ export class ExtractorCore {
    */
   private async navigateToExtractorPage(
     session: ErpSession
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<{ popupPage: any; workFrame: any }> {
     const { page, mainFrame } = session
 
@@ -118,6 +119,7 @@ export class ExtractorCore {
    * Setup query interface
    * Reference: Python setup_query_interface() method lines 231-239
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async setupQueryInterface(innerFrame: any): Promise<void> {
     // Click search icon (Python line 233)
     await innerFrame.locator('.search-name-wrapper > .iconfont').click()
@@ -140,7 +142,9 @@ export class ExtractorCore {
    */
   private async downloadBatch(
     _session: ErpSession,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     popupPage: any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     workFrame: any,
     orderNumbers: string[],
     batchIndex: number,
@@ -188,6 +192,7 @@ export class ExtractorCore {
    * Wait for loading overlay to disappear
    * Reference: Python lines 148-153
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async waitForLoading(workFrame: any): Promise<void> {
     const loadingLocator = workFrame
       .locator('div')

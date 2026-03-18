@@ -75,6 +75,7 @@ export class SqlServerService implements IDatabaseService {
    * @param sqlString - SQL query string with @p0, @p1, ... placeholders
    * @param params - Query parameters as an array (converted to @p0, @p1, ...)
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async query(sqlString: string, params?: any[]): Promise<QueryResult> {
     if (!this.pool) {
       throw new Error('Not connected to SQL Server. Call connect() first.')
@@ -159,6 +160,7 @@ export class SqlServerService implements IDatabaseService {
    * Execute multiple queries in a transaction
    * @param queries - Array of queries with array-based parameters
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async transaction(queries: { sql: string; params?: any[] }[]): Promise<void> {
     if (!this.pool) {
       throw new Error('Not connected to SQL Server. Call connect() first.')

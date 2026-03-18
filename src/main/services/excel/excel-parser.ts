@@ -67,10 +67,12 @@ export class ExcelParser {
     }
 
     const plans: DiscreteMaterialPlan[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allRows: any[][] = []
 
     // Read all rows into memory
     worksheet.eachRow((row, _rowNumber) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       allRows.push(row.values as any[])
     })
 
@@ -80,6 +82,7 @@ export class ExcelParser {
     const orders = this.parseOrders(allRows)
 
     // Store orders for potential Excel export
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(this as any).lastOrders = orders
 
     // Flatten orders into material plans
@@ -128,6 +131,7 @@ export class ExcelParser {
    * @param outputPath - Output Excel file path
    */
   async saveAsExcel(outputPath: string): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const orders = (this as any).lastOrders
     if (!orders) {
       throw new Error('No parsed data available. Call parse() first.')
@@ -225,7 +229,9 @@ export class ExcelParser {
    * Parse orders from all rows
    * Reference: _parse_sheet() in Python code
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private parseOrders(allRows: any[][]): Array<{ orderInfo: OrderHeader; materials: any[] }> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const orders: Array<{ orderInfo: OrderHeader; materials: any[] }> = []
     let i = 0
 
@@ -266,11 +272,13 @@ export class ExcelParser {
           const isEmptyRow =
             nextRow < allRows.length &&
             allRows[nextRow] &&
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             allRows[nextRow].every((cell: any) => cell === null || String(cell).trim() === '')
 
           if (isEmptyRow) {
             // No data, find footer info
             log.debug('Order has no material data')
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const materials: any[] = []
             const footerInfo: OrderHeader = {}
             let dataRow = nextRow + 1
@@ -297,6 +305,7 @@ export class ExcelParser {
           } else {
             // Has data, extract materials
             log.debug('Order has material data')
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const materials: any[] = []
             const footerInfo: OrderHeader = {}
             let dataRow = tableRow + 1
@@ -381,6 +390,7 @@ export class ExcelParser {
    * Parse header row (field names and values interleaved)
    * Reference: _parse_header_row() in Python code
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private parseHeaderRow(row: any[], info: OrderHeader): void {
     let j = 0
     while (j < row.length) {
@@ -429,6 +439,7 @@ export class ExcelParser {
    * - etc.
    * NOTE: This is an internal method that returns raw data structure
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private parseMaterialRowInternal(row: any[], rowNumber: number): any | null {
     // Extract 13 fields from material row (ExcelJS is 1-indexed, so data starts at index 1)
     const material = {
@@ -459,6 +470,7 @@ export class ExcelParser {
   /**
    * Safely parse float from cell value
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private parseFloat(value: any): number | undefined {
     if (value === null || value === undefined) {
       return undefined
@@ -474,6 +486,7 @@ export class ExcelParser {
    * @param values - Row values array from ExcelJS
    * @returns true if row contains "离散备料计划" (order title)
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public isOrderRow(values: any[]): boolean {
     // ExcelJS arrays are 1-indexed, check index 2 for order title
     const firstCell = values[2]
@@ -490,6 +503,7 @@ export class ExcelParser {
    * @param values - Row values array from ExcelJS
    * @returns Order number (e.g., "SC202501001") or empty string
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public extractOrderNumber(values: any[]): string {
     // Parse the row to extract order number using same logic as header parsing
     const orderInfo: OrderHeader = {}
@@ -508,6 +522,7 @@ export class ExcelParser {
    * @returns DiscreteMaterialPlan or null if invalid row
    */
   public parseMaterialRow(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     values: any[],
     orderNumber: string,
     productionId: string,

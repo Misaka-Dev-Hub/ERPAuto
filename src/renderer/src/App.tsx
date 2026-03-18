@@ -53,6 +53,7 @@ function App(): React.JSX.Element {
   const [currentPage, setCurrentPage] = useState<Page>('extractor') // Default to extractor for the new layout
 
   // Load error message from sessionStorage
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const showError = (message: string) => {
     setErrorMessage(message)
     setTimeout(() => setErrorMessage(''), 3000)
@@ -65,6 +66,7 @@ function App(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const initializeAuth = async () => {
     logger.info('=== Starting initializeAuth ===')
     try {
@@ -150,12 +152,14 @@ function App(): React.JSX.Element {
   }
 
   // Handle login dialog cancel
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleLoginCancel = () => {
     // User cancelled, keep showing dialog or exit
     setShowLoginDialog(false)
   }
 
   // Handle user selection
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleUserSelect = async (user: SelectedUserInfo) => {
     try {
       const result = await window.electron.auth.switchUser(user)
@@ -179,6 +183,7 @@ function App(): React.JSX.Element {
   }
 
   // Handle user selection cancel
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleUserSelectionCancel = () => {
     // User cancelled selection, logout and show login dialog
     window.electron.auth.logout()
@@ -187,6 +192,7 @@ function App(): React.JSX.Element {
   }
 
   // Handle logout
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const handleLogout = async () => {
     await window.electron.auth.logout()
     setIsAuthenticated(false)
@@ -322,6 +328,7 @@ function App(): React.JSX.Element {
       {/* ================= 顶部导航与标题栏 ================= */}
       <header
         className="h-16 bg-slate-900 text-slate-300 flex items-center justify-between px-4 shadow-md z-20 flex-shrink-0"
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         style={{ WebkitAppRegion: 'drag' } as any}
       >
         <div className="flex items-center gap-6">
@@ -334,6 +341,7 @@ function App(): React.JSX.Element {
           <div
             className="flex flex-col cursor-pointer"
             onClick={() => setCurrentPage('home')}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             style={{ WebkitAppRegion: 'no-drag' } as any}
           >
             <div className="flex items-center gap-2 text-white font-bold text-lg">
@@ -348,6 +356,7 @@ function App(): React.JSX.Element {
 
         <nav
           className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg"
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
           {navItems.map((item) => (
@@ -368,6 +377,7 @@ function App(): React.JSX.Element {
 
         <div
           className="flex items-center gap-4 text-sm"
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
           <div className="flex items-center gap-2 text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">

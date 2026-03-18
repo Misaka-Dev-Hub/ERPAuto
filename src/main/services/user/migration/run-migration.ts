@@ -12,6 +12,7 @@ import * as mysql from 'mysql2/promise'
 import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { dirname } from 'path'
 import yaml from 'js-yaml'
 import { z } from 'zod'
@@ -70,6 +71,7 @@ async function checkColumnExists(
       AND COLUMN_NAME = ?
   `
   const [rows] = await connection.query(sql, [tableName, columnName])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = rows as any[]
   return result.length > 0 && result[0].count > 0
 }

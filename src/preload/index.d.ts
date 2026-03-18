@@ -1,4 +1,10 @@
-import type { FileAPI, ExtractorAPI, CleanerAPI, DatabaseAPI, ReportAPI } from '../main/types/ipc-api.types'
+import type {
+  FileAPI,
+  ExtractorAPI,
+  CleanerAPI,
+  DatabaseAPI,
+  ReportAPI
+} from '../main/types/ipc-api.types'
 import type { ResolverInput, ResolverResponse } from '../main/ipc/resolver-handler'
 import type { UserInfo } from '../main/types/user.types'
 import type {

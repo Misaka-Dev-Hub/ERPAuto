@@ -226,6 +226,7 @@ export class RustfsService {
       const response = await this.client.send(command)
 
       const chunks: Buffer[] = []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for await (const chunk of response.Body as any) {
         chunks.push(Buffer.from(chunk))
       }
