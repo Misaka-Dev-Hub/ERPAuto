@@ -38,6 +38,7 @@
     "@types/js-yaml": "^4.0.9",
     "chromium-bidi": "^15.0.0",
     "date-fns": "^4.1.0",
+    "electron-updater": "^6.8.3",
     "exceljs": "^4.4.0",
     "github-markdown-css": "^5.9.0",
     "js-yaml": "^4.1.1",
