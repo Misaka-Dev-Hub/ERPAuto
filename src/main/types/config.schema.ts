@@ -144,6 +144,22 @@ export const rustfsConfigSchema = z.object({
 })
 
 /**
+ * Update service configuration schema
+ */
+export const updateConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  allowDevMode: z.boolean().default(false),
+  endpoint: z.string().default(''),
+  accessKey: z.string().default(''),
+  secretKey: z.string().default(''),
+  bucket: z.string().default(''),
+  region: z.string().default('us-east-1'),
+  basePrefix: z.string().default('updates/win-portable'),
+  checkIntervalMinutes: z.number().int().min(1).max(1440).default(30),
+  maxAdminHistoryPerChannel: z.number().int().min(1).max(100).default(10)
+})
+
+/**
  * 完整应用配置 Schema
  */
 export const fullConfigSchema = z.object({
@@ -155,7 +171,8 @@ export const fullConfigSchema = z.object({
   cleaner: cleanerConfigSchema,
   orderResolution: orderResolutionSchema,
   logging: loggingConfigSchema,
-  rustfs: rustfsConfigSchema.optional()
+  rustfs: rustfsConfigSchema.optional(),
+  update: updateConfigSchema.optional()
 })
 
 /**
@@ -168,6 +185,7 @@ export type SqlServerConfig = z.infer<typeof sqlServerConfigSchema>
 export type ErpSystemConfig = z.infer<typeof erpSystemConfigSchema>
 export type LoggingConfig = z.infer<typeof loggingConfigSchema>
 export type RustfsConfig = z.infer<typeof rustfsConfigSchema>
+export type UpdateConfig = z.infer<typeof updateConfigSchema>
 
 /**
  * 验证并解析配置

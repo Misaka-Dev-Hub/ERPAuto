@@ -18,14 +18,24 @@ const getGitHash = (): string => {
 const require = createRequire(import.meta.url)
 const version = require('./package.json').version
 const gitHash = getGitHash()
+const appChannel = process.env.APP_CHANNEL === 'preview' ? 'preview' : 'stable'
 
 export default defineConfig({
-  main: {},
-  preload: {},
+  main: {
+    define: {
+      __APP_CHANNEL__: JSON.stringify(appChannel)
+    }
+  },
+  preload: {
+    define: {
+      __APP_CHANNEL__: JSON.stringify(appChannel)
+    }
+  },
   renderer: {
     define: {
       __APP_VERSION__: JSON.stringify(version),
-      __GIT_HASH__: JSON.stringify(gitHash)
+      __GIT_HASH__: JSON.stringify(gitHash),
+      __APP_CHANNEL__: JSON.stringify(appChannel)
     },
     resolve: {
       alias: {

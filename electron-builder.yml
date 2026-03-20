@@ -2,6 +2,9 @@ appId: com.electron.app
 productName: erpauto
 directories:
   buildResources: build
+extraResources:
+  - from: build/bin/portable-updater.exe
+    to: portable-updater.exe
 files:
   - '!**/.vscode/*'
   - '!src/*'

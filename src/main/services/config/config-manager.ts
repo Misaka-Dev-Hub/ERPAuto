@@ -102,6 +102,18 @@ const DEFAULT_CONFIG: FullConfig = {
     secretKey: '',
     bucket: 'erpauto',
     region: 'us-east-1'
+  },
+  update: {
+    enabled: false,
+    allowDevMode: false,
+    endpoint: '',
+    accessKey: '',
+    secretKey: '',
+    bucket: '',
+    region: 'us-east-1',
+    basePrefix: 'updates/win-portable',
+    checkIntervalMinutes: 30,
+    maxAdminHistoryPerChannel: 10
   }
 }
 

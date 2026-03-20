@@ -70,3 +70,16 @@ rustfs:
   secretKey: '<YOUR_SECRET_KEY>' # 密钥
   bucket: 'erpauto' # 存储桶名称
   region: 'us-east-1' # 区域（S3 兼容，默认即可）
+
+# 便携版自动更新配置
+update:
+  enabled: false
+  allowDevMode: false
+  endpoint: 'http://192.168.110.114:9000'
+  accessKey: '<YOUR_ACCESS_KEY>'
+  secretKey: '<YOUR_SECRET_KEY>'
+  bucket: 'erpauto'
+  region: 'us-east-1'
+  basePrefix: 'updates/win-portable'
+  checkIntervalMinutes: 30
+  maxAdminHistoryPerChannel: 10
