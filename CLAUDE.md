@@ -1,141 +1,165 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本文件用于给 AI 编程代理提供本项目的最小必要指导。  
+目标不是替代 `README` 或 `docs/`，而是帮助代理快速理解项目结构、工作方式和关键约束。
 
-## Development Commands
+## 项目概览
 
-### Running the Application
+ERPAuto 是一个基于 Electron 的桌面应用，用于自动化处理 ERP 系统中的数据提取、清理、校验和配置管理。
 
-```bash
-npm run dev              # Start development server with hot reload
-npm run build            # Full build with type checking
-npm run build:win        # Build Windows executable
-```
+技术栈：
 
-### Code Quality
+- Electron 39
+- React 19
+- TypeScript 5.9
+- electron-vite / Vite 7
+- Playwright 1.58
+- Vitest
 
-```bash
-npm run lint             # ESLint check
-npm run format           # Prettier format
-npm run typecheck        # TypeScript check (both main and renderer)
-npm run typecheck:node   # TypeScript check for main process only
-npm run typecheck:web    # TypeScript check for renderer only
-```
+## 常用命令
 
-### Testing
+开发与构建：
 
 ```bash
-npm run test             # Run unit tests (Vitest)
-npm run test:coverage    # Run tests with coverage report
-npm run test:e2e         # Run E2E tests (Playwright)
-npm run test:e2e:ui      # Run E2E tests with UI
-npm run test:e2e:report  # Show E2E test report
+npm run dev
+npm run build
+npm run build:win
 ```
 
-## Architecture Overview
+质量检查：
 
-ERPAuto is an **Electron desktop application** for automating ERP system data processing. The application follows the classic Electron architecture with three distinct processes:
+```bash
+npm run typecheck
+npm run typecheck:node
+npm run typecheck:web
+npm run lint
+npm run format
+```
 
-### Process Structure
+测试：
 
-1. **Main Process** (`src/main/`)
-   - Node.js environment managing application lifecycle
-   - Entry point: `src/main/index.ts`
-   - Registers all IPC handlers via `registerIpcHandlers()`
-   - Loads configuration from `config.yaml` via ConfigManager at startup
+```bash
+npm run test
+npm run test:coverage
+npm run test:e2e
+```
 
-2. **Preload Script** (`src/preload/`)
-   - Security bridge between main and renderer processes
-   - Exposes type-safe APIs via `contextBridge` as `window.electron` and `window.api`
-   - Central API surface organized by domain (auth, extractor, cleaner, database, etc.)
+发布：
 
-3. **Renderer Process** (`src/renderer/`)
-   - React 19 + TypeScript UI
-   - Uses exposed preload APIs for all main process communication
-   - Authentication-based routing with role-based access control
+```bash
+npm run release:publish -- --channel stable
+npm run release:publish -- --channel preview
+```
 
-### Service Architecture
+详细发布流程见：
+[docs/build-and-release-guide.md](/d:/FileLib/Projects/CodeMigration/ERPAuto/docs/build-and-release-guide.md)
 
-The main process is organized around domain-specific services in `src/main/services/`:
+## 代码结构
 
-- **ERP Services** (`services/erp/`): Browser automation using Playwright
-  - `ExtractorService` - Downloads material plan data
-  - `CleanerService` - Deletes specified materials with dry-run support
-  - `ErpAuthService` - Handles ERP authentication
-  - `OrderResolverService` - Validates and resolves order numbers
-  - `locators.ts` - ERP element selectors
+### 主进程
 
-- **Database Services** (`services/database/`): Dual database support
-  - `MySqlService` / `mysql.ts` - MySQL operations
-  - `SqlServerService` / `sql-server.ts` - SQL Server operations
-  - DAO pattern: `discrete-material-plan-dao.ts`, `materials-to-be-deleted-dao.ts`
+- 路径：`src/main/`
+- 入口：`src/main/index.ts`
+- 职责：
+  - 应用生命周期管理
+  - 配置加载
+  - IPC 注册
+  - 更新服务初始化
 
-- **User Services** (`services/user/`): Authentication and session management
-  - `BipUsersDao` - User data access
-  - `SessionManager` - Active session tracking
+### 预加载层
 
-- **Other Services**:
-  - `config/` - Configuration management
-  - `excel/` - Excel file parsing
+- 路径：`src/preload/`
+- 职责：
+  - 暴露 `window.electron` API
+  - 作为 renderer 和 main 之间的安全桥
 
-### IPC Handler Pattern
+### 渲染进程
 
-All IPC communication follows a consistent pattern:
+- 路径：`src/renderer/`
+- 技术：React + TypeScript
+- 特点：
+  - 通过 preload 暴露的 API 调用主进程
+  - 以登录状态和角色控制主要功能入口
 
-- Handlers are in `src/main/ipc/`, organized by domain (8 modules)
-- Each handler module exports a `register*Handlers()` function
-- All handlers are registered in `src/main/ipc/index.ts`
-- Channel naming follows `domain:action` convention (e.g., `extractor:run`, `auth:login`)
+### 服务层
 
-### Authentication Flow
+主进程服务集中在 `src/main/services/`，按领域拆分：
 
-The application implements a multi-stage authentication system:
+- `erp/`：ERP 浏览器自动化
+- `database/`：MySQL / SQL Server
+- `user/`：登录、会话、用户切换
+- `config/`：YAML 配置管理
+- `update/`：便携版更新
+- `excel/`：Excel 处理
 
-1. **Silent Login**: On startup, attempts automatic login using computer name
-2. **Fallback**: Shows login dialog if silent login fails
-3. **Admin User Selection**: Admin users can switch to other user accounts
-4. **Session Management**: Persistent sessions with role-based permissions (Admin/User/Guest)
+## 关键事实
 
-Admin users see logout buttons and can access user switching. Non-admin users have restricted access based on the user who initiated their session.
+### 配置系统
 
-### Type System
+- 使用 YAML 配置
+- 模板文件：`config.template.yaml`
+- 开发环境通常使用项目根目录下的 `config.yaml`
+- 生产环境会将配置放到用户目录
 
-- Separate TypeScript configs: `tsconfig.node.json` (main/preload) and `tsconfig.web.json` (renderer)
-- Types are co-located with features: `src/main/types/` contains domain-specific type definitions
-- The preload script exposes a typed API surface that's available in renderer
+### IPC 组织方式
 
-### Path Aliases
+- 所有 IPC handler 在 `src/main/ipc/`
+- 每个领域一个 handler 模块
+- 统一在 `src/main/ipc/index.ts` 注册
+- channel 命名遵循 `domain:action`
 
-- `@renderer` → `src/renderer/src` (renderer process)
-- `@main` → `src/main` (main process, tests only)
-- `@services` → `src/main/services` (main process, tests only)
-- `@types` → `src/main/types` (main process, tests only)
+### 认证与角色
 
-## Configuration Management
+当前主要角色是：
 
-The application uses a YAML-based configuration system (`config.yaml`) managed by `ConfigManager`:
+- `Admin`
+- `User`
+- `Guest`
 
-- **Development**: `config.yaml` in project root (easy to edit and version control)
-- **Production**: `config.yaml` in user data directory (AppData on Windows)
+登录流程支持：
 
-Key configurations in `config.yaml`:
+- 静默登录
+- 普通登录
+- 管理员切换用户
 
-- **ERP Settings**: URL (fixed infrastructure)
-- **Database**: MySQL and SQL Server connection configs (dual support)
-- **Paths**: Data directory and output file settings
-- **Extraction**: Batch size, verbosity, persistence options
-- **Validation**: Data source, batch size, match mode
-- **Order Resolution**: Database table and field names for order number lookup
+### 便携版自动更新
 
-Note: ERP credentials (username/password) are stored in the database (`dbo_BIPUsers` table) per user, managed via the Settings UI.
+项目已实现 Windows 便携版更新，关键点：
 
-## Key Technologies
+- 更新检查基于登录用户角色
+- 支持 `stable` / `preview` 双通道
+- `User` 只看 `stable`
+- `Admin` 同时看 `stable` 和 `preview`
+- 使用原生 `portable-updater.exe` 完成替换，不依赖 PowerShell
 
-- **Electron 39** - Desktop framework
-- **React 19** - UI framework
-- **TypeScript 5.9** - Type safety
-- **Playwright 1.58** - Browser automation for ERP interaction
-- **electron-vite + Vite 7** - Build tooling
-- **Zod** - Runtime validation
-- **Vitest** - Unit tests
-- **Playwright Test** - E2E tests
+相关文档：
+
+- [docs/portable-auto-update-architecture.md](/d:/FileLib/Projects/CodeMigration/ERPAuto/docs/portable-auto-update-architecture.md)
+- [docs/build-and-release-guide.md](/d:/FileLib/Projects/CodeMigration/ERPAuto/docs/build-and-release-guide.md)
+
+## 代理工作约束
+
+1. 优先修改现有文件，不要随意新建同类文件。
+2. 变更前先理解对应模块的现有模式，尽量保持风格一致。
+3. renderer 不要直接访问 Node/Electron 能力，统一走 preload。
+4. 配置、IPC、类型定义通常需要同步更新，避免只改一层。
+5. 涉及发布、更新、构建链路时，优先复用现有脚本，不要重复实现。
+6. 涉及浏览器部署或更新流程时，先看 `docs/` 里的专题文档。
+
+## 代理优先查看的文档
+
+- [README.md](/d:/FileLib/Projects/CodeMigration/ERPAuto/README.md)
+- [docs/build-and-release-guide.md](/d:/FileLib/Projects/CodeMigration/ERPAuto/docs/build-and-release-guide.md)
+- [docs/portable-auto-update-architecture.md](/d:/FileLib/Projects/CodeMigration/ERPAuto/docs/portable-auto-update-architecture.md)
+- [docs/browser/PLAYWRIGHT_DEPLOYMENT.md](/d:/FileLib/Projects/CodeMigration/ERPAuto/docs/browser/PLAYWRIGHT_DEPLOYMENT.md)
+
+## 不放在这里的内容
+
+以下内容不应继续堆在本文件中：
+
+- 详细用户使用说明
+- 大段业务流程说明
+- 重复的架构长文
+- 版本发布记录
+
+这些内容应继续放在 `README` 或 `docs/` 下的专题文档中。
