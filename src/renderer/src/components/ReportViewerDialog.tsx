@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react'
-import { X, FileText, Loader2 } from 'lucide-react'
+import React, { useEffect, useState, useMemo } from 'react'
+import { X, FileText, Loader2, ChevronDown } from 'lucide-react'
+import { Combobox, Transition } from '@headlessui/react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -30,11 +31,12 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
   currentUsername
 }) => {
   const [reports, setReports] = useState<ReportMetadata[]>([])
-  const [selectedReportKey, setSelectedReportKey] = useState<string>('')
+  const [selectedReport, setSelectedReport] = useState<ReportMetadata | null>(null)
   const [reportContent, setReportContent] = useState<string>('')
   const [isLoadingList, setIsLoadingList] = useState<boolean>(false)
   const [isLoadingContent, setIsLoadingContent] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
 
   useEffect(() => {
     if (isOpen) {
@@ -42,7 +44,7 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
     } else {
       // Reset state when closed
       setReports([])
-      setSelectedReportKey('')
+      setSelectedReport(null)
       setReportContent('')
       setError(null)
     }
@@ -71,11 +73,10 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
     }
   }
 
-  const handleReportChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const key = e.target.value
-    setSelectedReportKey(key)
+  const handleReportChange = async (report: ReportMetadata | null) => {
+    setSelectedReport(report)
 
-    if (!key) {
+    if (!report) {
       setReportContent('')
       return
     }
@@ -83,7 +84,7 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
     setIsLoadingContent(true)
     setError(null)
     try {
-      const result = await window.electron.report.download(key)
+      const result = await window.electron.report.download(report.key)
       if (result.success && result.data) {
         setReportContent(result.data)
       } else {
@@ -97,6 +98,12 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
       setIsLoadingContent(false)
     }
   }
+
+  // Filter reports based on search query
+  const filteredReports = useMemo(() => {
+    if (!query) return reports
+    return reports.filter((report) => report.filename.toLowerCase().includes(query.toLowerCase()))
+  }, [reports, query])
 
   if (!isOpen) return null
 
@@ -136,29 +143,82 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
           <div className="flex items-center gap-4">
             <label className="text-sm font-medium text-slate-700 flex-shrink-0">选择报告:</label>
             <div className="relative flex-1 max-w-2xl">
-              <select
-                value={selectedReportKey}
-                onChange={handleReportChange}
-                disabled={isLoadingList}
-                className="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-700 py-2 pl-3 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 disabled:opacity-50 text-sm"
-              >
-                <option value="">请选择要查看的报告...</option>
-                {reports.map((report) => (
-                  <option key={report.key} value={report.key}>
-                    {isAdmin ? `[${report.username}] ` : ''}
-                    {report.filename} ({formatDate(report.lastModified)})
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
-                <svg
-                  className="fill-current h-4 w-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
+              <Combobox value={selectedReport} onChange={handleReportChange} nullable>
+                <div className="relative">
+                  <Combobox.Input
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-700 py-2 pl-3 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 disabled:opacity-50 text-sm"
+                    displayValue={(report: ReportMetadata | null) => {
+                      if (!report) return '请选择要查看的报告...'
+                      return `${isAdmin ? `[${report.username}] ` : ''}${report.filename} (${formatDate(report.lastModified)})`
+                    }}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="请选择要查看的报告..."
+                    disabled={isLoadingList}
+                  />
+                  <Combobox.Button className="absolute inset-y-0 right-0 flex items-center px-2 text-slate-500 hover:text-slate-700 transition-colors">
+                    <ChevronDown size={20} className="h-5 w-5" />
+                  </Combobox.Button>
+                </div>
+                <Transition
+                  enter="transition duration-100 ease-out"
+                  enterFrom="transform scale-95 opacity-0"
+                  enterTo="transform scale-100 opacity-100"
+                  leave="transition duration-75 ease-out"
+                  leaveFrom="transform scale-100 opacity-100"
+                  leaveTo="transform scale-95 opacity-0"
                 >
-                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                </svg>
-              </div>
+                  <Combobox.Options className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-auto focus:outline-none">
+                    {filteredReports.length === 0 && query ? (
+                      <div className="px-4 py-8 text-center text-slate-400 text-sm">
+                        未找到匹配的报告
+                      </div>
+                    ) : (
+                      <>
+                        {/* Empty option to allow clearing selection */}
+                        <Combobox.Option
+                          value={null}
+                          className={({ active }) =>
+                            `px-4 py-2.5 text-sm cursor-pointer ${
+                              active ? 'bg-slate-100 text-slate-900' : 'text-slate-500 italic'
+                            }`
+                          }
+                        >
+                          请选择要查看的报告...
+                        </Combobox.Option>
+                        {filteredReports.map((report) => (
+                          <Combobox.Option
+                            key={report.key}
+                            value={report}
+                            className={({ active, selected }) =>
+                              `px-4 py-2.5 text-sm cursor-pointer transition-colors ${
+                                selected
+                                  ? 'bg-blue-500 text-white'
+                                  : active
+                                    ? 'bg-blue-50 text-blue-700'
+                                    : 'text-slate-900'
+                              }`
+                            }
+                          >
+                            {({ selected }) => (
+                              <div className="flex items-center justify-between">
+                                <span className="truncate flex-1">
+                                  {isAdmin ? `[${report.username}] ` : ''}
+                                  {report.filename}
+                                </span>
+                                <span
+                                  className={`ml-2 text-xs ${selected ? 'text-blue-100' : 'text-slate-400'}`}
+                                >
+                                  {formatDate(report.lastModified)}
+                                </span>
+                              </div>
+                            )}
+                          </Combobox.Option>
+                        ))}
+                      </>
+                    )}
+                  </Combobox.Options>
+                </Transition>
+              </Combobox>
             </div>
             {isLoadingList && <Loader2 size={16} className="text-blue-500 animate-spin" />}
           </div>
