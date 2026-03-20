@@ -22,6 +22,11 @@ import type {
 import type { IpcResult } from '../main/ipc'
 import type { LogLevel } from '../shared/ipc-channels'
 import type { CleanerConfig } from '../main/types/config.schema'
+import type {
+  DownloadReleaseRequest,
+  UpdateDialogCatalog,
+  UpdateStatus
+} from '../main/types/update.types'
 
 export interface ResolverAPI {
   resolve: (input: ResolverInput) => Promise<IpcResult<ResolverResponse>>
@@ -120,6 +125,16 @@ export interface LoggerAPI {
   log: (level: LogLevel, message: string, context?: Record<string, unknown>) => void
 }
 
+export interface UpdateAPI {
+  getStatus: () => Promise<IpcResult<UpdateStatus>>
+  checkNow: () => Promise<IpcResult<UpdateStatus>>
+  getCatalog: () => Promise<IpcResult<UpdateDialogCatalog>>
+  getChangelog: (release: DownloadReleaseRequest) => Promise<IpcResult<string>>
+  downloadRelease: (release: DownloadReleaseRequest) => Promise<IpcResult<UpdateStatus>>
+  installDownloaded: () => Promise<IpcResult<void>>
+  onStatusChanged: (callback: (data: UpdateStatus) => void) => () => void
+}
+
 export interface ProcessAPI {
   versions: {
     electron: string
@@ -146,6 +161,7 @@ declare global {
       config: ConfigAPI
       logger: LoggerAPI
       report: ReportAPI
+      update: UpdateAPI
     }
     api: unknown
   }

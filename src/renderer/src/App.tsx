@@ -9,7 +9,17 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import { LayoutDashboard, Download, Trash2, Settings, Database, User, LogOut } from 'lucide-react'
+import {
+  LayoutDashboard,
+  Download,
+  Trash2,
+  Settings,
+  Database,
+  User,
+  LogOut,
+  ArrowUpCircle,
+  LoaderCircle
+} from 'lucide-react'
 import { useLogger } from './hooks/useLogger'
 import LoginDialog from './components/LoginDialog'
 import UserSelectionDialog, {
@@ -19,6 +29,12 @@ import { Toast } from './components/ui/Toast'
 import ExtractorPage from './pages/ExtractorPage'
 import CleanerPage from './pages/CleanerPage'
 import SettingsPage from './pages/SettingsPage'
+import UpdateDialog from './components/UpdateDialog'
+import type {
+  DownloadReleaseRequest,
+  UpdateDialogCatalog,
+  UpdateStatus
+} from '../../main/types/update.types'
 
 type Page = 'home' | 'extractor' | 'cleaner' | 'settings'
 
@@ -51,6 +67,9 @@ function App(): React.JSX.Element {
 
   // Navigation state
   const [currentPage, setCurrentPage] = useState<Page>('extractor') // Default to extractor for the new layout
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
+  const [updateCatalog, setUpdateCatalog] = useState<UpdateDialogCatalog | null>(null)
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false)
 
   // Load error message from sessionStorage
   const showError = (message: string) => {
@@ -64,6 +83,46 @@ function App(): React.JSX.Element {
     initializeAuth()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    const unsubscribe = window.electron.update.onStatusChanged((status) => {
+      setUpdateStatus(status)
+      if (status.phase === 'available' || status.phase === 'downloaded' || status.phase === 'idle') {
+        void refreshUpdateCatalog()
+      }
+    })
+
+    void refreshUpdateState()
+
+    return unsubscribe
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      void refreshUpdateState()
+      void refreshUpdateCatalog()
+      return
+    }
+
+    setUpdateStatus(null)
+    setUpdateCatalog(null)
+    setShowUpdateDialog(false)
+  }, [isAuthenticated])
+
+  const refreshUpdateState = async () => {
+    const result = await window.electron.update.getStatus()
+    if (result.success && result.data) {
+      setUpdateStatus(result.data)
+    }
+  }
+
+  const refreshUpdateCatalog = async () => {
+    const result = await window.electron.update.getCatalog()
+    if (result.success && result.data) {
+      setUpdateCatalog(result.data)
+    }
+  }
 
   const initializeAuth = async () => {
     logger.info('=== Starting initializeAuth ===')
@@ -195,6 +254,44 @@ function App(): React.JSX.Element {
     setShowLoginDialog(true)
   }
 
+  const openUpdateDialog = async () => {
+    await refreshUpdateCatalog()
+    setShowUpdateDialog(true)
+  }
+
+  const handleInstallUserRelease = async () => {
+    if (!updateCatalog?.recommendedRelease) {
+      showError('暂无可安装更新')
+      return
+    }
+
+    if (updateStatus?.phase !== 'downloaded') {
+      const downloadResult = await window.electron.update.downloadRelease(updateCatalog.recommendedRelease)
+      if (!downloadResult.success) {
+        showError(downloadResult.error || '下载更新失败')
+        return
+      }
+    }
+
+    const installResult = await window.electron.update.installDownloaded()
+    if (!installResult.success) {
+      showError(installResult.error || '启动安装失败')
+    }
+  }
+
+  const handleAdminDownloadAndInstall = async (release: DownloadReleaseRequest) => {
+    const downloadResult = await window.electron.update.downloadRelease(release)
+    if (!downloadResult.success) {
+      showError(downloadResult.error || '下载更新失败')
+      return
+    }
+
+    const installResult = await window.electron.update.installDownloaded()
+    if (!installResult.success) {
+      showError(installResult.error || '启动安装失败')
+    }
+  }
+
   // Check if should show logout button
   // Show logout if: user is Admin, OR user was switched by Admin
   const shouldShowLogout = currentUser?.userType === 'Admin' || isSwitchedByAdmin
@@ -317,6 +414,24 @@ function App(): React.JSX.Element {
     { id: 'settings', label: '系统设置 (Settings)', icon: <Settings size={18} /> }
   ]
 
+  const showUpdateEntry =
+    !!updateStatus &&
+    ((currentUser?.userType === 'User' && updateStatus.phase === 'downloaded') ||
+      (currentUser?.userType === 'Admin' &&
+        (updateStatus.adminHasAnyRelease ||
+          updateStatus.phase === 'downloading' ||
+          updateStatus.phase === 'downloaded' ||
+          updateStatus.phase === 'installing')))
+
+  const updateButtonLabel =
+    currentUser?.userType === 'Admin'
+      ? updateStatus?.phase === 'downloading'
+        ? '下载更新中...'
+        : '有可用版本'
+      : updateStatus?.phase === 'downloaded'
+        ? `发现稳定版 V${updateStatus.latestVersion}`
+        : '发现新版本'
+
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
       {/* ================= 顶部导航与标题栏 ================= */}
@@ -370,6 +485,20 @@ function App(): React.JSX.Element {
           className="flex items-center gap-4 text-sm"
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
+          {showUpdateEntry && (
+            <button
+              onClick={() => void openUpdateDialog()}
+              className="inline-flex items-center gap-2 rounded-full border border-blue-500/40 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-100 transition hover:bg-blue-500/20"
+              title={updateStatus?.message || '查看更新'}
+            >
+              {updateStatus?.phase === 'downloading' || updateStatus?.phase === 'installing' ? (
+                <LoaderCircle size={15} className="animate-spin" />
+              ) : (
+                <ArrowUpCircle size={15} />
+              )}
+              <span>{updateButtonLabel}</span>
+            </button>
+          )}
           <div className="flex items-center gap-2 text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
             <Database size={14} className="text-green-500" />
             <span className="text-slate-300">数据库已连接</span>
@@ -418,6 +547,22 @@ function App(): React.JSX.Element {
 
       {/* Toast Notifications */}
       <Toast />
+      <UpdateDialog
+        isOpen={showUpdateDialog}
+        userType={currentUser?.userType ?? null}
+        status={updateStatus}
+        catalog={updateCatalog}
+        onClose={() => setShowUpdateDialog(false)}
+        onInstallUserRelease={handleInstallUserRelease}
+        onDownloadAndInstallAdminRelease={async (release) =>
+          handleAdminDownloadAndInstall(release)
+        }
+        onRefreshCatalog={async () => {
+          await window.electron.update.checkNow()
+          await refreshUpdateCatalog()
+          await refreshUpdateState()
+        }}
+      />
     </div>
   )
 }

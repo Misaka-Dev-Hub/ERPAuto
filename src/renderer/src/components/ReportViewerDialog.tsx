@@ -2,6 +2,11 @@ import React, { useEffect, useState } from 'react'
 import { X, FileText, Loader2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeHighlight from 'rehype-highlight'
+import rehypeSlug from 'rehype-slug'
+import rehypeAutolinkHeadings from 'rehype-autolink-headings'
+import 'github-markdown-css/github-markdown-light.css'
+import 'highlight.js/styles/github.css'
 
 interface ReportMetadata {
   key: string
@@ -157,7 +162,11 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
             </div>
             {isLoadingList && <Loader2 size={16} className="text-blue-500 animate-spin" />}
           </div>
-          {error && <div className="mt-3 text-sm text-red-600 flex items-center gap-1.5 bg-red-50 p-2 rounded">{error}</div>}
+          {error && (
+            <div className="mt-3 text-sm text-red-600 flex items-center gap-1.5 bg-red-50 p-2 rounded">
+              {error}
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -169,8 +178,13 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
             </div>
           ) : reportContent ? (
             <div className="h-full overflow-y-auto p-8">
-              <div className="prose prose-slate prose-sm max-w-none bg-white p-8 rounded-xl shadow-sm border border-slate-200">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{reportContent}</ReactMarkdown>
+              <div className="markdown-body bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeSlug, rehypeAutolinkHeadings, rehypeHighlight]}
+                >
+                  {reportContent}
+                </ReactMarkdown>
               </div>
             </div>
           ) : (

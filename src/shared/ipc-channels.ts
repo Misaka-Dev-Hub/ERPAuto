@@ -96,7 +96,16 @@ export const IPC_CHANNELS = {
   // Report
   REPORT_LIST_ALL: 'report:listAll',
   REPORT_LIST_BY_USER: 'report:listByUser',
-  REPORT_DOWNLOAD: 'report:download'
+  REPORT_DOWNLOAD: 'report:download',
+
+  // Update
+  UPDATE_GET_STATUS: 'update:getStatus',
+  UPDATE_CHECK_NOW: 'update:checkNow',
+  UPDATE_GET_CATALOG: 'update:getCatalog',
+  UPDATE_GET_CHANGELOG: 'update:getChangelog',
+  UPDATE_DOWNLOAD_RELEASE: 'update:downloadRelease',
+  UPDATE_INSTALL_DOWNLOADED: 'update:installDownloaded',
+  UPDATE_STATUS_CHANGED: 'update:onStatusChanged'
 } as const
 
 /**

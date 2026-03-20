@@ -18,6 +18,7 @@ import type { UserInfo } from '../types/user.types'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { ValidationError } from '../types/errors'
 import { withErrorHandling, type IpcResult } from './index'
+import { UpdateService } from '../services/update/update-service'
 
 const log = createLogger('AuthHandler')
 
@@ -70,6 +71,7 @@ export interface CurrentUserResponse {
  */
 export function registerAuthHandlers(): void {
   const sessionManager = SessionManager.getInstance()
+  const updateService = UpdateService.getInstance()
 
   /**
    * Get computer name
@@ -93,6 +95,8 @@ export function registerAuthHandlers(): void {
         const userInfo = sessionManager.getUserInfo()
 
         if (success && userInfo) {
+          await updateService.setUserContext(userInfo.userType)
+
           // Check if admin needs user selection
           const requiresUserSelection = userInfo.userType === 'Admin'
 
@@ -119,6 +123,7 @@ export function registerAuthHandlers(): void {
           }
         }
 
+        await updateService.setUserContext(null)
         throw new ValidationError('无感登录失败：未找到匹配用户', 'VAL_INVALID_INPUT')
       }, 'auth:silentLogin')
     }
@@ -144,6 +149,7 @@ export function registerAuthHandlers(): void {
 
         if (success && userInfo) {
           log.info('Login successful', { username, userType: userInfo.userType })
+          await updateService.setUserContext(userInfo.userType)
 
           // Audit log: LOGIN success (non-blocking)
           const os = await import('os')
@@ -172,6 +178,7 @@ export function registerAuthHandlers(): void {
         }).catch((err) => log.warn('Failed to write audit log', { err }))
 
         log.warn('Login failed - invalid credentials', { username })
+        await updateService.setUserContext(null)
         throw new ValidationError('用户名或密码错误', 'VAL_INVALID_INPUT')
       }, 'auth:login')
     }
@@ -198,6 +205,7 @@ export function registerAuthHandlers(): void {
       }
 
       sessionManager.logout()
+      await updateService.setUserContext(null)
     }, 'auth:logout')
   })
 
@@ -241,6 +249,7 @@ export function registerAuthHandlers(): void {
         if (success) {
           const newUser = sessionManager.getUserInfo()
           log.info('User switch successful', { newUsername: newUser?.username })
+          await updateService.setUserContext(newUser?.userType ?? null)
           return {
             success: true,
             userInfo: newUser ?? undefined
