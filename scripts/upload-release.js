@@ -14,6 +14,8 @@ Options:
   --channel <stable|preview>  Release channel. Required.
   --source <dir>              Local release root. Default: release-output
   --config <file>             Config file path. Default: config.yaml
+  --version <x.y.z>           Release version. Default: package.json version
+  --full-sync                 Upload the whole channel directory instead of current release only
   --verify                    Read back remote index.json after upload
 `)
 }
@@ -41,6 +43,10 @@ function assert(condition, message) {
   }
 }
 
+function readJson(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+}
+
 function loadConfig(configPath) {
   const raw = fs.readFileSync(configPath, 'utf-8')
   const parsed = yaml.load(raw)
@@ -54,22 +60,6 @@ function loadConfig(configPath) {
   assert(update.bucket, 'update.bucket is required')
 
   return update
-}
-
-function walkFiles(dirPath) {
-  const results = []
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true })
-
-  for (const entry of entries) {
-    const fullPath = path.join(dirPath, entry.name)
-    if (entry.isDirectory()) {
-      results.push(...walkFiles(fullPath))
-    } else {
-      results.push(fullPath)
-    }
-  }
-
-  return results
 }
 
 function getContentType(filePath) {
@@ -95,6 +85,69 @@ async function readRemoteText(client, bucket, key) {
   return Buffer.concat(chunks).toString('utf-8')
 }
 
+function buildFileDescriptor(sourceRoot, absolutePath) {
+  return {
+    absolutePath,
+    relativeKey: path.relative(sourceRoot, absolutePath).replace(/\\/g, '/')
+  }
+}
+
+function collectUploadFiles(sourceRoot, channelRoot, channel, version, fullSync, basePrefix) {
+  const indexPath = path.join(channelRoot, 'index.json')
+  assert(fs.existsSync(indexPath), `Index not found: ${indexPath}`)
+
+  if (fullSync) {
+    const results = []
+    const entries = fs.readdirSync(channelRoot, { withFileTypes: true })
+
+    function walk(dirPath) {
+      const dirEntries = fs.readdirSync(dirPath, { withFileTypes: true })
+      for (const entry of dirEntries) {
+        const fullPath = path.join(dirPath, entry.name)
+        if (entry.isDirectory()) {
+          walk(fullPath)
+        } else {
+          results.push(buildFileDescriptor(sourceRoot, fullPath))
+        }
+      }
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(channelRoot, entry.name)
+      if (entry.isDirectory()) {
+        walk(fullPath)
+      } else {
+        results.push(buildFileDescriptor(sourceRoot, fullPath))
+      }
+    }
+
+    return { files: results, indexKey: `${basePrefix}/${channel}/index.json` }
+  }
+
+  const parsedIndex = readJson(indexPath)
+  assert(parsedIndex && Array.isArray(parsedIndex.releases), `Invalid index file: ${indexPath}`)
+
+  const releaseEntry = parsedIndex.releases.find(
+    (release) => release.version === version && release.channel === channel
+  )
+  assert(releaseEntry, `Release entry not found in index for ${channel}/${version}`)
+
+  const artifactPath = path.resolve(sourceRoot, releaseEntry.artifactKey)
+  const changelogPath = path.resolve(sourceRoot, releaseEntry.changelogKey)
+
+  assert(fs.existsSync(artifactPath), `Artifact not found: ${artifactPath}`)
+  assert(fs.existsSync(changelogPath), `Changelog not found: ${changelogPath}`)
+
+  return {
+    files: [
+      buildFileDescriptor(sourceRoot, artifactPath),
+      buildFileDescriptor(sourceRoot, changelogPath),
+      buildFileDescriptor(sourceRoot, indexPath)
+    ],
+    indexKey: `${basePrefix}/${channel}/index.json`
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   if (args.help || args.h) {
@@ -108,9 +161,12 @@ async function main() {
   const sourceRoot = path.resolve(process.cwd(), args.source || 'release-output')
   const configPath = path.resolve(process.cwd(), args.config || 'config.yaml')
   const updateConfig = loadConfig(configPath)
+  const packageJson = readJson(path.resolve(process.cwd(), 'package.json'))
+  const version = args.version || packageJson.version
+  assert(version, 'Missing release version')
 
-  const uploadRoot = path.join(sourceRoot, updateConfig.basePrefix, channel)
-  assert(fs.existsSync(uploadRoot), `Upload root not found: ${uploadRoot}`)
+  const channelRoot = path.join(sourceRoot, updateConfig.basePrefix, channel)
+  assert(fs.existsSync(channelRoot), `Upload root not found: ${channelRoot}`)
 
   const client = new S3Client({
     region: updateConfig.region || 'us-east-1',
@@ -122,27 +178,32 @@ async function main() {
     forcePathStyle: true
   })
 
-  const files = walkFiles(uploadRoot)
-  assert(files.length > 0, `No files found under ${uploadRoot}`)
+  const { files, indexKey } = collectUploadFiles(
+    sourceRoot,
+    channelRoot,
+    channel,
+    version,
+    Boolean(args['full-sync']),
+    updateConfig.basePrefix
+  )
+  assert(files.length > 0, `No files found under ${channelRoot}`)
 
-  for (const filePath of files) {
-    const relative = path.relative(sourceRoot, filePath).replace(/\\/g, '/')
-    const body = fs.readFileSync(filePath)
+  for (const file of files) {
+    const body = fs.readFileSync(file.absolutePath)
 
     await client.send(
       new PutObjectCommand({
         Bucket: updateConfig.bucket,
-        Key: relative,
+        Key: file.relativeKey,
         Body: body,
-        ContentType: getContentType(filePath)
+        ContentType: getContentType(file.absolutePath)
       })
     )
 
-    console.log(`Uploaded: ${relative}`)
+    console.log(`Uploaded: ${file.relativeKey}`)
   }
 
   if (args.verify) {
-    const indexKey = `${updateConfig.basePrefix}/${channel}/index.json`
     const remoteIndex = await readRemoteText(client, updateConfig.bucket, indexKey)
     console.log('')
     console.log(`Verified remote index: ${indexKey}`)
