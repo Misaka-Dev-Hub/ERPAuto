@@ -13,6 +13,8 @@ import type {
 import type { IpcResult } from '../main/ipc'
 import { IPC_CHANNELS, type LogLevel } from '../shared/ipc-channels'
 import type { CleanerConfig } from '../main/types/config.schema'
+import type { DownloadReleaseRequest, UpdateStatus } from '../main/types/update.types'
+import type { UpdateDialogCatalog } from '../main/types/update.types'
 
 type ErpSettingsPayload = {
   erp?: {
@@ -218,6 +220,25 @@ const api = {
     listByUser: (username: string): Promise<IpcResult> =>
       invokeIpc(IPC_CHANNELS.REPORT_LIST_BY_USER, username),
     download: (key: string): Promise<IpcResult> => invokeIpc(IPC_CHANNELS.REPORT_DOWNLOAD, key)
+  },
+
+  update: {
+    getStatus: (): Promise<IpcResult<UpdateStatus>> => invokeIpc(IPC_CHANNELS.UPDATE_GET_STATUS),
+    checkNow: (): Promise<IpcResult<UpdateStatus>> => invokeIpc(IPC_CHANNELS.UPDATE_CHECK_NOW),
+    getCatalog: (): Promise<IpcResult<UpdateDialogCatalog>> =>
+      invokeIpc(IPC_CHANNELS.UPDATE_GET_CATALOG),
+    getChangelog: (release: DownloadReleaseRequest): Promise<IpcResult<string>> =>
+      invokeIpc(IPC_CHANNELS.UPDATE_GET_CHANGELOG, release),
+    downloadRelease: (release: DownloadReleaseRequest): Promise<IpcResult<UpdateStatus>> =>
+      invokeIpc(IPC_CHANNELS.UPDATE_DOWNLOAD_RELEASE, release),
+    installDownloaded: (): Promise<IpcResult<void>> =>
+      invokeIpc(IPC_CHANNELS.UPDATE_INSTALL_DOWNLOADED),
+    onStatusChanged: (callback: (data: UpdateStatus) => void) => {
+      const subscription = (_event: Electron.IpcRendererEvent, data: UpdateStatus) =>
+        callback(data)
+      ipcRenderer.on(IPC_CHANNELS.UPDATE_STATUS_CHANGED, subscription)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.UPDATE_STATUS_CHANGED, subscription)
+    }
   }
 } as const
 

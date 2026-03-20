@@ -9,6 +9,7 @@ import { logAudit } from './services/logger/audit-logger'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import fs from 'fs'
+import { UpdateService } from './services/update/update-service'
 
 // Set Playwright browsers path BEFORE any playwright import
 process.env.PLAYWRIGHT_BROWSERS_PATH = join(app.getPath('userData'), 'ms-playwright')
@@ -110,6 +111,7 @@ app.whenReady().then(async () => {
   try {
     const configManager = ConfigManager.getInstance()
     await configManager.initialize()
+    UpdateService.getInstance().initialize()
   } catch (error) {
     console.error('Failed to initialize ConfigManager:', error)
     // Continue anyway - default config will be created
