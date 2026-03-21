@@ -81,9 +81,7 @@ function validateUpdateConfig(configPath) {
 
 function hasConflictMarker(filePath) {
   const content = fs.readFileSync(filePath, 'utf-8')
-  return (
-    content.includes('<<<<<<<') || content.includes('=======') || content.includes('>>>>>>>')
-  )
+  return content.includes('<<<<<<<') || content.includes('=======') || content.includes('>>>>>>>')
 }
 
 function validateVersionFiles(version) {
@@ -99,7 +97,10 @@ function validateVersionFiles(version) {
 
   const rootPackage = packageLock.packages && packageLock.packages['']
   if (rootPackage && rootPackage.version) {
-    assert(rootPackage.version === version, 'package-lock root package version does not match package.json')
+    assert(
+      rootPackage.version === version,
+      'package-lock root package version does not match package.json'
+    )
   }
 }
 

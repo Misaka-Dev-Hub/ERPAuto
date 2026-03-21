@@ -215,4 +215,3 @@ flowchart LR
 1. 将 `validation-application-service.ts` 中的 SQL Server / MySQL 分支继续下沉到 repository 或 dialect adapter。
 2. 逐步给 `getCleanerData()`、`getMaterialsByManager()` 这类编排逻辑补更多单测。
 3. 把和 validation 强耦合的 renderer 逻辑改成显式依赖 application contract，而不是隐式依赖 payload shape。
-
