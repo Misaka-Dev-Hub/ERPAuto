@@ -11,6 +11,8 @@ export default defineConfig(
       '**/node_modules',
       '**/dist',
       '**/out',
+      '.agents/**',
+      '.claude/**',
       'scripts/**',
       'src/main/tools/**',
       'tests/manual/**'
