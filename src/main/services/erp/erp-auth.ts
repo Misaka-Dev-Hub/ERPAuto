@@ -108,7 +108,6 @@ export class ErpAuthService {
       browser,
       context,
       page,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mainFrame: mainFrame as any, // Store forwardFrame content frame for subsequent operations
       isLoggedIn: true
     }

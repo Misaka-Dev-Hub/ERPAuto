@@ -70,7 +70,7 @@ export class ExcelParser {
     const allRows: any[][] = []
 
     // Read all rows into memory
-    worksheet.eachRow((row, _rowNumber) => {
+    worksheet.eachRow((row) => {
       allRows.push(row.values as any[])
     })
 

@@ -124,12 +124,6 @@ export class MaterialsToBeDeletedRepository {
   async getAllMaterialCodes(): Promise<Set<string>> {
     try {
       const repo = await this.getRepository()
-      const records = await repo.find({
-        select: ['materialCode'],
-        where: { materialCode: In([]) } // This will be overridden
-      })
-
-      // Use query builder for better performance
       const result = await repo
         .createQueryBuilder('m')
         .select('m.materialCode')

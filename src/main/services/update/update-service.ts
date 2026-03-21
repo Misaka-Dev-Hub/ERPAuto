@@ -28,7 +28,11 @@ import {
 
 const log = createLogger('UpdateService')
 
-function appendPortableLaunchLog(logPath: string, message: string, meta?: Record<string, unknown>): void {
+function appendPortableLaunchLog(
+  logPath: string,
+  message: string,
+  meta?: Record<string, unknown>
+): void {
   try {
     fs.mkdirSync(path.dirname(logPath), { recursive: true })
     const timestamp = new Date().toISOString()
@@ -217,10 +221,7 @@ export class UpdateService {
     return {
       mode: 'admin',
       recommendedRelease: this.status.recommendedRelease,
-      channels: limitCatalogHistory(
-        this.catalog,
-        this.config?.maxAdminHistoryPerChannel ?? 10
-      )
+      channels: limitCatalogHistory(this.catalog, this.config?.maxAdminHistoryPerChannel ?? 10)
     }
   }
 
@@ -570,13 +571,16 @@ export class UpdateService {
       return
     }
 
-    this.intervalHandle = setInterval(() => {
-      this.checkForUpdates().catch((error) => {
-        log.warn('Periodic update check failed', {
-          error: error instanceof Error ? error.message : String(error)
+    this.intervalHandle = setInterval(
+      () => {
+        this.checkForUpdates().catch((error) => {
+          log.warn('Periodic update check failed', {
+            error: error instanceof Error ? error.message : String(error)
+          })
         })
-      })
-    }, this.config.checkIntervalMinutes * 60 * 1000)
+      },
+      this.config.checkIntervalMinutes * 60 * 1000
+    )
   }
 
   private clearPolling(): void {
@@ -607,7 +611,11 @@ export class UpdateService {
   }
 
   private getDownloadPath(release: UpdateRelease): string {
-    return path.join(app.getPath('userData'), 'pending-update', `${release.channel}-${release.version}.exe`)
+    return path.join(
+      app.getPath('userData'),
+      'pending-update',
+      `${release.channel}-${release.version}.exe`
+    )
   }
 
   private async calculateSha256(filePath: string): Promise<string> {

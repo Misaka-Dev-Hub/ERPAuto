@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { X, FileText, Loader2, ChevronDown } from 'lucide-react'
 import { Combobox, Transition } from '@headlessui/react'
 import ReactMarkdown from 'react-markdown'
@@ -38,19 +38,7 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
 
-  useEffect(() => {
-    if (isOpen) {
-      loadReports()
-    } else {
-      // Reset state when closed
-      setReports([])
-      setSelectedReport(null)
-      setReportContent('')
-      setError(null)
-    }
-  }, [isOpen, isAdmin, currentUsername])
-
-  const loadReports = async () => {
+  const loadReports = useCallback(async () => {
     setIsLoadingList(true)
     setError(null)
     try {
@@ -66,12 +54,24 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
       } else {
         setError(result.error || '无法获取报告列表')
       }
-    } catch (err) {
+    } catch {
       setError('获取报告列表时发生错误')
     } finally {
       setIsLoadingList(false)
     }
-  }
+  }, [currentUsername, isAdmin])
+
+  useEffect(() => {
+    if (isOpen) {
+      void loadReports()
+    } else {
+      // Reset state when closed
+      setReports([])
+      setSelectedReport(null)
+      setReportContent('')
+      setError(null)
+    }
+  }, [isOpen, loadReports])
 
   const handleReportChange = async (report: ReportMetadata | null) => {
     setSelectedReport(report)
@@ -91,7 +91,7 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
         setError(result.error || '无法获取报告内容')
         setReportContent('')
       }
-    } catch (err) {
+    } catch {
       setError('获取报告内容时发生错误')
       setReportContent('')
     } finally {

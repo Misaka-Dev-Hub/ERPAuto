@@ -10,8 +10,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Trash2, Save, RotateCcw, Users } from 'lucide-react'
 import { Modal } from './ui/Modal'
 import { showSuccess, showError, showInfo } from '../stores/useAppStore'
-import { useConfirmDialog } from './ui/ConfirmDialog'
 import { ConfirmDialog } from './ui/ConfirmDialog'
+import { useConfirmDialog } from './ui/useConfirmDialog'
 
 interface MaterialTypeRecord {
   id?: number
@@ -51,6 +51,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
 
   const tableRef = useRef<HTMLTableElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const selectRef = useRef<HTMLSelectElement>(null)
 
   // Confirmation dialog hook
   const { confirm, dialog: confirmDialog } = useConfirmDialog()
@@ -60,22 +61,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
     (r) => r.state === 'new' || r.state === 'modified' || r.state === 'deleted'
   ).length
 
-  // Load data when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      loadData()
-    }
-  }, [isOpen, isAdmin, currentUsername])
-
-  // Focus input when editing starts
-  useEffect(() => {
-    if (editingCell && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
-    }
-  }, [editingCell])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
     try {
       // Load managers list
@@ -114,7 +100,25 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
     } finally {
       setLoading(false)
     }
-  }
+  }, [currentUsername, isAdmin])
+
+  // Load data when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      void loadData()
+    }
+  }, [isOpen, loadData])
+
+  // Focus input when editing starts
+  useEffect(() => {
+    const activeElement = inputRef.current ?? selectRef.current
+    if (editingCell && activeElement) {
+      activeElement.focus()
+      if (activeElement instanceof HTMLInputElement) {
+        activeElement.select()
+      }
+    }
+  }, [editingCell])
 
   // Filter rows by selected managers (admin only)
   const filteredRows = React.useMemo(() => {
@@ -296,7 +300,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
       variant: 'warning'
     })
     if (confirmed) {
-      loadData()
+      void loadData()
     }
   }
 
@@ -443,7 +447,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
                 {filteredRows.filter((r) => r.state !== 'deleted').length === 0 ? (
                   <tr>
                     <td colSpan={2} className="px-4 py-8 text-center text-slate-400">
-                      暂无数据，点击"新增"按钮添加物料类型关键词
+                      暂无数据，点击&quot;新增&quot;按钮添加物料类型关键词
                     </td>
                   </tr>
                 ) : (
@@ -495,7 +499,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
                             {isEditingManager ? (
                               isAdmin ? (
                                 <select
-                                  ref={inputRef as any}
+                                  ref={selectRef}
                                   value={editValue}
                                   onChange={(e) => setEditValue(e.target.value)}
                                   onBlur={saveEdit}

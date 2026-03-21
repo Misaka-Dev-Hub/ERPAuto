@@ -7,6 +7,21 @@ import type {
 } from './types'
 import type { CleanerExportItem, MaterialBatchChange } from './helpers'
 
+interface CleanerDataPayload {
+  success?: boolean
+  orderNumbers?: string[]
+  materialCodes?: string[]
+}
+
+interface CleanerRunPayload {
+  ordersProcessed: number
+  materialsDeleted: number
+  materialsSkipped: number
+  errors: string[]
+  retriedOrders: number
+  successfulRetries: number
+}
+
 export async function initializeCleanerPage(): Promise<CleanerInitializationResult> {
   const adminResult = await window.electron.auth.isAdmin()
   const userResult = await window.electron.auth.getCurrentUser()
@@ -105,7 +120,9 @@ export async function runCleanerExecution(params: {
   processConcurrency: number
 }): Promise<CleanerReportData> {
   const cleanerDataResult = await window.electron.validation.getCleanerData()
-  const cleanerData = cleanerDataResult.success ? (cleanerDataResult.data as any) : null
+  const cleanerData = cleanerDataResult.success
+    ? (cleanerDataResult.data as CleanerDataPayload | null)
+    : null
 
   if (!cleanerDataResult.success || cleanerData?.success === false) {
     throw new Error(cleanerDataResult.error || '获取清理数据失败')
@@ -130,7 +147,7 @@ export async function runCleanerExecution(params: {
     processConcurrency: params.processConcurrency
   })
 
-  const cleanerRunData = response.success ? (response.data as any) : null
+  const cleanerRunData = response.success ? (response.data as CleanerRunPayload | null) : null
   if (!response.success || !cleanerRunData) {
     throw new Error(response.error || '清理失败')
   }

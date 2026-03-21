@@ -70,8 +70,9 @@ export class SessionManager {
   public async loginByComputerName(): Promise<boolean> {
     try {
       const { BIPUsersDAO } = await import('./bip-users-dao')
+      const { hostname } = await import('os')
       const dao = new BIPUsersDAO()
-      const computerName = require('os').hostname()
+      const computerName = hostname()
       const userInfo = await dao.authenticateByComputerName(computerName)
 
       if (userInfo) {

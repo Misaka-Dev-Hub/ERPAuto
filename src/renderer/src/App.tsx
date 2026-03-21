@@ -8,7 +8,7 @@
  * - Display main content after successful authentication
  */
 
-import React, { useState, useEffect } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
   LayoutDashboard,
   Download,
@@ -77,54 +77,21 @@ function App(): React.JSX.Element {
     setTimeout(() => setErrorMessage(''), 3000)
   }
 
-  // Initialize authentication on mount
-  useEffect(() => {
-    logger.info('=== Initializing auth... ===')
-    initializeAuth()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    const unsubscribe = window.electron.update.onStatusChanged((status) => {
-      setUpdateStatus(status)
-      if (status.phase === 'available' || status.phase === 'downloaded' || status.phase === 'idle') {
-        void refreshUpdateCatalog()
-      }
-    })
-
-    void refreshUpdateState()
-
-    return unsubscribe
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      void refreshUpdateState()
-      void refreshUpdateCatalog()
-      return
-    }
-
-    setUpdateStatus(null)
-    setUpdateCatalog(null)
-    setShowUpdateDialog(false)
-  }, [isAuthenticated])
-
-  const refreshUpdateState = async () => {
+  const refreshUpdateState = useCallback(async () => {
     const result = await window.electron.update.getStatus()
     if (result.success && result.data) {
       setUpdateStatus(result.data)
     }
-  }
+  }, [])
 
-  const refreshUpdateCatalog = async () => {
+  const refreshUpdateCatalog = useCallback(async () => {
     const result = await window.electron.update.getCatalog()
     if (result.success && result.data) {
       setUpdateCatalog(result.data)
     }
-  }
+  }, [])
 
-  const initializeAuth = async () => {
+  const initializeAuth = useCallback(async () => {
     logger.info('=== Starting initializeAuth ===')
     try {
       // Get computer name
@@ -174,7 +141,42 @@ function App(): React.JSX.Element {
       setIsAuthenticating(false)
     }
     logger.info('=== Auth initialization complete ===')
-  }
+  }, [logger])
+
+  // Initialize authentication on mount
+  useEffect(() => {
+    logger.info('=== Initializing auth... ===')
+    void initializeAuth()
+  }, [initializeAuth, logger])
+
+  useEffect(() => {
+    const unsubscribe = window.electron.update.onStatusChanged((status) => {
+      setUpdateStatus(status)
+      if (
+        status.phase === 'available' ||
+        status.phase === 'downloaded' ||
+        status.phase === 'idle'
+      ) {
+        void refreshUpdateCatalog()
+      }
+    })
+
+    void refreshUpdateState()
+
+    return unsubscribe
+  }, [refreshUpdateCatalog, refreshUpdateState])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      void refreshUpdateState()
+      void refreshUpdateCatalog()
+      return
+    }
+
+    setUpdateStatus(null)
+    setUpdateCatalog(null)
+    setShowUpdateDialog(false)
+  }, [isAuthenticated, refreshUpdateCatalog, refreshUpdateState])
 
   // Handle login dialog submit
   const handleLogin = async (username: string, password: string): Promise<boolean> => {
@@ -266,7 +268,9 @@ function App(): React.JSX.Element {
     }
 
     if (updateStatus?.phase !== 'downloaded') {
-      const downloadResult = await window.electron.update.downloadRelease(updateCatalog.recommendedRelease)
+      const downloadResult = await window.electron.update.downloadRelease(
+        updateCatalog.recommendedRelease
+      )
       if (!downloadResult.success) {
         showError(downloadResult.error || '下载更新失败')
         return
@@ -554,9 +558,7 @@ function App(): React.JSX.Element {
         catalog={updateCatalog}
         onClose={() => setShowUpdateDialog(false)}
         onInstallUserRelease={handleInstallUserRelease}
-        onDownloadAndInstallAdminRelease={async (release) =>
-          handleAdminDownloadAndInstall(release)
-        }
+        onDownloadAndInstallAdminRelease={async (release) => handleAdminDownloadAndInstall(release)}
         onRefreshCatalog={async () => {
           await window.electron.update.checkNow()
           await refreshUpdateCatalog()

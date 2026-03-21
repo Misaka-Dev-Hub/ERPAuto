@@ -86,7 +86,9 @@ export default function UpdateDialog({
   }, [isOpen, selectedRelease])
 
   const isBusy =
-    status?.phase === 'downloading' || status?.phase === 'installing' || status?.phase === 'checking'
+    status?.phase === 'downloading' ||
+    status?.phase === 'installing' ||
+    status?.phase === 'checking'
 
   const renderReleaseList = (title: string, releases: UpdateRelease[]) => {
     if (releases.length === 0) {
@@ -233,7 +235,9 @@ export default function UpdateDialog({
             {userType === 'Admin' ? (
               <button
                 onClick={() =>
-                  selectedRelease ? void onDownloadAndInstallAdminRelease(selectedRelease) : undefined
+                  selectedRelease
+                    ? void onDownloadAndInstallAdminRelease(selectedRelease)
+                    : undefined
                 }
                 className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
                 disabled={!selectedRelease || isBusy}

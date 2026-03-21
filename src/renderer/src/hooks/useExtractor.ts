@@ -1,5 +1,10 @@
 import { useEffect } from 'react'
+import type { LogLevel } from '../stores/extractorStore'
 import { useExtractorStore } from '../stores/extractorStore'
+
+function isLogLevel(value: string): value is LogLevel {
+  return ['info', 'success', 'warning', 'error', 'system'].includes(value)
+}
 
 export function useExtractor() {
   const {
@@ -30,7 +35,7 @@ export function useExtractor() {
     })
 
     const unsubscribeLog = window.electron.extractor.onLog((data) => {
-      addLog(data.level as any, data.message)
+      addLog(isLogLevel(data.level) ? data.level : 'info', data.message)
     })
 
     return () => {

@@ -25,6 +25,11 @@ export type { IpcResult } from '../types/ipc.types'
 
 const log = createLogger('IPC')
 
+function getErrorCauseMessage(error: { cause?: unknown }): string | undefined {
+  const { cause } = error
+  return cause instanceof Error ? cause.message : undefined
+}
+
 export function ok<T>(data: T): IpcResult<T> {
   return { success: true, data }
 }
@@ -63,7 +68,7 @@ export function withErrorHandling<T>(
       if (isBaseError(error)) {
         logError(log, `[${context}] ${error.name}`, error, {
           code,
-          cause: (error as any).cause?.message,
+          cause: getErrorCauseMessage(error),
           handler: context
         })
       } else {

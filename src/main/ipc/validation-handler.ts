@@ -5,6 +5,7 @@
 import { ipcMain } from 'electron'
 import { MaterialsToBeDeletedDAO } from '../services/database/materials-to-be-deleted-dao'
 import { createLogger } from '../services/logger'
+import type { MaterialStats } from '../services/database/materials-to-be-deleted-dao'
 import type {
   MaterialDeleteRequest,
   MaterialOperationResponse,
@@ -151,18 +152,21 @@ export function registerValidationHandlers(): void {
     }
   )
 
-  ipcMain.handle(IPC_CHANNELS.MATERIALS_GET_STATISTICS, async (): Promise<{ stats: any }> => {
-    try {
-      const dao = new MaterialsToBeDeletedDAO()
-      const stats = await dao.getStatistics()
-      return { stats }
-    } catch (error) {
-      log.error('Get statistics error', {
-        error: error instanceof Error ? error.message : String(error)
-      })
-      return { stats: null }
+  ipcMain.handle(
+    IPC_CHANNELS.MATERIALS_GET_STATISTICS,
+    async (): Promise<{ stats: MaterialStats | null }> => {
+      try {
+        const dao = new MaterialsToBeDeletedDAO()
+        const stats = await dao.getStatistics()
+        return { stats }
+      } catch (error) {
+        log.error('Get statistics error', {
+          error: error instanceof Error ? error.message : String(error)
+        })
+        return { stats: null }
+      }
     }
-  })
+  )
 
   ipcMain.handle(
     IPC_CHANNELS.VALIDATION_SET_SHARED_PRODUCTION_IDS,

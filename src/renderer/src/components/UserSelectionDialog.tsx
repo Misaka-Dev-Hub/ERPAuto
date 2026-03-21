@@ -7,7 +7,7 @@
  * - Return selected user info
  */
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useRef } from 'react'
 import { Modal } from './ui/Modal'
 
 export interface UserInfo {
@@ -37,13 +37,6 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
 
-  // Reset selection when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedUserId(null)
-    }
-  }, [isOpen])
-
   const handleConfirm = () => {
     if (selectedUserId === null) {
       return
@@ -51,12 +44,19 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
 
     const selectedUser = users.find((u) => u.id === selectedUserId)
     if (selectedUser) {
+      setSelectedUserId(null)
       onSelectUser(selectedUser)
     }
   }
 
   const handleDoubleClick = (user: UserInfo) => {
+    setSelectedUserId(null)
     onSelectUser(user)
+  }
+
+  const handleCancel = () => {
+    setSelectedUserId(null)
+    onCancel()
   }
 
   const userTypeStyles: Record<string, string> = {
@@ -70,7 +70,7 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onCancel}
+      onClose={handleCancel}
       title="选择用户"
       size="md"
       triggerRef={triggerRef}
@@ -129,7 +129,7 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
             </button>
             <button
               className="px-6 py-2 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
-              onClick={onCancel}
+              onClick={handleCancel}
             >
               取消
             </button>
