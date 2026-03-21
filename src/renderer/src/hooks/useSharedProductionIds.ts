@@ -1,21 +1,33 @@
 import { useEffect } from 'react'
 
-function parseProductionIds(input: string): string[] {
+interface ValidationSyncApi {
+  clearSharedProductionIds: () => Promise<unknown>
+  setSharedProductionIds: (ids: string[]) => Promise<unknown>
+}
+
+export function parseProductionIds(input: string): string[] {
   return input
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
 }
 
-async function syncSharedProductionIds(input: string): Promise<void> {
+export async function syncSharedProductionIdsWithApi(
+  input: string,
+  validationApi: ValidationSyncApi
+): Promise<void> {
   const productionIds = parseProductionIds(input)
 
   if (productionIds.length === 0) {
-    await window.electron.validation.clearSharedProductionIds()
+    await validationApi.clearSharedProductionIds()
     return
   }
 
-  await window.electron.validation.setSharedProductionIds(productionIds)
+  await validationApi.setSharedProductionIds(productionIds)
+}
+
+async function syncSharedProductionIds(input: string): Promise<void> {
+  await syncSharedProductionIdsWithApi(input, window.electron.validation)
 }
 
 export function useSharedProductionIds(orderNumbers: string, debounceMs = 300) {

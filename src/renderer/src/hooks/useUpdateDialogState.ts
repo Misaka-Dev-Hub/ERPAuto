@@ -1,11 +1,13 @@
 import { startTransition, useEffect, useRef, useState } from 'react'
 import type { UpdateDialogCatalog, UpdateRelease } from '../../../main/types/update.types'
 
-function releaseKey(release: UpdateRelease): string {
+export function releaseKey(release: UpdateRelease): string {
   return `${release.channel}:${release.version}`
 }
 
-function getInitialSelectedRelease(catalog: UpdateDialogCatalog | null): UpdateRelease | undefined {
+export function getInitialSelectedRelease(
+  catalog: UpdateDialogCatalog | null
+): UpdateRelease | undefined {
   if (!catalog || catalog.mode === 'disabled') {
     return undefined
   }
