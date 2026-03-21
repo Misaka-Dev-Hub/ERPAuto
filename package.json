@@ -18,8 +18,6 @@
     "build:updater": "node scripts/compile-updater.js",
     "build:unpack": "chcp 65001 && set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 && npm run build:updater && npm run build && electron-builder --dir",
     "build:win": "chcp 65001 && set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 && npm run prebuild && npm run build && npm run build:updater && electron-builder --win",
-    "build:mac": "chcp 65001 && npm run prebuild && electron-vite build && electron-builder --mac",
-    "build:linux": "chcp 65001 && npm run prebuild && electron-vite build && electron-builder --linux",
     "release:prepare": "node scripts/prepare-release.js",
     "release:publish": "node scripts/publish-release.js",
     "release:upload": "node scripts/upload-release.js",
