@@ -5,23 +5,15 @@ import type { UpdateConfig } from '../../types/config.schema'
 import type { UserType } from '../../types/user.types'
 import type {
   DownloadReleaseRequest,
-  ReleaseChannel,
   UpdateCatalog,
   UpdateDialogCatalog,
-  UpdateRelease,
   UpdateStatus
 } from '../../types/update.types'
+import { UpdateCatalogService } from './update-catalog-service'
 import { UpdateInstaller } from './update-installer'
 import { UpdateStorageClient } from './update-storage-client'
 import { publishUpdateStatus } from './update-status-publisher'
-import { DEFAULT_STATUS, getSupportState, isMissingObjectError } from './update-support'
-import {
-  compareVersions,
-  limitCatalogHistory,
-  normalizeReleases,
-  resolveAdminDecision,
-  resolveUserDecision
-} from './update-utils'
+import { DEFAULT_STATUS, getSupportState } from './update-support'
 
 const log = createLogger('UpdateService')
 
@@ -30,6 +22,7 @@ export class UpdateService {
 
   private config: UpdateConfig | null = null
   private storageClient: UpdateStorageClient | null = null
+  private catalogService: UpdateCatalogService | null = null
   private installer = new UpdateInstaller()
   private status: UpdateStatus = { ...DEFAULT_STATUS }
   private catalog: UpdateCatalog = { stable: [], preview: [] }
@@ -63,6 +56,11 @@ export class UpdateService {
 
     if (enabled && this.config) {
       this.storageClient = new UpdateStorageClient(this.config)
+      this.catalogService = new UpdateCatalogService(
+        this.config,
+        this.storageClient,
+        this.installer
+      )
     }
 
     log.info('Update service initialized', {
@@ -80,23 +78,11 @@ export class UpdateService {
   }
 
   public getCatalog(): UpdateDialogCatalog {
-    const currentUserType = this.status.currentUserType
-    if (!this.status.enabled || !currentUserType || currentUserType === 'Guest') {
+    if (!this.catalogService) {
       return { mode: 'disabled' }
     }
 
-    if (currentUserType === 'User') {
-      return {
-        mode: 'user',
-        recommendedRelease: this.status.recommendedRelease
-      }
-    }
-
-    return {
-      mode: 'admin',
-      recommendedRelease: this.status.recommendedRelease,
-      channels: limitCatalogHistory(this.catalog, this.config?.maxAdminHistoryPerChannel ?? 10)
-    }
+    return this.catalogService.getDialogCatalog(this.status, this.catalog)
   }
 
   public async getChangelog(release: DownloadReleaseRequest): Promise<string> {
@@ -144,7 +130,7 @@ export class UpdateService {
 
   public async checkForUpdates(): Promise<UpdateStatus> {
     this.ensureInitialized()
-    if (!this.status.enabled || !this.storageClient || !this.config) {
+    if (!this.status.enabled || !this.storageClient || !this.catalogService) {
       return this.getStatus()
     }
 
@@ -156,15 +142,26 @@ export class UpdateService {
 
     try {
       const currentUserType = this.status.currentUserType
-      this.catalog = {
-        stable: await this.fetchChannelIndex('stable'),
-        preview: currentUserType === 'Admin' ? await this.fetchChannelIndex('preview') : []
-      }
+      this.catalog = await this.catalogService.loadCatalog(currentUserType)
 
       if (currentUserType === 'User') {
-        await this.processUserCatalog()
+        const nextStatus = await this.catalogService.resolveUserStatus(this.status, this.catalog)
+        this.publishStatus(nextStatus)
+
+        if (nextStatus.phase === 'available' && nextStatus.recommendedRelease) {
+          try {
+            await this.downloadRelease(nextStatus.recommendedRelease)
+          } catch (error) {
+            const message = error instanceof Error ? error.message : '下载更新失败'
+            this.publishStatus({
+              phase: 'error',
+              error: message,
+              message
+            })
+          }
+        }
       } else if (currentUserType === 'Admin') {
-        this.processAdminCatalog()
+        this.publishStatus(this.catalogService.resolveAdminStatus(this.status, this.catalog))
       } else {
         this.publishStatus({
           phase: 'idle',
@@ -259,122 +256,6 @@ export class UpdateService {
 
     publishUpdateStatus(this.status)
   }
-
-  private async fetchChannelIndex(channel: ReleaseChannel): Promise<UpdateRelease[]> {
-    if (!this.storageClient || !this.config) {
-      return []
-    }
-
-    const key = `${this.config.basePrefix}/${channel}/index.json`
-
-    try {
-      const raw = await this.storageClient.readText(key)
-      const parsed = JSON.parse(raw) as unknown
-      return normalizeReleases(parsed, channel)
-    } catch (error) {
-      if (isMissingObjectError(error)) {
-        log.warn('Update channel index not found, treating as empty', { channel, key })
-        return []
-      }
-
-      throw error
-    }
-  }
-
-  private async processUserCatalog(): Promise<void> {
-    const decision = resolveUserDecision({
-      currentVersion: this.status.currentVersion,
-      currentChannel: this.status.currentChannel,
-      catalog: this.catalog
-    })
-
-    if (!decision.recommendedRelease || !decision.shouldOffer) {
-      this.publishStatus({
-        phase: 'idle',
-        recommendedRelease: undefined,
-        latestVersion: undefined,
-        latestChannel: undefined,
-        downloadedRelease: undefined,
-        progress: undefined,
-        adminHasAnyRelease: false,
-        error: undefined,
-        message: undefined
-      })
-      return
-    }
-
-    const recommended = decision.recommendedRelease
-    this.publishStatus({
-      phase: 'available',
-      recommendedRelease: recommended,
-      latestVersion: recommended.version,
-      latestChannel: recommended.channel,
-      adminHasAnyRelease: false,
-      message:
-        this.status.currentChannel === 'preview'
-          ? `当前为预览版，可切换回稳定版 ${recommended.version}`
-          : `发现稳定版 ${recommended.version}`
-    })
-
-    const existing = await this.installer.getValidDownloadedRelease(recommended)
-    if (existing) {
-      this.publishStatus({
-        phase: 'downloaded',
-        progress: 100,
-        downloadedRelease: {
-          version: existing.version,
-          channel: existing.channel,
-          localPath: existing.localPath
-        },
-        message:
-          this.status.currentChannel === 'preview'
-            ? `稳定版 ${recommended.version} 已准备安装`
-            : `发现稳定版 ${recommended.version}`
-      })
-      return
-    }
-
-    try {
-      await this.downloadRelease(recommended)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '下载更新失败'
-      this.publishStatus({
-        phase: 'error',
-        error: message,
-        message
-      })
-    }
-  }
-
-  private processAdminCatalog(): void {
-    const decision = resolveAdminDecision({
-      currentVersion: this.status.currentVersion,
-      currentChannel: this.status.currentChannel,
-      catalog: this.catalog,
-      maxHistoryPerChannel: this.config?.maxAdminHistoryPerChannel ?? 10
-    })
-
-    const hasHigherVersion = [...this.catalog.stable, ...this.catalog.preview].some(
-      (release) => compareVersions(release.version, this.status.currentVersion) > 0
-    )
-    const hasCrossChannelOption = [...this.catalog.stable, ...this.catalog.preview].some(
-      (release) => release.channel !== this.status.currentChannel
-    )
-    const shouldOffer = hasHigherVersion || hasCrossChannelOption
-
-    this.publishStatus({
-      phase: shouldOffer ? 'available' : 'idle',
-      recommendedRelease: decision.recommendedRelease,
-      latestVersion: decision.recommendedRelease?.version,
-      latestChannel: decision.recommendedRelease?.channel,
-      adminHasAnyRelease: shouldOffer,
-      downloadedRelease: undefined,
-      progress: undefined,
-      error: undefined,
-      message: shouldOffer ? '发现可用版本' : undefined
-    })
-  }
-
   private startPolling(): void {
     this.clearPolling()
     if (!this.config) {
