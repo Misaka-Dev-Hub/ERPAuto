@@ -1,33 +1,10 @@
 import { useState, useCallback } from 'react'
-
-interface ValidationRequest {
-  mode: 'database_full' | 'database_filtered'
-  productionIdFile?: string
-  useSharedProductionIds?: boolean
-}
-
-interface ValidationResult {
-  materialName: string
-  materialCode: string
-  specification: string
-  model: string
-  managerName: string
-  isMarkedForDeletion: boolean
-  matchedTypeKeyword?: string
-}
-
-interface ValidationStats {
-  totalRecords: number
-  matchedCount: number
-  markedCount: number
-}
-
-interface ValidationResponse {
-  success: boolean
-  results?: ValidationResult[]
-  stats?: ValidationStats
-  error?: string
-}
+import type {
+  ValidationRequest,
+  ValidationResponsePayload as ValidationResponse,
+  ValidationResult,
+  ValidationStats
+} from './cleaner/types'
 
 interface UseValidationState {
   loading: boolean

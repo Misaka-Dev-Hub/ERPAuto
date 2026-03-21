@@ -1,27 +1,23 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { showSuccess, showError, showWarning, formatListMessage } from '../stores/useAppStore'
 import { ConfirmDialogProps } from '../components/ui/ConfirmDialog'
-
-export interface ValidationResult {
-  materialName: string
-  materialCode: string
-  specification: string
-  model: string
-  managerName: string
-  isMarkedForDeletion: boolean
-  matchedTypeKeyword?: string
-}
-
-export interface CleanerProgress {
-  message: string
-  progress: number
-  currentOrderIndex: number
-  totalOrders: number
-  currentMaterialIndex: number
-  totalMaterialsInOrder: number
-  currentOrderNumber?: string
-  phase: 'login' | 'processing' | 'complete'
-}
+import {
+  buildDeletionPlan,
+  buildExportItems,
+  filterValidationResults,
+  getStoredBoolean,
+  getStoredValidationMode
+} from './cleaner/helpers'
+import {
+  exportCleanerResults,
+  initializeCleanerPage,
+  loadCleanerConfig as fetchCleanerConfig,
+  reloadManagers,
+  runCleanerExecution,
+  runValidationRequest,
+  saveDeletionPlan
+} from './cleaner/api'
+import type { CleanerProgress, CleanerReportData, ValidationResult } from './cleaner/types'
 
 export function useCleaner() {
   // Authentication & permissions
@@ -29,15 +25,8 @@ export function useCleaner() {
   const [currentUsername, setCurrentUsername] = useState<string>('')
 
   // State with sessionStorage persistence
-  const [dryRun, setDryRun] = useState(() => {
-    const saved = sessionStorage.getItem('cleaner_dryRun')
-    return saved ? saved === 'true' : false
-  })
-
-  const [valMode, setValMode] = useState<'full' | 'filtered'>(() => {
-    const saved = sessionStorage.getItem('cleaner_validationMode')
-    return saved === 'full' ? 'full' : 'filtered'
-  })
+  const [dryRun, setDryRun] = useState(() => getStoredBoolean('cleaner_dryRun', false))
+  const [valMode, setValMode] = useState<'full' | 'filtered'>(() => getStoredValidationMode())
 
   // Validation state
   const [validationResults, setValidationResults] = useState<ValidationResult[]>([])
@@ -60,24 +49,14 @@ export function useCleaner() {
 
   // Execution report dialog state
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false)
-  const [reportData, setReportData] = useState<{
-    ordersProcessed: number
-    materialsDeleted: number
-    materialsSkipped: number
-    errors: string[]
-    retriedOrders?: number
-    successfulRetries?: number
-  } | null>(null)
+  const [reportData, setReportData] = useState<CleanerReportData | null>(null)
 
   // Progress state
   const [progress, setProgress] = useState<CleanerProgress | null>(null)
   const [startTime, setStartTime] = useState<number | null>(null)
 
   // Execution settings state
-  const [headless, setHeadless] = useState(() => {
-    const saved = sessionStorage.getItem('cleaner_headless')
-    return saved ? saved === 'true' : true
-  })
+  const [headless, setHeadless] = useState(() => getStoredBoolean('cleaner_headless', true))
   const [queryBatchSize, setQueryBatchSize] = useState(100)
   const [processConcurrency, setProcessConcurrency] = useState(1)
   const [showSettingsMenu, setShowSettingsMenu] = useState(false)
@@ -117,35 +96,17 @@ export function useCleaner() {
   useEffect(() => {
     const initializePage = async () => {
       try {
-        const adminResult = await window.electron.auth.isAdmin()
-        const userResult = await window.electron.auth.getCurrentUser()
-        const admin = adminResult.success && Boolean(adminResult.data)
-        const user = userResult.success ? userResult.data : undefined
-        setIsAdmin(admin)
-        if (user && user.userInfo) {
-          setCurrentUsername(user.userInfo.username)
-          if (!admin) {
-            setSelectedManagers(new Set([user.userInfo.username]))
-          }
-        }
+        const result = await initializeCleanerPage()
+        setIsAdmin(result.isAdmin)
+        setCurrentUsername(result.currentUsername)
+        setManagers(result.managers)
+        setSharedProductionIdsCount(result.sharedProductionIdsCount)
 
-        // Load managers
-        if (admin) {
-          const resp = await window.electron.materials.getManagers()
-          const managersPayload = resp.success
-            ? (resp.data as { managers: string[] } | undefined)
-            : undefined
-          const managerList = managersPayload?.managers ?? []
-          setManagers(managerList)
-          setSelectedManagers(new Set(managerList))
+        if (result.isAdmin) {
+          setSelectedManagers(new Set(result.managers))
+        } else if (result.currentUsername) {
+          setSelectedManagers(new Set([result.currentUsername]))
         }
-
-        // Get shared Production IDs
-        const result = await window.electron.validation.getSharedProductionIds()
-        const idsPayload = result.success
-          ? (result.data as { productionIds?: string[] } | undefined)
-          : undefined
-        setSharedProductionIdsCount(idsPayload?.productionIds?.length ?? 0)
       } catch (err) {
         console.error('Initialization failed:', err)
       }
@@ -168,10 +129,10 @@ export function useCleaner() {
   useEffect(() => {
     const loadCleanerConfig = async () => {
       try {
-        const result = await window.electron.config.getCleaner()
-        if (result.success && result.data) {
-          setQueryBatchSize(result.data.queryBatchSize)
-          setProcessConcurrency(result.data.processConcurrency)
+        const result = await fetchCleanerConfig()
+        if (result) {
+          setQueryBatchSize(result.queryBatchSize)
+          setProcessConcurrency(result.processConcurrency)
         }
       } catch (err) {
         console.error('Failed to load cleaner config:', err)
@@ -204,14 +165,14 @@ export function useCleaner() {
 
   // Filter validation results by selected managers and hidden items
   const filteredResults = useMemo(() => {
-    let results = validationResults
-    if (!isAdmin && currentUsername) {
-      results = results.filter((r) => r.managerName === currentUsername || !r.managerName)
-    } else if (managers.length > 0 && selectedManagers.size > 0) {
-      results = results.filter((r) => selectedManagers.has(r.managerName) || !r.managerName)
-    }
-    results = results.filter((r) => !hiddenItems.has(r.materialCode))
-    return results
+    return filterValidationResults({
+      validationResults,
+      isAdmin,
+      currentUsername,
+      managers,
+      selectedManagers,
+      hiddenItems
+    })
   }, [validationResults, isAdmin, currentUsername, managers, selectedManagers, hiddenItems])
 
   // Handlers
@@ -222,13 +183,12 @@ export function useCleaner() {
     setHiddenItems(new Set())
 
     try {
-      const response = await window.electron.validation.validate({
+      const validationData = await runValidationRequest({
         mode: valMode === 'full' ? 'database_full' : 'database_filtered',
         useSharedProductionIds: valMode === 'filtered'
       })
-      const validationData = response.success ? (response.data as any) : null
 
-      if (response.success && validationData?.success && validationData.results) {
+      if (validationData?.success && validationData.results) {
         setValidationResults(validationData.results)
         const markedCodes = new Set<string>(
           validationData.results
@@ -248,7 +208,7 @@ export function useCleaner() {
         }
         showSuccess('校验完成')
       } else {
-        showError(response.error || validationData?.error || '校验失败')
+        showError(validationData?.error || '校验失败')
       }
     } catch (err) {
       showError(err instanceof Error ? err.message : '校验过程中发生未知错误')
@@ -324,21 +284,10 @@ export function useCleaner() {
       return
     }
 
-    const materialsToUpsert: { materialCode: string; managerName: string }[] = []
-    const materialsToDelete: string[] = []
-    const missingManager: string[] = []
-
-    for (const result of resultsToProcess) {
-      if (!result.materialCode?.trim()) continue
-
-      const code = result.materialCode.trim()
-      if (selectedItems.has(code)) {
-        if (!result.managerName?.trim()) missingManager.push(code)
-        else materialsToUpsert.push({ materialCode: code, managerName: result.managerName.trim() })
-      } else {
-        materialsToDelete.push(code)
-      }
-    }
+    const { materialsToUpsert, materialsToDelete, missingManager } = buildDeletionPlan(
+      resultsToProcess,
+      selectedItems
+    )
 
     if (missingManager.length > 0) {
       showError(
@@ -368,31 +317,15 @@ export function useCleaner() {
       setIsRunning(true)
       const msgParts: string[] = []
 
-      if (materialsToUpsert.length > 0) {
-        const res = await window.electron.materials.upsertBatch(materialsToUpsert)
-        const payload = res.success
-          ? (res.data as { stats?: { success?: number } } | undefined)
-          : undefined
-        if (!res.success) throw new Error(res.error || '写入物料失败')
-        msgParts.push(`写入/更新成功：${payload?.stats?.success || 0} 条`)
-      }
-
-      if (materialsToDelete.length > 0) {
-        const res = await window.electron.materials.delete(materialsToDelete)
-        const payload = res.success ? (res.data as { count?: number } | undefined) : undefined
-        if (!res.success) throw new Error(res.error || '删除物料失败')
-        msgParts.push(`删除成功：${payload?.count || 0} 条`)
-      }
+      const result = await saveDeletionPlan({ materialsToUpsert, materialsToDelete })
+      if (materialsToUpsert.length > 0) msgParts.push(`写入/更新成功：${result.upserted} 条`)
+      if (materialsToDelete.length > 0) msgParts.push(`删除成功：${result.deleted} 条`)
 
       showSuccess(`操作完成！\n\n${msgParts.join('\n')}`)
 
       // Reload managers if admin
       if (isAdmin) {
-        const resp = await window.electron.materials.getManagers()
-        const payload = resp.success
-          ? (resp.data as { managers?: string[] } | undefined)
-          : undefined
-        setManagers(payload?.managers ?? [])
+        setManagers(await reloadManagers())
       }
     } catch (err) {
       showError(err instanceof Error ? err.message : '操作失败')
@@ -429,42 +362,13 @@ export function useCleaner() {
     setIsReportDialogOpen(true)
 
     try {
-      const cleanerDataResult = await window.electron.validation.getCleanerData()
-      const cleanerData = cleanerDataResult.success ? (cleanerDataResult.data as any) : null
-      if (!cleanerDataResult.success || cleanerData?.success === false) {
-        throw new Error(cleanerDataResult.error || '获取清理数据失败')
-      }
-
-      const orderNumberList = cleanerData?.orderNumbers || []
-      const materialCodeList = cleanerData?.materialCodes || []
-
-      if (orderNumberList.length === 0)
-        throw new Error('没有订单号数据。请先到数据提取页面输入 Production ID。')
-      if (materialCodeList.length === 0)
-        throw new Error('没有物料代码数据。请确认已在物料清理界面确认要删除的物料。')
-
-      const response = await window.electron.cleaner.runCleaner({
-        orderNumbers: orderNumberList,
-        materialCodes: materialCodeList,
+      const result = await runCleanerExecution({
         dryRun,
         headless,
         queryBatchSize,
         processConcurrency
       })
-      const cleanerRunData = response.success ? (response.data as any) : null
-
-      if (response.success && cleanerRunData) {
-        setReportData({
-          ordersProcessed: cleanerRunData.ordersProcessed,
-          materialsDeleted: cleanerRunData.materialsDeleted,
-          materialsSkipped: cleanerRunData.materialsSkipped,
-          errors: cleanerRunData.errors,
-          retriedOrders: cleanerRunData.retriedOrders,
-          successfulRetries: cleanerRunData.successfulRetries
-        })
-      } else {
-        throw new Error(response.error || '清理失败')
-      }
+      setReportData(result)
     } catch (err) {
       showError(err instanceof Error ? err.message : '发生未知错误')
     } finally {
@@ -488,25 +392,8 @@ export function useCleaner() {
 
     setIsExporting(true)
     try {
-      // Prepare export data from filtered results
-      const exportItems = filteredResults.map((result) => ({
-        materialName: result.materialName,
-        materialCode: result.materialCode,
-        specification: result.specification || '',
-        model: result.model || '',
-        managerName: result.managerName || '',
-        isMarkedForDeletion: result.isMarkedForDeletion,
-        isSelected: selectedItems.has(result.materialCode)
-      }))
-
-      const response = await window.electron.cleaner.exportResults(exportItems)
-      const exportData = response.success ? (response.data as any) : null
-
-      if (response.success && exportData?.success !== false) {
-        showSuccess(`导出成功！\n文件已保存到：${exportData?.filePath ?? ''}`)
-      } else {
-        throw new Error(response.error || exportData?.error || '导出失败')
-      }
+      const filePath = await exportCleanerResults(buildExportItems(filteredResults, selectedItems))
+      showSuccess(`导出成功！\n文件已保存到：${filePath}`)
     } catch (err) {
       showError(err instanceof Error ? err.message : '导出过程中发生错误')
     } finally {
