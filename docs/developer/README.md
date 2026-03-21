@@ -20,18 +20,59 @@
 3. 核心模块文档
 4. 开发与调试指南
 
+## 开发者文档总导航
+
+```mermaid
+graph TD
+    Developer[docs/developer]
+    Architecture[architecture/]
+    Modules[modules/]
+    Guides[guides/]
+
+    Overview[系统地图]
+    Runtime[运行时分层]
+    DataFlow[数据流与关键文件]
+    Business[业务模块]
+    TaskGuides[开发任务指南]
+
+    Developer --> Architecture
+    Developer --> Modules
+    Developer --> Guides
+
+    Architecture --> Overview
+    Architecture --> Runtime
+    Architecture --> DataFlow
+    Modules --> Business
+    Guides --> TaskGuides
+```
+
+也可以把这三层理解成：
+
+```mermaid
+flowchart LR
+    A[architecture]
+    B[modules]
+    C[guides]
+
+    A -->|先理解系统| B
+    B -->|再理解业务边界| C
+    C -->|最后落到开发动作| Done[开始修改与维护]
+```
+
 ## 计划中的目录结构
 
 ```text
 docs/developer/
   README.md
   architecture/
+    README.md
     overview.md
     runtime-architecture.md
     data-flow.md
     file-map.md
     decision-log.md
   modules/
+    README.md
     extractor.md
     cleaner.md
     validation.md
@@ -39,6 +80,7 @@ docs/developer/
     update.md
     settings.md
   guides/
+    README.md
     local-development.md
     debugging.md
     ipc-development.md
