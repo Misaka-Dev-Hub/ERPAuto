@@ -232,9 +232,9 @@ export function useAppBootstrap() {
   }, [])
 
   const openUpdateDialog = useCallback(async () => {
-    await refreshUpdateCatalog()
+    await Promise.all([refreshUpdateCatalog(), refreshUpdateState()])
     setShowUpdateDialog(true)
-  }, [refreshUpdateCatalog])
+  }, [refreshUpdateCatalog, refreshUpdateState])
 
   const handleInstallUserRelease = useCallback(async () => {
     if (!updateCatalog?.recommendedRelease) {
@@ -276,8 +276,7 @@ export function useAppBootstrap() {
 
   const refreshUpdateDialogState = useCallback(async () => {
     await window.electron.update.checkNow()
-    await refreshUpdateCatalog()
-    await refreshUpdateState()
+    await Promise.all([refreshUpdateCatalog(), refreshUpdateState()])
   }, [refreshUpdateCatalog, refreshUpdateState])
 
   return {
