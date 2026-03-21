@@ -2,15 +2,15 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { MySqlConfig, SqlServerConfig } from '../main/types/ipc-api.types'
 import type { ExtractorInput, ExtractionProgress } from '../main/types/extractor.types'
 import type { CleanerInput, CleanerProgress, ExportResultItem } from '../main/types/cleaner.types'
-import type { ResolverInput } from '../main/ipc/resolver-handler'
-import type { LoginRequest } from '../main/ipc/auth-handler'
+import type { ResolverInput } from '../main/types/resolver-ipc.types'
+import type { LoginRequest } from '../main/types/auth-ipc.types'
 import type { UserInfo } from '../main/types/user.types'
 import type {
   ValidationRequest,
   MaterialTypeRecord,
   MaterialTypeBatchRequest
 } from '../main/types/validation.types'
-import type { IpcResult } from '../main/ipc'
+import type { IpcResult } from '../main/types/ipc.types'
 import { IPC_CHANNELS, type LogLevel } from '../shared/ipc-channels'
 import type { CleanerConfig } from '../main/types/config.schema'
 import type { DownloadReleaseRequest, UpdateStatus } from '../main/types/update.types'
@@ -234,8 +234,7 @@ const api = {
     installDownloaded: (): Promise<IpcResult<void>> =>
       invokeIpc(IPC_CHANNELS.UPDATE_INSTALL_DOWNLOADED),
     onStatusChanged: (callback: (data: UpdateStatus) => void) => {
-      const subscription = (_event: Electron.IpcRendererEvent, data: UpdateStatus) =>
-        callback(data)
+      const subscription = (_event: Electron.IpcRendererEvent, data: UpdateStatus) => callback(data)
       ipcRenderer.on(IPC_CHANNELS.UPDATE_STATUS_CHANGED, subscription)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.UPDATE_STATUS_CHANGED, subscription)
     }

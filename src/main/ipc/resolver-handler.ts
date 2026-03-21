@@ -10,37 +10,11 @@ import { ipcMain } from 'electron'
 import { create, type IDatabaseService } from '../services/database'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
 import { createLogger } from '../services/logger'
-import type { OrderMapping, ResolutionStats } from '../services/erp/order-resolver'
+import type { ResolverInput, ResolverResponse } from '../types/resolver-ipc.types'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { withErrorHandling, type IpcResult } from './index'
 
 const log = createLogger('ResolverHandler')
-
-/**
- * Resolver input from renderer
- */
-export interface ResolverInput {
-  /** List of order numbers/productionIDs to resolve */
-  inputs: string[]
-}
-
-/**
- * Resolver response to renderer
- */
-export interface ResolverResponse {
-  /** Whether the resolution was successful */
-  success: boolean
-  /** Resolved order mappings */
-  mappings?: OrderMapping[]
-  /** Valid production order numbers ready for use */
-  validOrderNumbers?: string[]
-  /** Warning messages for invalid inputs */
-  warnings?: string[]
-  /** Resolution statistics */
-  stats?: ResolutionStats
-  /** Error message if failed */
-  error?: string
-}
 
 /**
  * Register IPC handlers for order number resolver

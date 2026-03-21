@@ -19,18 +19,11 @@ import { registerUpdateHandlers } from './update-handler'
 import { createLogger, logError } from '../services/logger'
 import { serializeError, sanitizeError } from '../services/logger/error-utils'
 import { getErrorMessage, getErrorCode, isBaseError } from '../types/errors'
+import type { IpcResult } from '../types/ipc.types'
+
+export type { IpcResult } from '../types/ipc.types'
 
 const log = createLogger('IPC')
-
-/**
- * Standard result type for all IPC handlers
- */
-export interface IpcResult<T = unknown> {
-  success: boolean
-  data?: T
-  error?: string
-  code?: string
-}
 
 export function ok<T>(data: T): IpcResult<T> {
   return { success: true, data }

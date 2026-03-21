@@ -11,7 +11,7 @@ import type {
   ExportResultItem,
   ExportResultResponse
 } from './cleaner.types'
-import type { IpcResult } from '../ipc'
+import type { IpcResult } from './ipc.types'
 
 /**
  * MySQL connection configuration
@@ -176,13 +176,23 @@ export interface ReportAPI {
   /**
    * List all reports across all users (Admin only typically)
    */
-  listAll: () => Promise<IpcResult<{ key: string; filename: string; username: string; lastModified?: Date; size?: number }[]>>
+  listAll: () => Promise<
+    IpcResult<
+      { key: string; filename: string; username: string; lastModified?: Date; size?: number }[]
+    >
+  >
 
   /**
    * List reports for a specific user
    * @param username - Username to list reports for
    */
-  listByUser: (username: string) => Promise<IpcResult<{ key: string; filename: string; username: string; lastModified?: Date; size?: number }[]>>
+  listByUser: (
+    username: string
+  ) => Promise<
+    IpcResult<
+      { key: string; filename: string; username: string; lastModified?: Date; size?: number }[]
+    >
+  >
 
   /**
    * Download a specific report by key

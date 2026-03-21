@@ -13,41 +13,13 @@
 import type { IDatabaseService } from '../database'
 import { ConfigManager } from '../config/config-manager'
 import { createLogger } from '../logger'
+import type {
+  OrderMapping,
+  OrderNumberType,
+  ResolutionStats
+} from '../../types/order-resolver.types'
 
 const log = createLogger('OrderResolver')
-
-/**
- * Order mapping result
- */
-export interface OrderMapping {
-  /** Original input from user */
-  input: string
-  /** Recognized productionID (if input matches productionID pattern) */
-  productionId?: string
-  /** Final production order number to use */
-  orderNumber?: string
-  /** Whether the order number was successfully resolved */
-  resolved: boolean
-  /** Error message if resolution failed */
-  error?: string
-}
-
-/**
- * Order number type recognition result
- */
-export type OrderNumberType = 'productionId' | 'orderNumber' | 'unknown'
-
-/**
- * Resolution statistics
- */
-export interface ResolutionStats {
-  totalInputs: number
-  validOrderNumbers: number
-  validProductionIds: number
-  resolvedCount: number
-  failedCount: number
-  unknownFormat: number
-}
 
 /**
  * ProductionID pattern: 2 digits + 1 letter + 1-6 digits

@@ -15,56 +15,19 @@ import { SessionManager } from '../services/user/session-manager'
 import { createLogger } from '../services/logger'
 import { logAudit } from '../services/logger/audit-logger'
 import type { UserInfo } from '../types/user.types'
+import type {
+  CurrentUserResponse,
+  LoginRequest,
+  LoginResponse,
+  SilentLoginResponse,
+  UserSelectionResponse
+} from '../types/auth-ipc.types'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { ValidationError } from '../types/errors'
 import { withErrorHandling, type IpcResult } from './index'
 import { UpdateService } from '../services/update/update-service'
 
 const log = createLogger('AuthHandler')
-
-/**
- * Login request
- */
-export interface LoginRequest {
-  username: string
-  password: string
-}
-
-/**
- * Login response
- */
-export interface LoginResponse {
-  success: boolean
-  userInfo?: UserInfo
-  error?: string
-}
-
-/**
- * Silent login response
- */
-export interface SilentLoginResponse {
-  success: boolean
-  userInfo?: UserInfo
-  requiresUserSelection?: boolean // True if admin needs to select a user
-  error?: string
-}
-
-/**
- * User selection response
- */
-export interface UserSelectionResponse {
-  success: boolean
-  userInfo?: UserInfo
-  error?: string
-}
-
-/**
- * Current user response
- */
-export interface CurrentUserResponse {
-  isAuthenticated: boolean
-  userInfo?: UserInfo
-}
 
 /**
  * Register IPC handlers for user authentication
