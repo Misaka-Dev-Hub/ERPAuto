@@ -70,6 +70,7 @@ function App(): React.JSX.Element {
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
   const [updateCatalog, setUpdateCatalog] = useState<UpdateDialogCatalog | null>(null)
   const [showUpdateDialog, setShowUpdateDialog] = useState(false)
+  const authInitializationStartedRef = React.useRef(false)
 
   // Load error message from sessionStorage
   const showError = (message: string) => {
@@ -145,6 +146,12 @@ function App(): React.JSX.Element {
 
   // Initialize authentication on mount
   useEffect(() => {
+    if (authInitializationStartedRef.current) {
+      logger.debug('Skipping duplicate auth initialization effect')
+      return
+    }
+
+    authInitializationStartedRef.current = true
     logger.info('=== Initializing auth... ===')
     void initializeAuth()
   }, [initializeAuth, logger])

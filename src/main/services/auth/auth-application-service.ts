@@ -15,6 +15,8 @@ import type {
 const log = createLogger('AuthApplicationService')
 
 export class AuthApplicationService {
+  private silentLoginPromise: Promise<SilentLoginResponse> | null = null
+
   constructor(
     private readonly sessionManager: SessionManager = SessionManager.getInstance(),
     private readonly updateService: UpdateService = UpdateService.getInstance()
@@ -25,6 +27,20 @@ export class AuthApplicationService {
   }
 
   async silentLogin(): Promise<SilentLoginResponse> {
+    if (this.silentLoginPromise) {
+      log.debug('Reusing in-flight silent login request')
+      return this.silentLoginPromise
+    }
+
+    this.silentLoginPromise = this.performSilentLogin()
+    try {
+      return await this.silentLoginPromise
+    } finally {
+      this.silentLoginPromise = null
+    }
+  }
+
+  private async performSilentLogin(): Promise<SilentLoginResponse> {
     log.info('Attempting silent login')
     const success = await this.sessionManager.loginByComputerName()
     const userInfo = this.sessionManager.getUserInfo()

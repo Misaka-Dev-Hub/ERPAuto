@@ -8,12 +8,10 @@ import {
 } from './bootstrap/runtime'
 import { setupProcessGuards } from './bootstrap/process-guards'
 
-const playwrightBrowsersPath = configurePlaywrightBrowsersPath()
-
-setupProcessGuards()
-registerMainWindowLifecycle()
-
 app.whenReady().then(async () => {
+  setupProcessGuards()
+  registerMainWindowLifecycle()
+  const playwrightBrowsersPath = configurePlaywrightBrowsersPath()
   ensurePlaywrightRuntime(playwrightBrowsersPath)
   await initializeMainProcessServices()
   setupElectronRuntime()

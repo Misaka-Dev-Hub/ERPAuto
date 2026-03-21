@@ -133,7 +133,7 @@ export class ConfigManager {
     if (this.initialized) return
 
     // 检测是否为开发环境
-    const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+    const isDev = process.env.NODE_ENV === 'development' || !(app?.isPackaged ?? false)
 
     if (isDev) {
       // 开发环境：配置文件放在项目根目录，方便编辑和调试

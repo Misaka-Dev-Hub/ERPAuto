@@ -1,5 +1,4 @@
 import { app, dialog } from 'electron'
-import { electronApp, optimizer } from '@electron-toolkit/utils'
 import fs from 'fs'
 import { join } from 'path'
 import { ConfigManager } from '../services/config/config-manager'
@@ -12,10 +11,23 @@ export function configurePlaywrightBrowsersPath(): string {
 }
 
 export function setupElectronRuntime(): void {
-  electronApp.setAppUserModelId('com.electron')
+  app.setAppUserModelId('com.electron')
 
   app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
+    window.webContents.on('before-input-event', (event, input) => {
+      const isReloadShortcut = (input.control || input.meta) && input.key.toLowerCase() === 'r'
+      const isToggleDevTools = input.key === 'F12'
+
+      if (!app.isPackaged && isToggleDevTools && input.type === 'keyDown') {
+        window.webContents.toggleDevTools()
+        event.preventDefault()
+        return
+      }
+
+      if (app.isPackaged && isReloadShortcut) {
+        event.preventDefault()
+      }
+    })
   })
 }
 

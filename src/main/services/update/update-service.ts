@@ -44,7 +44,7 @@ function appendPortableLaunchLog(
 }
 
 function getCurrentAppVersion(): string {
-  return typeof app.getVersion === 'function' ? app.getVersion() : '0.0.0'
+  return typeof app?.getVersion === 'function' ? app.getVersion() : '0.0.0'
 }
 
 function getCurrentChannel(): ReleaseChannel {
@@ -79,7 +79,7 @@ function getSupportState(config: UpdateConfig | null): {
     return { supported: false, reason: '当前仅支持 Windows 自动更新' }
   }
 
-  if (app.isPackaged) {
+  if (app?.isPackaged) {
     return { supported: true }
   }
 

@@ -43,9 +43,10 @@ export class SessionManager {
    * @returns True if login successful, false otherwise
    */
   public async login(username: string, password: string): Promise<boolean> {
+    let dao: InstanceType<(typeof import('./bip-users-dao'))['BIPUsersDAO']> | null = null
     try {
       const { BIPUsersDAO } = await import('./bip-users-dao')
-      const dao = new BIPUsersDAO()
+      dao = new BIPUsersDAO()
       const userInfo = await dao.authenticate(username, password)
 
       if (userInfo) {
@@ -60,6 +61,12 @@ export class SessionManager {
     } catch (error) {
       console.error('[SessionManager] Login error:', error)
       return false
+    } finally {
+      if (dao) {
+        await dao.disconnect().catch((error) => {
+          console.error('[SessionManager] Login disconnect error:', error)
+        })
+      }
     }
   }
 
@@ -68,10 +75,11 @@ export class SessionManager {
    * @returns True if login successful, false otherwise
    */
   public async loginByComputerName(): Promise<boolean> {
+    let dao: InstanceType<(typeof import('./bip-users-dao'))['BIPUsersDAO']> | null = null
     try {
       const { BIPUsersDAO } = await import('./bip-users-dao')
       const { hostname } = await import('os')
-      const dao = new BIPUsersDAO()
+      dao = new BIPUsersDAO()
       const computerName = hostname()
       const userInfo = await dao.authenticateByComputerName(computerName)
 
@@ -87,6 +95,12 @@ export class SessionManager {
     } catch (error) {
       console.error('[SessionManager] Silent login error:', error)
       return false
+    } finally {
+      if (dao) {
+        await dao.disconnect().catch((error) => {
+          console.error('[SessionManager] Silent login disconnect error:', error)
+        })
+      }
     }
   }
 
@@ -174,13 +188,20 @@ export class SessionManager {
    * Get all users from database (for Admin user selection)
    */
   public async getAllUsers(): Promise<UserInfo[]> {
+    let dao: InstanceType<(typeof import('./bip-users-dao'))['BIPUsersDAO']> | null = null
     try {
       const { BIPUsersDAO } = await import('./bip-users-dao')
-      const dao = new BIPUsersDAO()
+      dao = new BIPUsersDAO()
       return await dao.getAllUsers()
     } catch (error) {
       console.error('[SessionManager] Get all users error:', error)
       return []
+    } finally {
+      if (dao) {
+        await dao.disconnect().catch((error) => {
+          console.error('[SessionManager] Get all users disconnect error:', error)
+        })
+      }
     }
   }
 }

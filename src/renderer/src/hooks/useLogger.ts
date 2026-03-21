@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { LogLevel } from '../../../shared/ipc-channels'
 
 /**
@@ -70,33 +70,24 @@ export function useLogger(context: string): RendererLogger {
   )
 
   // Return memoized logger methods
-  return {
-    log: logger,
-    info: useCallback(
-      (message: string, meta?: Record<string, unknown>) => {
+  return useMemo(
+    () => ({
+      log: logger,
+      info: (message: string, meta?: Record<string, unknown>) => {
         logger('info', message, meta)
       },
-      [logger]
-    ),
-    warn: useCallback(
-      (message: string, meta?: Record<string, unknown>) => {
+      warn: (message: string, meta?: Record<string, unknown>) => {
         logger('warn', message, meta)
       },
-      [logger]
-    ),
-    error: useCallback(
-      (message: string, meta?: Record<string, unknown>) => {
+      error: (message: string, meta?: Record<string, unknown>) => {
         logger('error', message, meta)
       },
-      [logger]
-    ),
-    debug: useCallback(
-      (message: string, meta?: Record<string, unknown>) => {
+      debug: (message: string, meta?: Record<string, unknown>) => {
         logger('debug', message, meta)
-      },
-      [logger]
-    )
-  }
+      }
+    }),
+    [logger]
+  )
 }
 
 /**
