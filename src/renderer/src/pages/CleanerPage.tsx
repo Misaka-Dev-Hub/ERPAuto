@@ -1,13 +1,16 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import { CleanerExecutionBar } from '../components/cleaner/CleanerExecutionBar'
 import { CleanerResultsTable } from '../components/cleaner/CleanerResultsTable'
 import { CleanerSidebar } from '../components/cleaner/CleanerSidebar'
 import { CleanerToolbar } from '../components/cleaner/CleanerToolbar'
-import MaterialTypeManagementDialog from '../components/MaterialTypeManagementDialog'
-import ExecutionReportDialog from '../components/ExecutionReportDialog'
-import ReportViewerDialog from '../components/ReportViewerDialog'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { useCleaner } from '../hooks/useCleaner'
+
+const MaterialTypeManagementDialog = React.lazy(
+  () => import('../components/MaterialTypeManagementDialog')
+)
+const ExecutionReportDialog = React.lazy(() => import('../components/ExecutionReportDialog'))
+const ReportViewerDialog = React.lazy(() => import('../components/ReportViewerDialog'))
 
 const CleanerPage: React.FC = () => {
   const typeManagementButtonRef = React.useRef<HTMLButtonElement>(null)
@@ -129,42 +132,45 @@ const CleanerPage: React.FC = () => {
         />
       </div>
 
-      {/* Material Type Management Dialog */}
-      <MaterialTypeManagementDialog
-        isOpen={isTypeDialogOpen}
-        onClose={() => setIsTypeDialogOpen(false)}
-        isAdmin={isAdmin}
-        currentUsername={currentUsername}
-        triggerRef={typeManagementButtonRef}
-      />
+      <Suspense fallback={null}>
+        <MaterialTypeManagementDialog
+          isOpen={isTypeDialogOpen}
+          onClose={() => setIsTypeDialogOpen(false)}
+          isAdmin={isAdmin}
+          currentUsername={currentUsername}
+          triggerRef={typeManagementButtonRef}
+        />
+      </Suspense>
 
-      {/* Execution Report Dialog */}
-      <ExecutionReportDialog
-        isOpen={isReportDialogOpen}
-        onClose={() => {
-          setIsReportDialogOpen(false)
-          resetStartTime()
-        }}
-        ordersProcessed={reportData?.ordersProcessed}
-        materialsDeleted={reportData?.materialsDeleted}
-        materialsSkipped={reportData?.materialsSkipped}
-        errors={reportData?.errors}
-        dryRun={dryRun}
-        isExecuting={isExecuting}
-        progress={progress}
-        startTime={startTime}
-        triggerRef={executeButtonRef}
-        retriedOrders={reportData?.retriedOrders}
-        successfulRetries={reportData?.successfulRetries}
-      />
+      <Suspense fallback={null}>
+        <ExecutionReportDialog
+          isOpen={isReportDialogOpen}
+          onClose={() => {
+            setIsReportDialogOpen(false)
+            resetStartTime()
+          }}
+          ordersProcessed={reportData?.ordersProcessed}
+          materialsDeleted={reportData?.materialsDeleted}
+          materialsSkipped={reportData?.materialsSkipped}
+          errors={reportData?.errors}
+          dryRun={dryRun}
+          isExecuting={isExecuting}
+          progress={progress}
+          startTime={startTime}
+          triggerRef={executeButtonRef}
+          retriedOrders={reportData?.retriedOrders}
+          successfulRetries={reportData?.successfulRetries}
+        />
+      </Suspense>
 
-      {/* Report Viewer Dialog */}
-      <ReportViewerDialog
-        isOpen={isReportViewerOpen}
-        onClose={() => setIsReportViewerOpen(false)}
-        isAdmin={isAdmin}
-        currentUsername={currentUsername}
-      />
+      <Suspense fallback={null}>
+        <ReportViewerDialog
+          isOpen={isReportViewerOpen}
+          onClose={() => setIsReportViewerOpen(false)}
+          isAdmin={isAdmin}
+          currentUsername={currentUsername}
+        />
+      </Suspense>
 
       {/* Confirmation Dialog */}
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}

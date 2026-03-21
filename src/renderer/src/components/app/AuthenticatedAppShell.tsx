@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import {
   ArrowUpCircle,
   Database,
@@ -16,11 +16,12 @@ import type {
   UpdateStatus
 } from '../../../../main/types/update.types'
 import type { CurrentUser, Page } from '../../hooks/useAppBootstrap'
-import UpdateDialog from '../UpdateDialog'
 import { Toast } from '../ui/Toast'
 import CleanerPage from '../../pages/CleanerPage'
 import ExtractorPage from '../../pages/ExtractorPage'
 import SettingsPage from '../../pages/SettingsPage'
+
+const UpdateDialog = React.lazy(() => import('../UpdateDialog'))
 
 interface AuthenticatedAppShellProps {
   currentUser: CurrentUser | null
@@ -192,18 +193,20 @@ export function AuthenticatedAppShell({
 
       <Toast />
 
-      <UpdateDialog
-        isOpen={showUpdateDialog}
-        userType={currentUser?.userType ?? null}
-        status={updateStatus}
-        catalog={updateCatalog}
-        onClose={onCloseUpdateDialog}
-        onInstallUserRelease={onInstallUserRelease}
-        onDownloadAndInstallAdminRelease={async (release) =>
-          onDownloadAndInstallAdminRelease(release)
-        }
-        onRefreshCatalog={onRefreshCatalog}
-      />
+      <Suspense fallback={null}>
+        <UpdateDialog
+          isOpen={showUpdateDialog}
+          userType={currentUser?.userType ?? null}
+          status={updateStatus}
+          catalog={updateCatalog}
+          onClose={onCloseUpdateDialog}
+          onInstallUserRelease={onInstallUserRelease}
+          onDownloadAndInstallAdminRelease={async (release) =>
+            onDownloadAndInstallAdminRelease(release)
+          }
+          onRefreshCatalog={onRefreshCatalog}
+        />
+      </Suspense>
     </div>
   )
 }
