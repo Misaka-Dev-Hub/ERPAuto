@@ -330,6 +330,7 @@ export function useAppBootstrap() {
     openUpdateDialog,
     handleInstallUserRelease,
     handleAdminDownloadAndInstall,
-    refreshUpdateDialogState
+    refreshUpdateDialogState,
+    initializeAuth
   }
 }

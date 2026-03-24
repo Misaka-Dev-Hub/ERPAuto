@@ -34,12 +34,15 @@ function App(): React.JSX.Element {
     openUpdateDialog,
     handleInstallUserRelease,
     handleAdminDownloadAndInstall,
-    refreshUpdateDialogState
+    refreshUpdateDialogState,
+    initializeAuth
   } = useAppBootstrap()
 
   const handlePlaywrightDownloadComplete = React.useCallback(() => {
     setShowPlaywrightDownload(false)
-  }, [setShowPlaywrightDownload])
+    // Re-trigger authentication after download completes
+    void initializeAuth()
+  }, [setShowPlaywrightDownload, initializeAuth])
 
   const shouldShowLogout = currentUser?.userType === 'Admin' || isSwitchedByAdmin
 

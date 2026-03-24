@@ -60,7 +60,7 @@ export interface DownloadConfig {
 const DEFAULT_CONFIG: Required<DownloadConfig> = {
   s3Client: null as unknown as S3Client,
   bucket: 'erpauto',
-  prefix: 'erpauto/resources/ms-playwright/',
+  prefix: 'resources/ms-playwright/', // ✅ Fixed: removed 'erpauto/' prefix
   destDir: path.join(process.env.APPDATA || '', 'erpauto', 'ms-playwright')
 }
 
@@ -176,7 +176,8 @@ export class DownloadService {
 
   /**
    * List all S3 objects under the configured prefix
-   * Filters to only chromium-* folders
+   * Filters to include ALL Chromium files (regular + headless)
+   * Simple filter: includes 'chromium' keyword
    */
   async listObjects(): Promise<S3Object[]> {
     log.info('Listing S3 objects', { bucket: this.config.bucket, prefix: this.config.prefix })
@@ -196,8 +197,10 @@ export class DownloadService {
       for (const obj of response.Contents || []) {
         if (!obj.Key) continue
 
-        // Only include chromium-* folders, skip firefox and webkit
-        if (!obj.Key.includes('chromium-')) {
+        // Simple filter: only download Chromium-related files
+        // This includes: chromium-1200, chromium-1208, chromium_headless_shell-1200, chromium_headless_shell-1208
+        // Excludes: firefox, webkit, ffmpeg, winldd, .links, .settings
+        if (!obj.Key.includes('chromium')) {
           continue
         }
 
