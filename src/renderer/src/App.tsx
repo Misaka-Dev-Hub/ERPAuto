@@ -1,6 +1,7 @@
 import React from 'react'
 import { AuthenticatedAppShell } from './components/app/AuthenticatedAppShell'
 import { UnauthenticatedApp } from './components/app/UnauthenticatedApp'
+import PlaywrightDownloadDialog from './components/PlaywrightDownloadDialog'
 import { useAppBootstrap } from './hooks/useAppBootstrap'
 
 function App(): React.JSX.Element {
@@ -22,6 +23,8 @@ function App(): React.JSX.Element {
     updateCatalog,
     showUpdateDialog,
     setShowUpdateDialog,
+    showPlaywrightDownload,
+    setShowPlaywrightDownload,
     showError,
     handleLogin,
     handleLoginCancel,
@@ -34,7 +37,22 @@ function App(): React.JSX.Element {
     refreshUpdateDialogState
   } = useAppBootstrap()
 
+  const handlePlaywrightDownloadComplete = React.useCallback(() => {
+    setShowPlaywrightDownload(false)
+  }, [setShowPlaywrightDownload])
+
   const shouldShowLogout = currentUser?.userType === 'Admin' || isSwitchedByAdmin
+
+  // Show Playwright download dialog first (before authentication check)
+  if (showPlaywrightDownload) {
+    return (
+      <PlaywrightDownloadDialog
+        isOpen={showPlaywrightDownload}
+        onClose={() => {}}
+        onDownloadComplete={handlePlaywrightDownloadComplete}
+      />
+    )
+  }
 
   if (!isAuthenticated) {
     return (

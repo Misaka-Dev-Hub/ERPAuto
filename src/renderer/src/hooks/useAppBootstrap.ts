@@ -37,6 +37,7 @@ export function useAppBootstrap() {
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
   const [updateCatalog, setUpdateCatalog] = useState<UpdateDialogCatalog | null>(null)
   const [showUpdateDialog, setShowUpdateDialog] = useState(false)
+  const [showPlaywrightDownload, setShowPlaywrightDownload] = useState(false)
 
   const authInitializationStartedRef = useRef(false)
 
@@ -120,7 +121,28 @@ export function useAppBootstrap() {
 
     authInitializationStartedRef.current = true
     logger.info('=== Initializing auth... ===')
-    void initializeAuth()
+
+    // Check if Playwright browsers are installed
+    const checkPlaywrightBrowsers = async () => {
+      try {
+        const result = await window.electron.playwrightBrowser.check()
+        if (result.success && !result.data) {
+          logger.info('Playwright browsers not found, showing download dialog')
+          setShowPlaywrightDownload(true)
+        } else {
+          logger.info('Playwright browsers found, continuing auth')
+          void initializeAuth()
+        }
+      } catch (error) {
+        logger.error('Failed to check Playwright browsers', {
+          error: error instanceof Error ? error.message : String(error)
+        })
+        // Continue with auth even if check fails
+        void initializeAuth()
+      }
+    }
+
+    void checkPlaywrightBrowsers()
   }, [initializeAuth, logger])
 
   useEffect(() => {
@@ -295,6 +317,8 @@ export function useAppBootstrap() {
     updateCatalog,
     showUpdateDialog,
     setShowUpdateDialog,
+    showPlaywrightDownload,
+    setShowPlaywrightDownload,
     showError,
     refreshUpdateState,
     refreshUpdateCatalog,

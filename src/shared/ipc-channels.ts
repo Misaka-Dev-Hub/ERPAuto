@@ -110,7 +110,8 @@ export const IPC_CHANNELS = {
   // Playwright Browser
   PLAYWRIGHT_BROWSER_DOWNLOAD: 'playwright-browser:download',
   PLAYWRIGHT_BROWSER_CANCEL: 'playwright-browser:cancel',
-  PLAYWRIGHT_BROWSER_PROGRESS: 'playwright-browser:progress'
+  PLAYWRIGHT_BROWSER_PROGRESS: 'playwright-browser:progress',
+  PLAYWRIGHT_BROWSER_CHECK: 'playwright-browser:check'
 } as const
 
 /**

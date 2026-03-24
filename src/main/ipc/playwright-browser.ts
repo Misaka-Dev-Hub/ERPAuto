@@ -3,7 +3,8 @@
  * Handles browser download requests from renderer process
  */
 
-import { ipcMain, IpcMainInvokeEvent } from 'electron'
+import { app, ipcMain, IpcMainInvokeEvent } from 'electron'
+import { join } from 'path'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { withErrorHandling, type IpcResult } from './index'
 import { DownloadService } from '../services/playwright-browser'
@@ -32,11 +33,50 @@ function createS3Client(): S3Client {
 }
 
 /**
+ * Check if Playwright browsers are installed
+ */
+async function checkBrowsersExist(): Promise<boolean> {
+  const fs = await import('fs')
+  const browsersPath = join(app.getPath('userData'), 'ms-playwright')
+  const newChromiumPath = join(browsersPath, 'chromium-1208', 'chrome-win64', 'chrome.exe')
+  const oldChromiumPath = join(browsersPath, 'chromium-win32', 'chrome.exe')
+  const chromiumPath = fs.default.existsSync(newChromiumPath) ? newChromiumPath : oldChromiumPath
+
+  if (fs.default.existsSync(chromiumPath)) {
+    return true
+  }
+
+  let foundRevision = false
+  try {
+    const entries = fs.default.readdirSync(browsersPath)
+    for (const entry of entries) {
+      if (entry.startsWith('chromium-') && !entry.includes('headless')) {
+        const revisionPath = join(browsersPath, entry, 'chrome-win64', 'chrome.exe')
+        if (fs.default.existsSync(revisionPath)) {
+          foundRevision = true
+          break
+        }
+      }
+    }
+  } catch {
+    // Ignore browser directory probing failures
+  }
+
+  return foundRevision
+}
+
+/**
  * Track active download for cancellation
  */
 let activeDownload: { service: DownloadService; cancelled: boolean } | null = null
 
 export function registerPlaywrightBrowserHandlers(): void {
+  ipcMain.handle(IPC_CHANNELS.PLAYWRIGHT_BROWSER_CHECK, async (): Promise<IpcResult<boolean>> => {
+    return withErrorHandling(async () => {
+      return checkBrowsersExist()
+    }, 'playwright-browser:check')
+  })
+
   ipcMain.handle(
     IPC_CHANNELS.PLAYWRIGHT_BROWSER_DOWNLOAD,
     async (event: IpcMainInvokeEvent): Promise<IpcResult<void>> => {

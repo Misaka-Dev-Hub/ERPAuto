@@ -12,7 +12,8 @@ app.whenReady().then(async () => {
   setupProcessGuards()
   registerMainWindowLifecycle()
   const playwrightBrowsersPath = configurePlaywrightBrowsersPath()
-  ensurePlaywrightRuntime(playwrightBrowsersPath)
+  const browsersExist = ensurePlaywrightRuntime(playwrightBrowsersPath)
+  console.log('Playwright browsers exist:', browsersExist)
   await initializeMainProcessServices()
   setupElectronRuntime()
 

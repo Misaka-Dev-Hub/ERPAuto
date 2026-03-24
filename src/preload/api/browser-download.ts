@@ -4,6 +4,10 @@ import type { IpcResult } from '../../main/types/ipc.types'
 import type { DownloadProgress } from '../index.d'
 
 export const playwrightBrowserApi = {
+  check: async (): Promise<IpcResult<boolean>> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.PLAYWRIGHT_BROWSER_CHECK)
+  },
+
   download: async (): Promise<IpcResult<void>> => {
     return ipcRenderer.invoke(IPC_CHANNELS.PLAYWRIGHT_BROWSER_DOWNLOAD)
   },

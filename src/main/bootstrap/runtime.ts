@@ -31,7 +31,11 @@ export function setupElectronRuntime(): void {
   })
 }
 
-export function ensurePlaywrightRuntime(browsersPath: string): void {
+/**
+ * Check if Playwright browsers are installed
+ * @returns true if browsers exist, false otherwise
+ */
+export function ensurePlaywrightRuntime(browsersPath: string): boolean {
   try {
     fs.mkdirSync(browsersPath, { recursive: true })
   } catch (error) {
@@ -43,7 +47,7 @@ export function ensurePlaywrightRuntime(browsersPath: string): void {
   const chromiumPath = fs.existsSync(newChromiumPath) ? newChromiumPath : oldChromiumPath
 
   if (fs.existsSync(chromiumPath)) {
-    return
+    return true
   }
 
   let foundRevision = false
@@ -64,22 +68,14 @@ export function ensurePlaywrightRuntime(browsersPath: string): void {
   }
 
   if (foundRevision) {
-    return
+    return true
   }
 
-  dialog.showErrorBox(
-    '浏览器文件未找到',
-    `Playwright 浏览器文件不存在。\n\n` +
-      `期望路径：${newChromiumPath}\n` +
-      `或：${oldChromiumPath}\n\n` +
-      `当前目录内容：${fs.existsSync(browsersPath) ? fs.readdirSync(browsersPath).join(', ') : '目录不存在'}\n\n` +
-      `请运行以下命令安装浏览器：\n` +
-      `npx playwright install chromium`
-  )
   console.warn(
     'Playwright browser not found. Available:',
     fs.existsSync(browsersPath) ? fs.readdirSync(browsersPath) : 'none'
   )
+  return false
 }
 
 export async function initializeMainProcessServices(): Promise<void> {

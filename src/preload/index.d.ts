@@ -151,6 +151,7 @@ export interface DownloadProgress {
 }
 
 export interface PlaywrightBrowserAPI {
+  check: () => Promise<IpcResult<boolean>>
   download: () => Promise<IpcResult<void>>
   cancel: () => Promise<IpcResult<void>>
   onProgress: (callback: (data: DownloadProgress) => void) => () => void
