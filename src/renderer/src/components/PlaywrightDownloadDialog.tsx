@@ -36,8 +36,11 @@ export default function PlaywrightDownloadDialog({
   }, [])
 
   // Format ETA to human-readable string
-  const formatETA = useCallback((seconds: number): string => {
-    if (seconds < 0 || !Number.isFinite(seconds)) return '计算中...'
+  const formatETA = useCallback((seconds: number | undefined): string => {
+    if (seconds === undefined || seconds < 0 || !Number.isFinite(seconds)) {
+      return '计算中...'
+    }
+    if (seconds === 0) return '已完成'
     if (seconds < 60) return `${Math.round(seconds)}秒`
     const mins = Math.floor(seconds / 60)
     const secs = Math.round(seconds % 60)
@@ -169,19 +172,25 @@ export default function PlaywrightDownloadDialog({
                 <div className="rounded-lg border border-slate-200 px-4 py-3">
                   <div className="text-xs text-slate-500">总大小</div>
                   <div className="mt-1 text-lg font-semibold text-slate-900">
-                    {progress ? formatBytes(progress.totalBytes) : '计算中...'}
+                    {progress && progress.totalBytes > 0
+                      ? formatBytes(progress.totalBytes)
+                      : '计算中...'}
                   </div>
                 </div>
                 <div className="rounded-lg border border-slate-200 px-4 py-3">
                   <div className="text-xs text-slate-500">速度</div>
                   <div className="mt-1 text-lg font-semibold text-slate-900">
-                    {progress?.speed ? `${formatBytes(progress.speed)}/秒` : '计算中...'}
+                    {progress && progress.speed >= 0
+                      ? `${formatBytes(progress.speed)}/秒`
+                      : '计算中...'}
                   </div>
                 </div>
                 <div className="rounded-lg border border-slate-200 px-4 py-3">
                   <div className="text-xs text-slate-500">剩余时间</div>
                   <div className="mt-1 text-lg font-semibold text-slate-900">
-                    {progress?.eta !== undefined ? formatETA(progress.eta) : '计算中...'}
+                    {progress?.eta !== undefined && progress.eta >= 0
+                      ? formatETA(progress.eta)
+                      : '计算中...'}
                   </div>
                 </div>
               </div>
