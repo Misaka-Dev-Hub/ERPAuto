@@ -124,7 +124,12 @@ export class UpdateService {
       return
     }
 
-    await this.checkForUpdates()
+    // 启动异步更新检查，不阻塞登录流程
+    void this.checkForUpdates().catch((error) => {
+      log.warn('Async update check failed', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    })
     this.startPolling()
   }
 
@@ -149,16 +154,16 @@ export class UpdateService {
         this.publishStatus(nextStatus)
 
         if (nextStatus.phase === 'available' && nextStatus.recommendedRelease) {
-          try {
-            await this.downloadRelease(nextStatus.recommendedRelease)
-          } catch (error) {
+          // 异步下载，不阻塞更新检查流程
+          void this.downloadRelease(nextStatus.recommendedRelease).catch((error) => {
             const message = error instanceof Error ? error.message : '下载更新失败'
+            log.warn('Async update download failed', { error: message })
             this.publishStatus({
               phase: 'error',
               error: message,
               message
             })
-          }
+          })
         }
       } else if (currentUserType === 'Admin') {
         this.publishStatus(this.catalogService.resolveAdminStatus(this.status, this.catalog))
