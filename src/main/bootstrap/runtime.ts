@@ -1,4 +1,4 @@
-import { app, dialog } from 'electron'
+import { app } from 'electron'
 import fs from 'fs'
 import { join } from 'path'
 import { ConfigManager } from '../services/config/config-manager'
