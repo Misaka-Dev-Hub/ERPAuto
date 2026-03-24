@@ -105,7 +105,12 @@ export const IPC_CHANNELS = {
   UPDATE_GET_CHANGELOG: 'update:getChangelog',
   UPDATE_DOWNLOAD_RELEASE: 'update:downloadRelease',
   UPDATE_INSTALL_DOWNLOADED: 'update:installDownloaded',
-  UPDATE_STATUS_CHANGED: 'update:onStatusChanged'
+  UPDATE_STATUS_CHANGED: 'update:onStatusChanged',
+
+  // Playwright Browser
+  PLAYWRIGHT_BROWSER_DOWNLOAD: 'playwright-browser:download',
+  PLAYWRIGHT_BROWSER_CANCEL: 'playwright-browser:cancel',
+  PLAYWRIGHT_BROWSER_PROGRESS: 'playwright-browser:progress'
 } as const
 
 /**

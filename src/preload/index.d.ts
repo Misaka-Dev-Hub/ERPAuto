@@ -141,6 +141,21 @@ export interface UpdateAPI {
   onStatusChanged: (callback: (data: UpdateStatus) => void) => () => void
 }
 
+export interface DownloadProgress {
+  percent: number // 0-100
+  downloadedBytes: number
+  totalBytes: number
+  currentFile: string
+  speed: number // bytes/s
+  eta?: number // seconds
+}
+
+export interface PlaywrightBrowserAPI {
+  download: () => Promise<IpcResult<void>>
+  cancel: () => Promise<IpcResult<void>>
+  onProgress: (callback: (data: DownloadProgress) => void) => () => void
+}
+
 export interface ProcessAPI {
   versions: {
     electron: string
@@ -168,6 +183,7 @@ declare global {
       logger: LoggerAPI
       report: ReportAPI
       update: UpdateAPI
+      playwrightBrowser: PlaywrightBrowserAPI
     }
     api: unknown
   }

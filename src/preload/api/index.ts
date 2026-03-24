@@ -16,6 +16,7 @@ import {
   userErpConfigApi
 } from './materials'
 import { loggerApi } from './logger'
+import { playwrightBrowserApi } from './browser-download'
 
 export const api = {
   process: processApi,
@@ -33,7 +34,8 @@ export const api = {
   config: configApi,
   logger: loggerApi,
   report: reportApi,
-  update: updateApi
+  update: updateApi,
+  playwrightBrowser: playwrightBrowserApi
 } as const
 
 export type ElectronApi = typeof api
