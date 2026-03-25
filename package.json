@@ -51,6 +51,7 @@
     "playwright-core": "^1.58.2",
     "react-focus-lock": "^2.13.7",
     "react-markdown": "^10.1.0",
+    "recharts": "^3.8.0",
     "reflect-metadata": "^0.2.2",
     "rehype-autolink-headings": "^7.1.0",
     "rehype-highlight": "^7.0.2",

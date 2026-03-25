@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { X, FileText, Loader2, ChevronDown } from 'lucide-react'
+import { X, FileText, Loader2, ChevronDown, BarChart3 } from 'lucide-react'
 import { Combobox, Transition } from '@headlessui/react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -22,13 +22,15 @@ interface ReportViewerDialogProps {
   onClose: () => void
   isAdmin: boolean
   currentUsername: string
+  onOpenAnalysis?: () => void
 }
 
 export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
   isOpen,
   onClose,
   isAdmin,
-  currentUsername
+  currentUsername,
+  onOpenAnalysis
 }) => {
   const [reports, setReports] = useState<ReportMetadata[]>([])
   const [selectedReport, setSelectedReport] = useState<ReportMetadata | null>(null)
@@ -130,12 +132,23 @@ export const ReportViewerDialog: React.FC<ReportViewerDialogProps> = ({
             <FileText size={20} className="text-blue-600" />
             <h2 className="text-lg font-semibold">执行报告浏览器</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 p-1.5 rounded-lg transition-colors"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-3">
+            {isAdmin && onOpenAnalysis && (
+              <button
+                onClick={onOpenAnalysis}
+                className="text-xs bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50 flex items-center gap-1.5 font-medium transition-colors"
+              >
+                <BarChart3 size={14} className="text-blue-600" />
+                报告分析
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 p-1.5 rounded-lg transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Controls */}
