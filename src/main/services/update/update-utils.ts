@@ -24,7 +24,9 @@ export function compareVersions(left: string, right: string): number {
 export function normalizeReleases(input: unknown, channel: ReleaseChannel): UpdateRelease[] {
   const list = Array.isArray(input)
     ? input
-    : input && typeof input === 'object' && Array.isArray((input as { releases?: unknown[] }).releases)
+    : input &&
+        typeof input === 'object' &&
+        Array.isArray((input as { releases?: unknown[] }).releases)
       ? (input as { releases: unknown[] }).releases
       : []
 

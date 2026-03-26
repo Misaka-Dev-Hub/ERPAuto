@@ -31,6 +31,11 @@ import {
 } from '../../types/config.schema'
 
 const log = createLogger('ConfigManager')
+type DeepPartialRecord = Record<string, unknown>
+
+function formatZodIssue(issue: { path: PropertyKey[]; message: string }): string {
+  return `${issue.path.map((segment) => String(segment)).join('.')}: ${issue.message}`
+}
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -128,7 +133,7 @@ export class ConfigManager {
     if (this.initialized) return
 
     // 检测是否为开发环境
-    const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+    const isDev = process.env.NODE_ENV === 'development' || !(app?.isPackaged ?? false)
 
     if (isDev) {
       // 开发环境：配置文件放在项目根目录，方便编辑和调试
@@ -190,7 +195,7 @@ export class ConfigManager {
       log.info('Configuration loaded and validated successfully')
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const messages = error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`)
+        const messages = error.issues.map(formatZodIssue)
         log.error('Configuration validation failed', { errors: messages })
         throw new Error(`配置文件验证失败:\n${messages.join('\n')}`)
       }
@@ -300,7 +305,7 @@ export class ConfigManager {
       return { success: true }
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const messages = error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`)
+        const messages = error.issues.map(formatZodIssue)
         return { success: false, error: `配置验证失败:\n${messages.join('\n')}` }
       }
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
@@ -310,18 +315,27 @@ export class ConfigManager {
   /**
    * 深合并工具函数
    */
-  private deepMerge<T extends Record<string, any>>(source: T, target: Partial<T>): T {
-    const result = { ...source }
+  private deepMerge<T extends DeepPartialRecord>(source: T, target: Partial<T>): T {
+    const result: T = { ...source }
     for (const key in target) {
-      if (target[key] !== undefined) {
+      const sourceValue = result[key]
+      const targetValue = target[key]
+
+      if (targetValue !== undefined) {
         if (
-          typeof target[key] === 'object' &&
-          target[key] !== null &&
-          !Array.isArray(target[key])
+          typeof sourceValue === 'object' &&
+          sourceValue !== null &&
+          !Array.isArray(sourceValue) &&
+          typeof targetValue === 'object' &&
+          targetValue !== null &&
+          !Array.isArray(targetValue)
         ) {
-          result[key] = this.deepMerge(result[key] as any, target[key] as any)
+          result[key] = this.deepMerge(
+            sourceValue as DeepPartialRecord,
+            targetValue as Partial<DeepPartialRecord>
+          ) as T[Extract<keyof T, string>]
         } else {
-          result[key] = target[key] as any
+          result[key] = targetValue as T[Extract<keyof T, string>]
         }
       }
     }

@@ -6,10 +6,10 @@
 
 根据 [package.json](/d:/FileLib/Projects/CodeMigration/ERPAuto/package.json)，项目当前依赖为：
 
-| 组件 | 当前版本 |
-| --- | --- |
-| `playwright` | `^1.58.2` |
-| `playwright-core` | `^1.58.2` |
+| 组件               | 当前版本  |
+| ------------------ | --------- |
+| `playwright`       | `^1.58.2` |
+| `playwright-core`  | `^1.58.2` |
 | `@playwright/test` | `^1.58.2` |
 
 ## 当前代码中的目录约定

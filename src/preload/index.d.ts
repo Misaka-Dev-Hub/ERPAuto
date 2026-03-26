@@ -1,13 +1,19 @@
-import type { FileAPI, ExtractorAPI, CleanerAPI, DatabaseAPI, ReportAPI } from '../main/types/ipc-api.types'
-import type { ResolverInput, ResolverResponse } from '../main/ipc/resolver-handler'
+import type {
+  FileAPI,
+  ExtractorAPI,
+  CleanerAPI,
+  DatabaseAPI,
+  ReportAPI
+} from '../main/types/ipc-api.types'
+import type { ResolverInput, ResolverResponse } from '../main/types/resolver-ipc.types'
 import type { UserInfo } from '../main/types/user.types'
 import type {
+  CurrentUserResponse,
   LoginRequest,
   LoginResponse,
   SilentLoginResponse,
-  UserSelectionResponse,
-  CurrentUserResponse
-} from '../main/ipc/auth-handler'
+  UserSelectionResponse
+} from '../main/types/auth-ipc.types'
 import type {
   ValidationRequest,
   ValidationResponse,
@@ -19,7 +25,7 @@ import type {
   ConnectionTestResult,
   SaveSettingsResult
 } from '../main/types/settings.types'
-import type { IpcResult } from '../main/ipc'
+import type { IpcResult } from '../main/types/ipc.types'
 import type { LogLevel } from '../shared/ipc-channels'
 import type { CleanerConfig } from '../main/types/config.schema'
 import type {
@@ -135,6 +141,22 @@ export interface UpdateAPI {
   onStatusChanged: (callback: (data: UpdateStatus) => void) => () => void
 }
 
+export interface DownloadProgress {
+  percent: number // 0-100
+  downloadedBytes: number
+  totalBytes: number
+  currentFile: string
+  speed: number // bytes/s
+  eta?: number // seconds
+}
+
+export interface PlaywrightBrowserAPI {
+  check: () => Promise<IpcResult<boolean>>
+  download: () => Promise<IpcResult<void>>
+  cancel: () => Promise<IpcResult<void>>
+  onProgress: (callback: (data: DownloadProgress) => void) => () => void
+}
+
 export interface ProcessAPI {
   versions: {
     electron: string
@@ -162,6 +184,7 @@ declare global {
       logger: LoggerAPI
       report: ReportAPI
       update: UpdateAPI
+      playwrightBrowser: PlaywrightBrowserAPI
     }
     api: unknown
   }

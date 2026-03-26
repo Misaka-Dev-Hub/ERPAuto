@@ -10,17 +10,7 @@
 import React from 'react'
 import { CheckCircle, XCircle, SkipForward, Package, Loader2 } from 'lucide-react'
 import { Modal } from './ui/Modal'
-
-interface CleanerProgress {
-  message: string
-  progress: number
-  currentOrderIndex: number
-  totalOrders: number
-  currentMaterialIndex: number
-  totalMaterialsInOrder: number
-  currentOrderNumber?: string
-  phase: 'login' | 'processing' | 'complete'
-}
+import type { CleanerProgress } from '../hooks/cleaner/types'
 
 interface ExecutionReportDialogProps {
   isOpen: boolean

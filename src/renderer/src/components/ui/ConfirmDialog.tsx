@@ -5,7 +5,7 @@
  * Extends the Modal component with consistent styling and behavior.
  */
 
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useCallback, useEffect } from 'react'
 import { AlertTriangle, Info, AlertCircle } from 'lucide-react'
 import { Modal } from './Modal'
 import { Button } from './Button'
@@ -113,56 +113,6 @@ export function ConfirmDialog({
       </div>
     </Modal>
   )
-}
-
-/**
- * Hook for using confirmation dialogs
- * Returns a confirm function that shows a dialog and resolves with user's choice
- */
-export function useConfirmDialog() {
-  const [config, setConfig] = useState<
-    | (Omit<ConfirmDialogProps, 'isOpen' | 'onConfirm' | 'onCancel'> & {
-        resolve: (value: boolean) => void
-      })
-    | null
-  >(null)
-
-  const confirm = useCallback(
-    (options: Omit<ConfirmDialogProps, 'isOpen' | 'onConfirm' | 'onCancel'>): Promise<boolean> => {
-      return new Promise<boolean>((resolve) => {
-        setConfig({
-          ...options,
-          resolve
-        })
-      })
-    },
-    []
-  )
-
-  const handleConfirm = useCallback(() => {
-    if (config) {
-      config.resolve(true)
-      setConfig(null)
-    }
-  }, [config])
-
-  const handleCancel = useCallback(() => {
-    if (config) {
-      config.resolve(false)
-      setConfig(null)
-    }
-  }, [config])
-
-  const dialog = config
-    ? {
-        ...config,
-        isOpen: true,
-        onConfirm: handleConfirm,
-        onCancel: handleCancel
-      }
-    : null
-
-  return { confirm, dialog }
 }
 
 export default ConfirmDialog

@@ -115,7 +115,7 @@ export function setLogLevel(level: string): void {
 }
 
 // Add error-specific file transport in production
-if (app.isPackaged) {
+if (app?.isPackaged) {
   logger.add(
     new DailyRotateFile({
       filename: path.join(getLogDir(), 'error-%DATE%.log'),

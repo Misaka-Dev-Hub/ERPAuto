@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { Download, Play, CheckCircle } from 'lucide-react'
 import OrderNumberInput from '../components/OrderNumberInput'
 import { useExtractor } from '../hooks/useExtractor'
+import { usePersistentTextState } from '../hooks/usePersistentTextState'
+import { useSharedProductionIds } from '../hooks/useSharedProductionIds'
 import LogPanel from '../components/ui/LogPanel'
 import { SegmentedProgressBar } from '../components/ui/SegmentedProgressBar'
 
 const ExtractorPage: React.FC = () => {
-  const [orderNumbers, setOrderNumbers] = useState(() => {
-    return sessionStorage.getItem('extractor_orderNumbers') || ''
-  })
+  const [orderNumbers, setOrderNumbers] = usePersistentTextState('extractor_orderNumbers')
 
   const {
     isRunning,
@@ -22,19 +22,7 @@ const ExtractorPage: React.FC = () => {
     setComplete
   } = useExtractor()
 
-  useEffect(() => {
-    sessionStorage.setItem('extractor_orderNumbers', orderNumbers)
-    if (orderNumbers.trim()) {
-      const orderNumberList = orderNumbers
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-      window.electron.validation.setSharedProductionIds(orderNumberList)
-    } else {
-      // Clear shared Production IDs when input is cleared
-      window.electron.validation.clearSharedProductionIds()
-    }
-  }, [orderNumbers])
+  const { clearSharedProductionIdsNow } = useSharedProductionIds(orderNumbers)
 
   const handleExtract = () => {
     startExtraction(orderNumbers)
@@ -42,6 +30,7 @@ const ExtractorPage: React.FC = () => {
 
   const handleReset = () => {
     setOrderNumbers('')
+    void clearSharedProductionIdsNow()
     setError(null)
     setComplete(false)
     clearLogs()

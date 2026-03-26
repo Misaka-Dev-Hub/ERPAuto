@@ -27,72 +27,69 @@ function getRustfsService(): RustfsService | null {
 }
 
 export function registerReportHandlers(): void {
-  ipcMain.handle(
-    IPC_CHANNELS.REPORT_LIST_ALL,
-    async (): Promise<IpcResult<ReportMetadata[]>> => {
-      return withErrorHandling(async () => {
-        const rustfs = getRustfsService()
-        if (!rustfs) {
-          throw new Error('RustFS is not configured or enabled')
-        }
+  ipcMain.handle(IPC_CHANNELS.REPORT_LIST_ALL, async (): Promise<IpcResult<ReportMetadata[]>> => {
+    return withErrorHandling(async () => {
+      const rustfs = getRustfsService()
+      if (!rustfs) {
+        throw new Error('RustFS is not configured or enabled')
+      }
 
-        const configManager = ConfigManager.getInstance()
-        const config = configManager.getConfig()
+      const configManager = ConfigManager.getInstance()
+      const config = configManager.getConfig()
 
-        // Create a direct S3Client since RustfsService doesn't expose listObjects natively easily
-        const client = new S3Client({
-          region: config.rustfs?.region || 'us-east-1',
-          endpoint: config.rustfs?.endpoint || '',
-          credentials: {
-            accessKeyId: config.rustfs?.accessKey || '',
-            secretAccessKey: config.rustfs?.secretKey || ''
-          },
-          forcePathStyle: true
-        })
+      // Create a direct S3Client since RustfsService doesn't expose listObjects natively easily
+      const client = new S3Client({
+        region: config.rustfs?.region || 'us-east-1',
+        endpoint: config.rustfs?.endpoint || '',
+        credentials: {
+          accessKeyId: config.rustfs?.accessKey || '',
+          secretAccessKey: config.rustfs?.secretKey || ''
+        },
+        forcePathStyle: true
+      })
 
-        log.info('Fetching all reports from RustFS')
-        const input = {
-          Bucket: config.rustfs?.bucket || '',
-          Prefix: 'reports/cleaner/'
-        }
+      log.info('Fetching all reports from RustFS')
+      const input = {
+        Bucket: config.rustfs?.bucket || '',
+        Prefix: 'reports/cleaner/'
+      }
 
-        const command = new ListObjectsV2Command(input)
-        const response = await client.send(command)
+      const command = new ListObjectsV2Command(input)
+      const response = await client.send(command)
 
-        const reports: ReportMetadata[] = []
+      const reports: ReportMetadata[] = []
 
-        if (response.Contents) {
-          for (const item of response.Contents) {
-            if (item.Key && item.Key.endsWith('.md')) {
-              // reports/cleaner/{username}/{filename}
-              const parts = item.Key.split('/')
-              if (parts.length >= 4) {
-                const username = parts[2]
-                const filename = parts.slice(3).join('/')
-                reports.push({
-                  key: item.Key,
-                  filename,
-                  username,
-                  lastModified: item.LastModified,
-                  size: item.Size
-                })
-              }
+      if (response.Contents) {
+        for (const item of response.Contents) {
+          if (item.Key && item.Key.endsWith('.md')) {
+            // reports/cleaner/{username}/{filename}
+            const parts = item.Key.split('/')
+            if (parts.length >= 4) {
+              const username = parts[2]
+              const filename = parts.slice(3).join('/')
+              reports.push({
+                key: item.Key,
+                filename,
+                username,
+                lastModified: item.LastModified,
+                size: item.Size
+              })
             }
           }
         }
+      }
 
-        // Sort by lastModified descending
-        reports.sort((a, b) => {
-          if (a.lastModified && b.lastModified) {
-            return b.lastModified.getTime() - a.lastModified.getTime()
-          }
-          return 0
-        })
+      // Sort by lastModified descending
+      reports.sort((a, b) => {
+        if (a.lastModified && b.lastModified) {
+          return b.lastModified.getTime() - a.lastModified.getTime()
+        }
+        return 0
+      })
 
-        return reports
-      }, 'report:listAll')
-    }
-  )
+      return reports
+    }, 'report:listAll')
+  })
 
   ipcMain.handle(
     IPC_CHANNELS.REPORT_LIST_BY_USER,

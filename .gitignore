@@ -8,6 +8,7 @@ out
 
 # AI Agent
 .claude
+.agents
 
 # Environment
 .env

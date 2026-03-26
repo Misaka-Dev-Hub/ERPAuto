@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { LogLevel } from '../../../shared/ipc-channels'
 
 /**
@@ -50,55 +50,44 @@ export interface RendererLogger {
  * ```
  */
 export function useLogger(context: string): RendererLogger {
-  // Use ref to store context to avoid recreating logger on re-renders
-  const contextRef = useRef(context)
-  contextRef.current = context
-
-  // Create stable logger instance using useCallback
-  const logger = useCallback((level: LogLevel, message: string, meta?: Record<string, unknown>) => {
-    // Check if window.electron is available (safety check)
-    if (typeof window !== 'undefined' && window.electron?.logger?.log) {
-      window.electron.logger.log(level, message, {
-        ...meta,
-        context: contextRef.current
-      })
-    } else {
-      // Fallback to console in development if IPC not available
-      if (process.env.NODE_ENV === 'development') {
-        const consoleMethod = console[level] || console.log
-        consoleMethod(`[${contextRef.current}] ${message}`, meta || '')
+  const logger = useCallback(
+    (level: LogLevel, message: string, meta?: Record<string, unknown>) => {
+      // Check if window.electron is available (safety check)
+      if (typeof window !== 'undefined' && window.electron?.logger?.log) {
+        window.electron.logger.log(level, message, {
+          ...meta,
+          context
+        })
+      } else {
+        // Fallback to console in development if IPC not available
+        if (process.env.NODE_ENV === 'development') {
+          const consoleMethod = console[level] || console.log
+          consoleMethod(`[${context}] ${message}`, meta || '')
+        }
       }
-    }
-  }, [])
+    },
+    [context]
+  )
 
   // Return memoized logger methods
-  return {
-    log: logger,
-    info: useCallback(
-      (message: string, meta?: Record<string, unknown>) => {
+  return useMemo(
+    () => ({
+      log: logger,
+      info: (message: string, meta?: Record<string, unknown>) => {
         logger('info', message, meta)
       },
-      [logger]
-    ),
-    warn: useCallback(
-      (message: string, meta?: Record<string, unknown>) => {
+      warn: (message: string, meta?: Record<string, unknown>) => {
         logger('warn', message, meta)
       },
-      [logger]
-    ),
-    error: useCallback(
-      (message: string, meta?: Record<string, unknown>) => {
+      error: (message: string, meta?: Record<string, unknown>) => {
         logger('error', message, meta)
       },
-      [logger]
-    ),
-    debug: useCallback(
-      (message: string, meta?: Record<string, unknown>) => {
+      debug: (message: string, meta?: Record<string, unknown>) => {
         logger('debug', message, meta)
-      },
-      [logger]
-    )
-  }
+      }
+    }),
+    [logger]
+  )
 }
 
 /**

@@ -11,12 +11,8 @@
 import * as mysql from 'mysql2/promise'
 import * as fs from 'fs'
 import * as path from 'path'
-import { fileURLToPath } from 'url'
-import { dirname } from 'path'
 import yaml from 'js-yaml'
 import { z } from 'zod'
-
-const __filename = fileURLToPath(import.meta.url)
 
 /**
  * MySQL configuration schema

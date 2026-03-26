@@ -11,14 +11,12 @@
  *   npx tsx src/main/services/user/migration/add-erp-params-migration.ts
  */
 
-import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import { ConfigManager } from '../../config/config-manager'
 import { MySqlService } from '../../database/mysql'
 import { SqlServerService } from '../../database/sql-server'
-import yaml from 'js-yaml'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -90,62 +88,6 @@ async function addColumnSqlServer(
 ): Promise<void> {
   await sqlServerService.query(`ALTER TABLE ${tableName} ADD ${columnName} ${columnType}`)
   console.log(`  ✓ Added column ${columnName} (${columnType})`)
-}
-
-/**
- * Initialize ERP credentials for all users in MySQL
- */
-async function initializeErpCredentialsMySQL(
-  mysqlService: MySqlService,
-  tableName: string,
-  erpUrl: string,
-  erpUsername: string,
-  erpPassword: string
-): Promise<void> {
-  const result = await mysqlService.query(`SELECT COUNT(*) as count FROM ${tableName}`)
-  const userCount = result.rows[0]?.count as number
-
-  if (userCount === 0) {
-    console.log('No users found in BIPUsers table')
-    return
-  }
-
-  console.log(`Initializing ERP credentials for ${userCount} user(s)...`)
-
-  await mysqlService.query(
-    `UPDATE ${tableName} SET ERP_URL = ?, ERP_Username = ?, ERP_Password = ?`,
-    [erpUrl, erpUsername, erpPassword]
-  )
-
-  console.log('✓ ERP credentials initialized for all users')
-}
-
-/**
- * Initialize ERP credentials for all users in SQL Server
- */
-async function initializeErpCredentialsSqlServer(
-  sqlServerService: SqlServerService,
-  tableName: string,
-  erpUrl: string,
-  erpUsername: string,
-  erpPassword: string
-): Promise<void> {
-  const result = await sqlServerService.query(`SELECT COUNT(*) as count FROM ${tableName}`)
-  const userCount = result.rows[0]?.count as number
-
-  if (userCount === 0) {
-    console.log('No users found in BIPUsers table')
-    return
-  }
-
-  console.log(`Initializing ERP credentials for ${userCount} user(s)...`)
-
-  await sqlServerService.query(
-    `UPDATE ${tableName} SET ERP_URL = @p0, ERP_Username = @p1, ERP_Password = @p2`,
-    [erpUrl, erpUsername, erpPassword]
-  )
-
-  console.log('✓ ERP credentials initialized for all users')
 }
 
 /**

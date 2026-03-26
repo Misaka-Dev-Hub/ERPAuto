@@ -16,20 +16,19 @@ import { registerUserErpConfigHandlers } from './user-erp-config-handler'
 import { registerLoggerHandlers } from './logger-handler'
 import { registerReportHandlers } from './report-handler'
 import { registerUpdateHandlers } from './update-handler'
+import { registerPlaywrightBrowserHandlers } from './playwright-browser'
 import { createLogger, logError } from '../services/logger'
 import { serializeError, sanitizeError } from '../services/logger/error-utils'
 import { getErrorMessage, getErrorCode, isBaseError } from '../types/errors'
+import type { IpcResult } from '../types/ipc.types'
+
+export type { IpcResult } from '../types/ipc.types'
 
 const log = createLogger('IPC')
 
-/**
- * Standard result type for all IPC handlers
- */
-export interface IpcResult<T = unknown> {
-  success: boolean
-  data?: T
-  error?: string
-  code?: string
+function getErrorCauseMessage(error: { cause?: unknown }): string | undefined {
+  const { cause } = error
+  return cause instanceof Error ? cause.message : undefined
 }
 
 export function ok<T>(data: T): IpcResult<T> {
@@ -70,7 +69,7 @@ export function withErrorHandling<T>(
       if (isBaseError(error)) {
         logError(log, `[${context}] ${error.name}`, error, {
           code,
-          cause: (error as any).cause?.message,
+          cause: getErrorCauseMessage(error),
           handler: context
         })
       } else {
@@ -107,5 +106,6 @@ export function registerIpcHandlers(): void {
   registerLoggerHandlers()
   registerReportHandlers()
   registerUpdateHandlers()
+  registerPlaywrightBrowserHandlers()
   log.info('All IPC handlers registered')
 }

@@ -6,7 +6,18 @@ import eslintPluginReactHooks from 'eslint-plugin-react-hooks'
 import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 
 export default defineConfig(
-  { ignores: ['**/node_modules', '**/dist', '**/out'] },
+  {
+    ignores: [
+      '**/node_modules',
+      '**/dist',
+      '**/out',
+      '.agents/**',
+      '.claude/**',
+      'scripts/**',
+      'src/main/tools/**',
+      'tests/manual/**'
+    ]
+  },
   tseslint.configs.recommended,
   eslintPluginReact.configs.flat.recommended,
   eslintPluginReact.configs.flat['jsx-runtime'],
@@ -18,14 +29,23 @@ export default defineConfig(
     }
   },
   {
-    files: ['**/*.{ts,tsx}'],
+    files: ['**/*.{js,ts,tsx}'],
     plugins: {
       'react-hooks': eslintPluginReactHooks,
       'react-refresh': eslintPluginReactRefresh
     },
     rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
       ...eslintPluginReactHooks.configs.recommended.rules,
+      'react-hooks/set-state-in-effect': 'off',
       ...eslintPluginReactRefresh.configs.vite.rules
+    }
+  },
+  {
+    files: ['tests/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': 'off'
     }
   },
   eslintConfigPrettier

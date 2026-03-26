@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { startTransition } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { DownloadCloud, LoaderCircle, RefreshCw } from 'lucide-react'
 import Modal from './ui/Modal'
+import { useUpdateDialogState } from '../hooks/useUpdateDialogState'
 import type { UserType } from '../../../main/types/user.types'
 import type {
   DownloadReleaseRequest,
@@ -22,10 +23,6 @@ interface UpdateDialogProps {
   onRefreshCatalog: () => Promise<void>
 }
 
-function releaseKey(release: UpdateRelease): string {
-  return `${release.channel}:${release.version}`
-}
-
 export default function UpdateDialog({
   isOpen,
   userType,
@@ -36,57 +33,13 @@ export default function UpdateDialog({
   onDownloadAndInstallAdminRelease,
   onRefreshCatalog
 }: UpdateDialogProps): React.JSX.Element {
-  const [selectedRelease, setSelectedRelease] = useState<UpdateRelease | undefined>(undefined)
-  const [changelog, setChangelog] = useState<string>('')
-  const [isLoadingChangelog, setIsLoadingChangelog] = useState(false)
-
-  useEffect(() => {
-    if (!isOpen || !catalog) return
-
-    if (catalog.mode === 'user') {
-      setSelectedRelease(catalog.recommendedRelease)
-      return
-    }
-
-    if (catalog.mode === 'admin') {
-      setSelectedRelease(
-        catalog.recommendedRelease ?? catalog.channels?.stable[0] ?? catalog.channels?.preview[0]
-      )
-    }
-  }, [catalog, isOpen])
-
-  useEffect(() => {
-    if (!isOpen || !selectedRelease) {
-      setChangelog('')
-      return
-    }
-
-    let active = true
-    setIsLoadingChangelog(true)
-
-    window.electron.update
-      .getChangelog(selectedRelease)
-      .then((result) => {
-        if (!active) return
-        setChangelog(result.success && result.data ? result.data : '暂无更新说明。')
-      })
-      .catch(() => {
-        if (!active) return
-        setChangelog('暂无更新说明。')
-      })
-      .finally(() => {
-        if (active) {
-          setIsLoadingChangelog(false)
-        }
-      })
-
-    return () => {
-      active = false
-    }
-  }, [isOpen, selectedRelease])
+  const { selectedRelease, setSelectedRelease, changelog, isLoadingChangelog, isSelectedRelease } =
+    useUpdateDialogState(isOpen, catalog)
 
   const isBusy =
-    status?.phase === 'downloading' || status?.phase === 'installing' || status?.phase === 'checking'
+    status?.phase === 'downloading' ||
+    status?.phase === 'installing' ||
+    status?.phase === 'checking'
 
   const renderReleaseList = (title: string, releases: UpdateRelease[]) => {
     if (releases.length === 0) {
@@ -101,11 +54,15 @@ export default function UpdateDialog({
       <div className="space-y-2">
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</div>
         {releases.map((release) => {
-          const selected = selectedRelease && releaseKey(selectedRelease) === releaseKey(release)
+          const selected = isSelectedRelease(release)
           return (
             <button
-              key={releaseKey(release)}
-              onClick={() => setSelectedRelease(release)}
+              key={`${release.channel}:${release.version}`}
+              onClick={() => {
+                startTransition(() => {
+                  setSelectedRelease(release)
+                })
+              }}
               className={`w-full rounded-lg border px-3 py-3 text-left transition ${
                 selected
                   ? 'border-blue-500 bg-blue-50 text-blue-900'
@@ -233,7 +190,9 @@ export default function UpdateDialog({
             {userType === 'Admin' ? (
               <button
                 onClick={() =>
-                  selectedRelease ? void onDownloadAndInstallAdminRelease(selectedRelease) : undefined
+                  selectedRelease
+                    ? void onDownloadAndInstallAdminRelease(selectedRelease)
+                    : undefined
                 }
                 className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
                 disabled={!selectedRelease || isBusy}

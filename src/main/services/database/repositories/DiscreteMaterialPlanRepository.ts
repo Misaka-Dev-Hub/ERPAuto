@@ -5,7 +5,7 @@
  */
 
 import { DataSource, Repository, In } from 'typeorm'
-import { DiscreteMaterialPlan, MaterialPlanRecordData } from '../entities/DiscreteMaterialPlan'
+import { DiscreteMaterialPlan } from '../entities/DiscreteMaterialPlan'
 import { getDataSource } from '../data-source'
 import { createLogger } from '../../logger'
 

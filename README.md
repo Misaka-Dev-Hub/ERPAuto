@@ -76,15 +76,11 @@ npm run dev
 ### 构建应用
 
 ```bash
-# Windows
+# Windows 安装版 + 便携版
 npm run build:win
-
-# macOS
-npm run build:mac
-
-# Linux
-npm run build:linux
 ```
+
+当前项目的正式构建与发布链路仅维护 Windows 目标。
 
 ## 使用指南
 
