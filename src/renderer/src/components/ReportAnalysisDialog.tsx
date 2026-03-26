@@ -437,16 +437,31 @@ export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
   }, [comparisonData, selectedMetrics, selectedUsers])
 
   const handleMetricToggle = (metric: MetricKey) => {
-    const next = new Set(selectedMetrics)
-    if (next.has(metric)) {
-      if (next.size > 1) {
-        // Ensure at least one metric is selected
-        next.delete(metric)
-      }
+    // In comparison view, only allow single metric selection
+    if (viewMode === 'comparison') {
+      setSelectedMetrics(new Set([metric]))
     } else {
-      next.add(metric)
+      // In aggregated view, allow multiple metric selection
+      const next = new Set(selectedMetrics)
+      if (next.has(metric)) {
+        if (next.size > 1) {
+          // Ensure at least one metric is selected
+          next.delete(metric)
+        }
+      } else {
+        next.add(metric)
+      }
+      setSelectedMetrics(next)
     }
-    setSelectedMetrics(next)
+  }
+
+  const handleViewModeChange = (newMode: 'aggregated' | 'comparison') => {
+    setViewMode(newMode)
+    // When switching to comparison view, keep only the first selected metric
+    if (newMode === 'comparison' && selectedMetrics.size > 1) {
+      const firstMetric = Array.from(selectedMetrics)[0]
+      setSelectedMetrics(new Set([firstMetric]))
+    }
   }
 
   // Custom Tooltip formatter
@@ -573,7 +588,9 @@ export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
             <div className="flex-1 flex flex-col p-6 overflow-y-auto">
               {/* Controls */}
               <div className="mb-8">
-                <h3 className="text-sm font-medium text-slate-700 mb-3">选择呈现内容 (多选)</h3>
+                <h3 className="text-sm font-medium text-slate-700 mb-3">
+                  选择呈现内容 ({viewMode === 'comparison' ? '单选' : '多选'})
+                </h3>
                 <div className="flex flex-wrap gap-2">
                   {(Object.keys(METRIC_LABELS) as MetricKey[]).map((key) => {
                     const isSelected = selectedMetrics.has(key)
@@ -606,7 +623,7 @@ export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
                 <h3 className="text-sm font-medium text-slate-700 mb-3">视图模式</h3>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setViewMode('aggregated')}
+                    onClick={() => handleViewModeChange('aggregated')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                       viewMode === 'aggregated'
                         ? 'bg-blue-50 border-blue-200 text-blue-700'
@@ -616,7 +633,7 @@ export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
                     按日期聚合
                   </button>
                   <button
-                    onClick={() => setViewMode('comparison')}
+                    onClick={() => handleViewModeChange('comparison')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                       viewMode === 'comparison'
                         ? 'bg-blue-50 border-blue-200 text-blue-700'
