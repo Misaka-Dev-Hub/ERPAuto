@@ -20,7 +20,7 @@ export type LoginRequestZod = z.infer<typeof LoginRequestSchema>
 export const UserInfoSchema = z.object({
   id: z.number().int().positive(),
   username: z.string().min(1),
-  userType: z.enum(['Admin', 'User', 'Guest']),
+  userType: z.enum(['Admin', 'User']),
   computerName: z.string().optional()
 })
 

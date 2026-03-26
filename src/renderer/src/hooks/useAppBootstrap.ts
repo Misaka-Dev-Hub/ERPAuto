@@ -17,7 +17,7 @@ export interface CurrentUser {
 export interface SelectedUserInfo {
   id: number
   username: string
-  userType: 'Admin' | 'User' | 'Guest'
+  userType: 'Admin' | 'User'
   computerName?: string
 }
 

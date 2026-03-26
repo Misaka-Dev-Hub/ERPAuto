@@ -4,7 +4,7 @@ import UserSelectionDialog, { type UserInfo as SelectedUserInfo } from '../UserS
 
 interface CurrentUser {
   username: string
-  userType: 'Admin' | 'User' | 'Guest'
+  userType: 'Admin' | 'User'
 }
 
 interface UnauthenticatedAppProps {

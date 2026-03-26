@@ -13,7 +13,7 @@ import { Modal } from './ui/Modal'
 export interface UserInfo {
   id: number
   username: string
-  userType: 'Admin' | 'User' | 'Guest'
+  userType: 'Admin' | 'User'
   createTime?: Date
 }
 
@@ -61,8 +61,7 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
 
   const userTypeStyles: Record<string, string> = {
     Admin: 'bg-amber-50 text-amber-600',
-    User: 'bg-blue-50 text-blue-600',
-    Guest: 'bg-gray-100 text-gray-600'
+    User: 'bg-blue-50 text-blue-600'
   }
 
   if (!isOpen) return null

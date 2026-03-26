@@ -3,7 +3,7 @@ import { useState, useCallback } from 'react'
 interface UserInfo {
   id: number
   username: string
-  userType: 'Admin' | 'User' | 'Guest'
+  userType: 'Admin' | 'User'
   computerName?: string
 }
 

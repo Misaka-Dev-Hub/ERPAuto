@@ -127,13 +127,6 @@ export class SessionManager {
   }
 
   /**
-   * Check if the current user is a guest
-   */
-  public isGuest(): boolean {
-    return this.currentUser?.userType === 'Guest'
-  }
-
-  /**
    * Get the current username
    */
   public getUsername(): string | null {

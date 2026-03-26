@@ -10,7 +10,7 @@
 /**
  * User type for settings permission control
  */
-export type UserType = 'Admin' | 'User' | 'Guest'
+export type UserType = 'Admin' | 'User'
 
 /**
  * Database type selection

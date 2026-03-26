@@ -29,7 +29,7 @@ export class UpdateCatalogService {
 
   public getDialogCatalog(status: UpdateStatus, catalog: UpdateCatalog): UpdateDialogCatalog {
     const currentUserType = status.currentUserType
-    if (!status.enabled || !currentUserType || currentUserType === 'Guest') {
+    if (!status.enabled || !currentUserType) {
       return { mode: 'disabled' }
     }
 

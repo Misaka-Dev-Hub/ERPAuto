@@ -5,7 +5,7 @@
 /**
  * User type enumeration
  */
-export type UserType = 'Admin' | 'User' | 'Guest'
+export type UserType = 'Admin' | 'User'
 
 /**
  * User information interface

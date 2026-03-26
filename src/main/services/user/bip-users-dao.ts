@@ -139,7 +139,7 @@ export class BIPUsersDAO {
           return {
             id: row.ID as number,
             username: row.UserName as string,
-            userType: row.UserType as 'Admin' | 'User' | 'Guest'
+            userType: row.UserType as 'Admin' | 'User'
           }
         }
         return null
@@ -157,7 +157,7 @@ export class BIPUsersDAO {
           return {
             id: row.ID as number,
             username: row.UserName as string,
-            userType: row.UserType as 'Admin' | 'User' | 'Guest'
+            userType: row.UserType as 'Admin' | 'User'
           }
         }
         return null
@@ -198,7 +198,7 @@ export class BIPUsersDAO {
           return {
             id: row.ID as number,
             username: row.UserName as string,
-            userType: row.UserType as 'Admin' | 'User' | 'Guest'
+            userType: row.UserType as 'Admin' | 'User'
           }
         }
         return null
@@ -216,7 +216,7 @@ export class BIPUsersDAO {
           return {
             id: row.ID as number,
             username: row.UserName as string,
-            userType: row.UserType as 'Admin' | 'User' | 'Guest'
+            userType: row.UserType as 'Admin' | 'User'
           }
         }
         return null
@@ -254,7 +254,7 @@ export class BIPUsersDAO {
       return result.rows.map((row) => ({
         id: row.ID as number,
         username: row.UserName as string,
-        userType: row.UserType as 'Admin' | 'User' | 'Guest',
+        userType: row.UserType as 'Admin' | 'User',
         createTime: row.CreateTime as Date | undefined
       }))
     } catch (error) {
@@ -270,7 +270,7 @@ export class BIPUsersDAO {
    * Create a new user
    * @param username - The username (must be unique)
    * @param password - The password
-   * @param userType - User type ('Admin', 'User', or 'Guest')
+   * @param userType - User type ('Admin' or 'User')
    * @param computerName - Optional computer name for silent login
    * @returns True if successful
    */

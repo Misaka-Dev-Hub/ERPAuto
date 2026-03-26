@@ -106,7 +106,7 @@ export class UpdateService {
     this.ensureInitialized()
     this.status.currentUserType = userType
 
-    if (!this.status.enabled || !userType || userType === 'Guest') {
+    if (!this.status.enabled || !userType) {
       this.clearPolling()
       this.catalog = { stable: [], preview: [] }
       this.publishStatus({
