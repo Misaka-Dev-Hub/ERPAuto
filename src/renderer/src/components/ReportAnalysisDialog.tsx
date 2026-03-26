@@ -41,11 +41,26 @@ interface DailyMetrics {
   retriedOrders: number
   successfulRetries: number
   executionTimeSecs: number
+  avgExecutionTimeSecs: number
   users: string[] // Unique users who ran reports on this day
   reportCount: number
 }
 
-type MetricKey = keyof Omit<DailyMetrics, 'date' | 'users' | 'reportCount'>
+// User-specific daily metrics for comparison view
+interface UserDailyMetrics {
+  date: string
+  user: string
+  processedOrders: number
+  deletedMaterials: number
+  skippedMaterials: number
+  errors: number
+  retriedOrders: number
+  successfulRetries: number
+  executionTimeSecs: number
+  reportCount: number
+}
+
+type MetricKey = keyof Omit<DailyMetrics, 'date' | 'users' | 'reportCount' | 'avgExecutionTimeSecs'>
 
 const METRIC_LABELS: Record<MetricKey, string> = {
   processedOrders: '处理订单数',
@@ -54,7 +69,7 @@ const METRIC_LABELS: Record<MetricKey, string> = {
   errors: '错误数量',
   retriedOrders: '重试订单数',
   successfulRetries: '成功重试数',
-  executionTimeSecs: '执行耗时(秒)'
+  executionTimeSecs: '每订单平均耗时(秒)'
 }
 
 const METRIC_COLORS: Record<MetricKey, string> = {
@@ -64,7 +79,24 @@ const METRIC_COLORS: Record<MetricKey, string> = {
   errors: '#000000', // black
   retriedOrders: '#8b5cf6', // violet-500
   successfulRetries: '#10b981', // emerald-500
-  executionTimeSecs: '#64748b' // slate-500
+  executionTimeSecs: '#f97316' // orange-500
+}
+
+// User colors for comparison view
+const USER_COLORS = [
+  '#3b82f6', // blue-500
+  '#10b981', // emerald-500
+  '#f59e0b', // amber-500
+  '#ef4444', // red-500
+  '#8b5cf6', // violet-500
+  '#ec4899', // pink-500
+  '#06b6d4', // cyan-500
+  '#84cc16'  // lime-500
+]
+
+const getUserColor = (user: string, users: string[]): string => {
+  const index = users.indexOf(user)
+  return USER_COLORS[index % USER_COLORS.length]
 }
 
 export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
@@ -80,6 +112,12 @@ export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
   const [selectedMetrics, setSelectedMetrics] = useState<Set<MetricKey>>(
     new Set(['processedOrders', 'deletedMaterials', 'errors'])
   )
+
+  // View mode: aggregated (by date) or comparison (by user)
+  const [viewMode, setViewMode] = useState<'aggregated' | 'comparison'>('aggregated')
+
+  // Selected users for comparison view
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set())
 
   const parseDurationToSeconds = (durationStr: string): number => {
     // Handle empty or zero case
@@ -265,6 +303,7 @@ export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
           retriedOrders: 0,
           successfulRetries: 0,
           executionTimeSecs: 0,
+          avgExecutionTimeSecs: 0,
           users: [],
           reportCount: 0
         })
@@ -285,6 +324,16 @@ export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
       }
     }
 
+    // Calculate average execution time per order for each day
+    // Formula: total execution time / total processed orders (efficiency metric)
+    for (const day of dailyMap.values()) {
+      day.avgExecutionTimeSecs = day.processedOrders > 0
+        ? day.executionTimeSecs / day.processedOrders
+        : 0
+      // Replace executionTimeSecs with avgExecutionTimeSecs for chart display
+      day.executionTimeSecs = day.avgExecutionTimeSecs
+    }
+
     // Convert map to array and sort by date
     const sortedData = Array.from(dailyMap.values()).sort((a, b) => {
       // Basic string comparison works for YYYY-MM-DD
@@ -293,6 +342,99 @@ export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
 
     return sortedData
   }, [reportData])
+
+  // Extract all unique users from report data
+  const allUsers = useMemo(() => {
+    const userSet = new Set<string>()
+    reportData.forEach(data => userSet.add(data.user))
+    return Array.from(userSet).sort()
+  }, [reportData])
+
+  // Aggregate data by date AND user for comparison view
+  const comparisonData = useMemo(() => {
+    if (!reportData.length) return []
+
+    // Filter by selected users if any
+    const filteredData = selectedUsers.size > 0
+      ? reportData.filter(data => selectedUsers.has(data.user))
+      : reportData
+
+    // Group by date + user
+    const keyMap = new Map<string, UserDailyMetrics>()
+
+    for (const data of filteredData) {
+      const key = `${data.date}|${data.user}`
+
+      if (!keyMap.has(key)) {
+        keyMap.set(key, {
+          date: data.date,
+          user: data.user,
+          processedOrders: 0,
+          deletedMaterials: 0,
+          skippedMaterials: 0,
+          errors: 0,
+          retriedOrders: 0,
+          successfulRetries: 0,
+          executionTimeSecs: 0,
+          reportCount: 0
+        })
+      }
+
+      const entry = keyMap.get(key)!
+      entry.processedOrders += data.processedOrders
+      entry.deletedMaterials += data.deletedMaterials
+      entry.skippedMaterials += data.skippedMaterials
+      entry.errors += data.errors
+      entry.retriedOrders += data.retriedOrders
+      entry.successfulRetries += data.successfulRetries
+      entry.executionTimeSecs += data.executionTimeSecs
+      entry.reportCount += 1
+    }
+
+    // Calculate average execution time per order for each entry
+    // Formula: total execution time / total processed orders (efficiency metric)
+    for (const entry of keyMap.values()) {
+      entry.executionTimeSecs = entry.processedOrders > 0
+        ? entry.executionTimeSecs / entry.processedOrders
+        : 0
+    }
+
+    return Array.from(keyMap.values())
+      .sort((a, b) => {
+        const dateCompare = a.date.localeCompare(b.date)
+        if (dateCompare !== 0) return dateCompare
+        return a.user.localeCompare(b.user)
+      })
+  }, [reportData, selectedUsers])
+
+  // Format comparison data for chart rendering
+  const comparisonChartData = useMemo(() => {
+    if (!comparisonData.length) return []
+
+    const dates = [...new Set(comparisonData.map(d => d.date))].sort()
+    const users = [...new Set(comparisonData.map(d => d.user))]
+      .filter(user => selectedUsers.size === 0 || selectedUsers.has(user))
+      .sort()
+
+    const lookup = new Map<string, UserDailyMetrics>()
+    comparisonData.forEach(d => {
+      lookup.set(`${d.date}|${d.user}`, d)
+    })
+
+    return dates.map(date => {
+      const point: any = { date }
+      users.forEach(user => {
+        const key = `${date}|${user}`
+        const data = lookup.get(key)
+
+        Array.from(selectedMetrics).forEach(metric => {
+          const userKey = `${user}_${metric}` as any
+          point[userKey] = data ? (data as any)[metric] : 0
+        })
+      })
+      return point
+    })
+  }, [comparisonData, selectedMetrics, selectedUsers])
 
   const handleMetricToggle = (metric: MetricKey) => {
     const next = new Set(selectedMetrics)
@@ -340,8 +482,43 @@ export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
             <div className="mt-3 pt-2 border-t border-slate-100 text-xs text-slate-500">
               <p>操作用户: {dailyData.users.join(', ')}</p>
               <p className="mt-1">报告总数: {dailyData.reportCount}</p>
+              <p className="mt-1">每订单平均耗时: {dailyData.avgExecutionTimeSecs.toFixed(1)} 秒</p>
             </div>
           )}
+        </div>
+      )
+    }
+    return null
+  }
+
+  // Comparison Tooltip for user-specific data
+  const ComparisonTooltip = ({ active, payload, label, users, selectedUsers }: any) => {
+    if (active && payload && payload.length) {
+      const displayUsers = selectedUsers.size === 0 ? users : Array.from(selectedUsers)
+      const firstMetric = Array.from(selectedMetrics)[0]
+
+      return (
+        <div className="bg-white p-4 border border-slate-200 shadow-lg rounded-lg max-w-sm">
+          <p className="font-semibold text-slate-800 mb-2 border-b border-slate-100 pb-2">{label}</p>
+
+          <div className="space-y-1.5 text-sm">
+            {displayUsers.map((user: string) => {
+              const userEntry = payload.find((p: any) => p.name === (user || '未分配'))
+              if (!userEntry) return null
+
+              return (
+                <div key={user} className="flex justify-between items-center gap-4">
+                  <span className="flex items-center gap-1.5 text-slate-600">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: userEntry.color }} />
+                    {user || '未分配'}:
+                  </span>
+                  <span className="font-medium text-slate-900">
+                    {userEntry.value} {firstMetric === 'executionTimeSecs' ? '秒' : ''}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )
     }
@@ -424,48 +601,199 @@ export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
                 </div>
               </div>
 
+              {/* View Mode Toggle */}
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-slate-700 mb-3">视图模式</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setViewMode('aggregated')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      viewMode === 'aggregated'
+                        ? 'bg-blue-50 border-blue-200 text-blue-700'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    按日期聚合
+                  </button>
+                  <button
+                    onClick={() => setViewMode('comparison')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      viewMode === 'comparison'
+                        ? 'bg-blue-50 border-blue-200 text-blue-700'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    用户对比
+                  </button>
+                </div>
+              </div>
+
+              {/* User Filter Chips - Only in comparison mode */}
+              {viewMode === 'comparison' && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-medium text-slate-700">筛选用户</h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setSelectedUsers(new Set(allUsers))}
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        全选
+                      </button>
+                      <button
+                        onClick={() => setSelectedUsers(new Set())}
+                        className="text-xs text-slate-500 hover:underline"
+                      >
+                        清空
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {allUsers.map((user) => {
+                      const isSelected = selectedUsers.has(user)
+                      const color = getUserColor(user, allUsers)
+
+                      return (
+                        <button
+                          key={user}
+                          onClick={() => {
+                            const next = new Set(selectedUsers)
+                            if (next.has(user)) {
+                              next.delete(user)
+                            } else {
+                              next.add(user)
+                            }
+                            setSelectedUsers(next)
+                          }}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors flex items-center gap-1.5 ${
+                            isSelected
+                              ? 'bg-white border-current'
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                          style={isSelected ? { color, borderColor: color } : {}}
+                        >
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: isSelected ? color : '#cbd5e1' }}
+                          />
+                          {user || '未分配'}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {selectedUsers.size === 0 && (
+                    <p className="text-xs text-slate-500 mt-2">
+                      未选择用户时将显示所有用户数据
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Chart */}
               <div className="flex-1 min-h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart
-                    data={chartData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis
-                      dataKey="date"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: '#64748b', fontSize: 12 }}
-                      dy={10}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: '#64748b', fontSize: 12 }}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
-
-                    {/* Render selected metrics as lines or bars */}
-                    {Array.from(selectedMetrics).map((metric) => (
-                      <Line
-                        key={metric}
-                        type="monotone"
-                        dataKey={metric}
-                        name={METRIC_LABELS[metric]}
-                        stroke={METRIC_COLORS[metric]}
-                        strokeWidth={2}
-                        dot={{ r: 4, strokeWidth: 2 }}
-                        activeDot={{ r: 6, strokeWidth: 0 }}
+                {viewMode === 'aggregated' ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={chartData}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis
+                        dataKey="date"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#64748b', fontSize: 12 }}
+                        dy={10}
                       />
-                    ))}
-                  </ComposedChart>
-                </ResponsiveContainer>
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#64748b', fontSize: 12 }}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
+
+                      {Array.from(selectedMetrics).map((metric) => (
+                        <Line
+                          key={metric}
+                          type="monotone"
+                          dataKey={metric}
+                          name={METRIC_LABELS[metric]}
+                          stroke={METRIC_COLORS[metric]}
+                          strokeWidth={2}
+                          dot={{ r: 4, strokeWidth: 2 }}
+                          activeDot={{ r: 6, strokeWidth: 0 }}
+                        />
+                      ))}
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={comparisonChartData}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis
+                        dataKey="date"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#64748b', fontSize: 12 }}
+                        dy={10}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#64748b', fontSize: 12 }}
+                      />
+                      <Tooltip content={<ComparisonTooltip users={allUsers} selectedUsers={selectedUsers} />} />
+                      <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
+
+                      {selectedUsers.size === 0 || selectedUsers.size > 1
+                        ? // Multiple users: show first metric for each user
+                          allUsers.filter(user => selectedUsers.size === 0 || selectedUsers.has(user)).map((user) => (
+                            <Line
+                              key={user}
+                              type="monotone"
+                              dataKey={`${user}_${Array.from(selectedMetrics)[0]}`}
+                              name={user || '未分配'}
+                              stroke={getUserColor(user, allUsers)}
+                              strokeWidth={2}
+                              dot={{ r: 4, strokeWidth: 2 }}
+                              activeDot={{ r: 6, strokeWidth: 0 }}
+                            />
+                          ))
+                        : // Single user: show all metrics for that user
+                          Array.from(selectedMetrics).map((metric) => {
+                            const user = Array.from(selectedUsers)[0]
+                            return (
+                              <Line
+                                key={metric}
+                                type="monotone"
+                                dataKey={`${user}_${metric}`}
+                                name={METRIC_LABELS[metric]}
+                                stroke={METRIC_COLORS[metric]}
+                                strokeWidth={2}
+                                dot={{ r: 4, strokeWidth: 2 }}
+                                activeDot={{ r: 6, strokeWidth: 0 }}
+                              />
+                            )
+                          })
+                      }
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                )}
               </div>
 
               <div className="mt-4 text-center text-xs text-slate-400">
-                数据以天为单位进行聚合统计。展示的是选定时间段内的总量。
+                {viewMode === 'aggregated'
+                  ? '数据以天为单位进行聚合统计。展示的是选定时间段内的总量。'
+                  : selectedUsers.size === 0
+                    ? '展示所有用户的数据对比。未选择用户时显示全部。'
+                    : '展示选定用户的数据对比。'
+                }
               </div>
             </div>
           )}
