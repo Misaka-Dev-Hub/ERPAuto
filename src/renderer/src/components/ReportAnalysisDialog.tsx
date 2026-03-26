@@ -82,16 +82,24 @@ export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
   )
 
   const parseDurationToSeconds = (durationStr: string): number => {
-    // Expected format: "X分Y秒" or similar
+    // Handle empty or zero case
+    if (!durationStr || durationStr === '0秒' || durationStr === '0分0秒') {
+      return 0
+    }
+
+    // Remove any remaining backticks
+    const cleanStr = durationStr.replace(/\`/g, '').trim()
+
     let totalSeconds = 0
-    const minutesMatch = durationStr.match(/(\d+)分/)
+    const minutesMatch = cleanStr.match(/(\d+)分/)
     if (minutesMatch) {
       totalSeconds += parseInt(minutesMatch[1], 10) * 60
     }
-    const secondsMatch = durationStr.match(/(\d+)秒/)
+    const secondsMatch = cleanStr.match(/(\d+)秒/)
     if (secondsMatch) {
       totalSeconds += parseInt(secondsMatch[1], 10)
     }
+
     return totalSeconds
   }
 
@@ -136,9 +144,26 @@ export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
 
           // Regex to extract values from the markdown table
           const extractValue = (key: string): string | null => {
-            const regex = new RegExp(`\\|\\s*\\*\\*${key}\\*\\*\\s*\\|\\s*\`([^\`]+)\`\\s*\\|`)
-            const match = content.match(regex)
-            return match ? match[1].trim() : null
+            // Try multiple patterns in order of specificity
+            const patterns = [
+              // Pattern 1: Standard format with backticks
+              new RegExp(`\\|\\s*\\*\\*${key}\\*\\*\\s*\\|\\s*\`([^\`]+)\`\\s*\\|`),
+              // Pattern 2: Without backticks (fallback for older formats)
+              new RegExp(`\\|\\s*\\*\\*${key}\\*\\*\\s*\\|\\s*([^\\|\\s]+(?:\\s+[^\\|\\s]+)*)\\s*\\|`),
+              // Pattern 3: More relaxed - any content between pipes
+              new RegExp(`\\|\\s*\\*\\*${key}\\*\\*\\s*\\|\\s*(.+?)\\s*\\|`)
+            ]
+
+            for (const pattern of patterns) {
+              const match = content.match(pattern)
+              if (match && match[1]) {
+                const value = match[1].trim()
+                // Remove backticks if they're still present
+                return value.replace(/\`/g, '')
+              }
+            }
+
+            return null
           }
 
           const execTimeStr = extractValue('执行时间')
@@ -150,6 +175,9 @@ export const ReportAnalysisDialog: React.FC<ReportAnalysisDialogProps> = ({
           const retriedOrders = parseInt(extractValue('重试订单数') || '0', 10)
           const successfulRetries = parseInt(extractValue('成功重试数') || '0', 10)
           const executionTimeStr = extractValue('执行耗时') || '0秒'
+          if (executionTimeStr === '0秒') {
+            console.warn('Failed to extract execution time from report:', report.key)
+          }
 
           const executionTimeSecs = parseDurationToSeconds(executionTimeStr)
 
