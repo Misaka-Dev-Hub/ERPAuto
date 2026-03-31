@@ -5,7 +5,7 @@
  * Admin users see all users' records, regular users see only their own.
  */
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Modal } from './ui/Modal'
 import {
   RefreshCw,
@@ -17,32 +17,10 @@ import {
   Clock
 } from 'lucide-react'
 import type { UserInfo } from './UserSelectionDialog'
-
-// Local type definitions matching the backend types
-interface BatchStats {
-  batchId: string
-  userId: number
-  username: string
-  operationTime: string
-  status: string
-  totalOrders: number
-  totalRecords: number
-  successCount: number
-  failedCount: number
-}
-
-interface OperationHistoryRecord {
-  id?: number
-  batchId: string
-  userId: number
-  username: string
-  productionId: string | null
-  orderNumber: string
-  operationTime: Date
-  status: string
-  recordCount: number | null
-  errorMessage: string | null
-}
+import type {
+  BatchStats,
+  OperationHistoryRecord
+} from '../../../main/types/operation-history.types'
 
 interface ExtractorOperationHistoryModalProps {
   isOpen: boolean
@@ -71,6 +49,17 @@ const statusIcons: Record<string, React.ReactNode> = {
   pending: <Clock size={16} className="text-gray-500" />
 }
 
+const formatDateTime = (dateStr: string) => {
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryModalProps> = ({
   isOpen,
   onClose,
@@ -85,14 +74,7 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
 
   const isAdmin = user?.userType === 'Admin'
 
-  // Fetch batches when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      void fetchBatches()
-    }
-  }, [isOpen])
-
-  const fetchBatches = async () => {
+  const fetchBatches = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -107,23 +89,33 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const fetchBatchDetails = async (batchId: string) => {
-    // If already loaded, don't fetch again
-    if (batchDetails.has(batchId)) {
-      return
-    }
-
-    try {
-      const result = await window.electron.operationHistory.getBatchDetails(batchId)
-      if (result.success && result.data) {
-        setBatchDetails((prev) => new Map(prev).set(batchId, result.data!))
+  const fetchBatchDetails = useCallback(
+    async (batchId: string) => {
+      // If already loaded, don't fetch again
+      if (batchDetails.has(batchId)) {
+        return
       }
-    } catch (err) {
-      console.error('Failed to fetch batch details:', err)
+
+      try {
+        const result = await window.electron.operationHistory.getBatchDetails(batchId)
+        if (result.success && result.data) {
+          setBatchDetails((prev) => new Map(prev).set(batchId, result.data!))
+        }
+      } catch (err) {
+        console.error('Failed to fetch batch details:', err)
+      }
+    },
+    [batchDetails]
+  )
+
+  // Fetch batches when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      void fetchBatches()
     }
-  }
+  }, [isOpen, fetchBatches])
 
   const toggleBatchExpansion = (batchId: string) => {
     setExpandedBatches((prev) => {
@@ -173,17 +165,6 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
         return newSet
       })
     }
-  }
-
-  const formatDateTime = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return date.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
   }
 
   if (!isOpen) return null

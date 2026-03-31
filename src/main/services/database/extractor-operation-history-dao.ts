@@ -288,31 +288,30 @@ export class ExtractorOperationHistoryDAO {
       `
 
       if (options?.limit) {
-        // Add pagination - track current param count before adding new params
-        const offsetIndex = params.length
-        const limitIndex = params.length + 1
-
-        if (options.offset !== undefined) {
-          params.push(options.offset)
-        }
-        params.push(options.limit)
+        const safeLimit = Math.floor(options.limit)
+        const safeOffset = options.offset !== undefined ? Math.floor(options.offset) : undefined
 
         if (isSqlServer) {
-          if (options.offset !== undefined) {
-            sqlString += ` OFFSET @p${offsetIndex} ROWS FETCH NEXT @p${limitIndex} ROWS ONLY`
+          // SQL Server: use parameterized OFFSET/FETCH
+          const offsetIndex = params.length
+          if (safeOffset !== undefined) {
+            params.push(safeOffset)
+          }
+          params.push(safeLimit)
+
+          if (safeOffset !== undefined) {
+            sqlString += ` OFFSET @p${offsetIndex} ROWS FETCH NEXT @p${offsetIndex + 1} ROWS ONLY`
           } else {
-            // When no offset, use 0 for offset and next index for limit
             sqlString += ` OFFSET 0 ROWS FETCH NEXT @p${offsetIndex} ROWS ONLY`
           }
         } else {
-          if (options.offset !== undefined) {
-            sqlString += ` LIMIT ?`
-            // For MySQL with offset, we need to modify the query
-            // Replace LIMIT with OFFSET LIMIT
-            const parts = sqlString.split(' LIMIT ?')
-            sqlString = parts[0] + ` OFFSET ? LIMIT ?` + (parts[1] || '')
+          // MySQL: embed validated integer values directly.
+          // connection.execute() uses binary protocol prepared statements,
+          // which do not reliably support ? placeholders in LIMIT/OFFSET clauses.
+          if (safeOffset !== undefined) {
+            sqlString += ` LIMIT ${safeLimit} OFFSET ${safeOffset}`
           } else {
-            sqlString += ` LIMIT ?`
+            sqlString += ` LIMIT ${safeLimit}`
           }
         }
       }

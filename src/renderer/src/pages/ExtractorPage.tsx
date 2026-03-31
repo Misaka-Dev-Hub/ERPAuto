@@ -90,13 +90,13 @@ const ExtractorPage: React.FC = () => {
           </div>
         </div>
 
-        {showHistoryModal && (
+        {showHistoryModal ? (
           <ExtractorOperationHistoryModal
             isOpen={showHistoryModal}
             onClose={() => setShowHistoryModal(false)}
             user={user}
           />
-        )}
+        ) : null}
 
         {!isRunning && isComplete && (
           <div className="bg-green-50 rounded-xl p-8 flex items-center justify-center gap-4 shadow-md">
