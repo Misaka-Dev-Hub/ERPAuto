@@ -160,43 +160,27 @@ export class ExtractorOperationHistoryDAO {
    * Update the status of all records in a batch
    * @param batchId - Batch identifier
    * @param status - New status (success, failed, partial)
-   * @param recordCount - Total record count for the batch
    * @returns Update result
    */
   async updateBatchStatus(
     batchId: string,
-    status: string,
-    recordCount: number | null
+    status: string
   ): Promise<UpdateBatchStatusResult> {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
       const isSqlServer = dbService.type === 'sqlserver'
 
-      const placeholder = isSqlServer ? '@p0' : '?'
-      let sqlString: string
-      let params: (string | number | null)[]
-
-      if (recordCount !== null) {
-        sqlString = `
-          UPDATE ${tableName}
-          SET Status = ${isSqlServer ? '@p0' : '?'},
-              RecordCount = ${isSqlServer ? '@p1' : '?'}
-          WHERE BatchId = ${isSqlServer ? '@p2' : '?'}
-        `
-        params = isSqlServer ? [status, recordCount, batchId] : [status, recordCount, batchId]
-      } else {
-        sqlString = `
-          UPDATE ${tableName}
-          SET Status = ${placeholder}
-          WHERE BatchId = ${isSqlServer ? '@p1' : '?'}
-        `
-        params = isSqlServer ? [status, batchId] : [status, batchId]
-      }
+      const sqlString = `
+        UPDATE ${tableName}
+        SET Status = ${isSqlServer ? '@p0' : '?'}
+        WHERE BatchId = ${isSqlServer ? '@p1' : '?'}
+      `
+      const params = [status, batchId]
 
       await dbService.query(sqlString, params)
 
-      log.info('Batch status updated', { batchId, status, recordCount })
+      log.info('Batch status updated', { batchId, status })
       return { success: true, updatedCount: 1 }
     } catch (error) {
       log.error('Update batch status error', {
@@ -208,33 +192,51 @@ export class ExtractorOperationHistoryDAO {
   }
 
   /**
-   * Update a single record's status and error message
+   * Update a single record's status, error message, and optional record count
    * @param batchId - Batch identifier
    * @param orderNumber - Order number
    * @param status - New status
    * @param errorMessage - Optional error message
+   * @param recordCount - Optional per-order record count
    * @returns True if successful
    */
   async updateRecordStatus(
     batchId: string,
     orderNumber: string,
     status: string,
-    errorMessage?: string
+    errorMessage?: string,
+    recordCount?: number
   ): Promise<boolean> {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
       const isSqlServer = dbService.type === 'sqlserver'
 
-      const sqlString = `
-        UPDATE ${tableName}
-        SET Status = ${isSqlServer ? '@p0' : '?'},
-            ErrorMessage = ${isSqlServer ? '@p1' : '?'}
-        WHERE BatchId = ${isSqlServer ? '@p2' : '?'}
-          AND OrderNumber = ${isSqlServer ? '@p3' : '?'}
-      `
+      let sqlString: string
+      let params: (string | number | null)[]
 
-      await dbService.query(sqlString, [status, errorMessage || null, batchId, orderNumber])
+      if (recordCount !== undefined) {
+        sqlString = `
+          UPDATE ${tableName}
+          SET Status = ${isSqlServer ? '@p0' : '?'},
+              ErrorMessage = ${isSqlServer ? '@p1' : '?'},
+              RecordCount = ${isSqlServer ? '@p2' : '?'}
+          WHERE BatchId = ${isSqlServer ? '@p3' : '?'}
+            AND OrderNumber = ${isSqlServer ? '@p4' : '?'}
+        `
+        params = [status, errorMessage || null, recordCount, batchId, orderNumber]
+      } else {
+        sqlString = `
+          UPDATE ${tableName}
+          SET Status = ${isSqlServer ? '@p0' : '?'},
+              ErrorMessage = ${isSqlServer ? '@p1' : '?'}
+          WHERE BatchId = ${isSqlServer ? '@p2' : '?'}
+            AND OrderNumber = ${isSqlServer ? '@p3' : '?'}
+        `
+        params = [status, errorMessage || null, batchId, orderNumber]
+      }
+
+      await dbService.query(sqlString, params)
 
       return true
     } catch (error) {

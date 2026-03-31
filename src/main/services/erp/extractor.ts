@@ -46,7 +46,8 @@ export class ExtractorService {
       downloadedFiles: [],
       mergedFile: null,
       recordCount: 0,
-      errors: []
+      errors: [],
+      orderRecordCounts: []
     }
 
     try {
@@ -79,6 +80,7 @@ export class ExtractorService {
         const mergeResult = await this.mergeFiles(result.downloadedFiles)
         result.mergedFile = mergeResult.mergedFile
         result.recordCount = mergeResult.recordCount
+        result.orderRecordCounts = mergeResult.orderRecordCounts
 
         // Add merge error to result if any
         if (mergeResult.error) {
@@ -123,9 +125,14 @@ export class ExtractorService {
    */
   private async mergeFiles(
     filePaths: string[]
-  ): Promise<{ mergedFile: string | null; recordCount: number; error?: string }> {
+  ): Promise<{
+    mergedFile: string | null
+    recordCount: number
+    error?: string
+    orderRecordCounts: Array<{ orderNumber: string; recordCount: number }>
+  }> {
     if (filePaths.length === 0) {
-      return { mergedFile: null, recordCount: 0 }
+      return { mergedFile: null, recordCount: 0, orderRecordCounts: [] }
     }
 
     log.info('Starting merge', { fileCount: filePaths.length })
@@ -154,15 +161,21 @@ export class ExtractorService {
 
     // Calculate total record count (total material rows)
     let recordCount = 0
+    const orderRecordCounts: Array<{ orderNumber: string; recordCount: number }> = []
     for (const order of allOrders) {
-      recordCount += order.materials.length
+      const count = order.materials.length
+      recordCount += count
+      orderRecordCounts.push({
+        orderNumber: order.orderInfo.productionOrder || '',
+        recordCount: count
+      })
     }
 
     log.info('Merge summary', { orderCount: allOrders.length, recordCount })
 
     if (recordCount === 0) {
       log.warn('No records found in any downloaded files')
-      return { mergedFile: null, recordCount: 0 }
+      return { mergedFile: null, recordCount: 0, orderRecordCounts }
     }
 
     // Generate output filename with timestamp
@@ -178,13 +191,13 @@ export class ExtractorService {
       log.info('Saving merged file', { outputPath })
       await this.saveMergedOrders(allOrders, outputPath)
       log.info('Merged file saved successfully', { recordCount })
-      return { mergedFile: outputPath, recordCount }
+      return { mergedFile: outputPath, recordCount, orderRecordCounts }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       const errorStack = error instanceof Error ? error.stack : ''
       log.error('Failed to save merged file', { error: errorMsg, stack: errorStack })
       // Return parsed record count and error info even if save fails
-      return { mergedFile: null, recordCount, error: `保存合并文件失败：${errorMsg}` }
+      return { mergedFile: null, recordCount, orderRecordCounts, error: `保存合并文件失败：${errorMsg}` }
     }
   }
 

@@ -43,6 +43,8 @@ export interface ExtractorResult {
   errors: string[]
   /** Database import result (only populated if mergedFile was created) */
   importResult?: ImportResult
+  /** Per-order material row counts */
+  orderRecordCounts: Array<{ orderNumber: string; recordCount: number }>
 }
 
 export interface OrderInfo {
