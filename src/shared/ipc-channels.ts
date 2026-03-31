@@ -111,7 +111,12 @@ export const IPC_CHANNELS = {
   PLAYWRIGHT_BROWSER_DOWNLOAD: 'playwright-browser:download',
   PLAYWRIGHT_BROWSER_CANCEL: 'playwright-browser:cancel',
   PLAYWRIGHT_BROWSER_PROGRESS: 'playwright-browser:progress',
-  PLAYWRIGHT_BROWSER_CHECK: 'playwright-browser:check'
+  PLAYWRIGHT_BROWSER_CHECK: 'playwright-browser:check',
+
+  // Operation History
+  OPERATION_HISTORY_GET_BATCHES: 'operationHistory:getBatches',
+  OPERATION_HISTORY_GET_BATCH_DETAILS: 'operationHistory:getBatchDetails',
+  OPERATION_HISTORY_DELETE_BATCH: 'operationHistory:deleteBatch'
 } as const
 
 /**

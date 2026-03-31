@@ -17,6 +17,7 @@ import { registerLoggerHandlers } from './logger-handler'
 import { registerReportHandlers } from './report-handler'
 import { registerUpdateHandlers } from './update-handler'
 import { registerPlaywrightBrowserHandlers } from './playwright-browser'
+import { registerOperationHistoryHandlers } from './operation-history-handler'
 import { createLogger, logError } from '../services/logger'
 import { serializeError, sanitizeError } from '../services/logger/error-utils'
 import { getErrorMessage, getErrorCode, isBaseError } from '../types/errors'
@@ -107,5 +108,6 @@ export function registerIpcHandlers(): void {
   registerReportHandlers()
   registerUpdateHandlers()
   registerPlaywrightBrowserHandlers()
+  registerOperationHistoryHandlers()
   log.info('All IPC handlers registered')
 }

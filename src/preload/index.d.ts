@@ -157,6 +157,37 @@ export interface PlaywrightBrowserAPI {
   onProgress: (callback: (data: DownloadProgress) => void) => () => void
 }
 
+export interface OperationHistoryAPI {
+  getBatches: (options?: { limit?: number; offset?: number }) => Promise<IpcResult<BatchStats[]>>
+  getBatchDetails: (batchId: string) => Promise<IpcResult<OperationHistoryRecord[]>>
+  deleteBatch: (batchId: string) => Promise<IpcResult<{ deleted: boolean }>>
+}
+
+export interface BatchStats {
+  batchId: string
+  userId: number
+  username: string
+  operationTime: string
+  status: string
+  totalOrders: number
+  totalRecords: number
+  successCount: number
+  failedCount: number
+}
+
+export interface OperationHistoryRecord {
+  id?: number
+  batchId: string
+  userId: number
+  username: string
+  productionId: string | null
+  orderNumber: string
+  operationTime: Date
+  status: string
+  recordCount: number | null
+  errorMessage: string | null
+}
+
 export interface ProcessAPI {
   versions: {
     electron: string
@@ -185,6 +216,7 @@ declare global {
       report: ReportAPI
       update: UpdateAPI
       playwrightBrowser: PlaywrightBrowserAPI
+      operationHistory: OperationHistoryAPI
     }
     api: unknown
   }

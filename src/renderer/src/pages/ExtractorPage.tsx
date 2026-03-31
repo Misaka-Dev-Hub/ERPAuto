@@ -1,14 +1,18 @@
 import React from 'react'
-import { Download, Play, CheckCircle } from 'lucide-react'
+import { Download, Play, CheckCircle, History } from 'lucide-react'
 import OrderNumberInput from '../components/OrderNumberInput'
 import { useExtractor } from '../hooks/useExtractor'
 import { usePersistentTextState } from '../hooks/usePersistentTextState'
 import { useSharedProductionIds } from '../hooks/useSharedProductionIds'
 import LogPanel from '../components/ui/LogPanel'
 import { SegmentedProgressBar } from '../components/ui/SegmentedProgressBar'
+import ExtractorOperationHistoryModal from '../components/ExtractorOperationHistoryModal'
+import { useUserStore } from '../stores/useUserStore'
 
 const ExtractorPage: React.FC = () => {
   const [orderNumbers, setOrderNumbers] = usePersistentTextState('extractor_orderNumbers')
+  const [showHistoryModal, setShowHistoryModal] = React.useState(false)
+  const user = useUserStore((state) => state.user)
 
   const {
     isRunning,
@@ -68,6 +72,14 @@ const ExtractorPage: React.FC = () => {
 
           <div className="flex items-center gap-4">
             <button
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-lg flex items-center gap-2 font-medium transition-colors"
+              onClick={() => setShowHistoryModal(true)}
+              disabled={isRunning}
+            >
+              <History size={18} />
+              操作历史
+            </button>
+            <button
               className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-sm transition-colors"
               onClick={handleExtract}
               disabled={isRunning || !orderNumbers.trim()}
@@ -77,6 +89,14 @@ const ExtractorPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {showHistoryModal && (
+          <ExtractorOperationHistoryModal
+            isOpen={showHistoryModal}
+            onClose={() => setShowHistoryModal(false)}
+            user={user}
+          />
+        )}
 
         {!isRunning && isComplete && (
           <div className="bg-green-50 rounded-xl p-8 flex items-center justify-center gap-4 shadow-md">

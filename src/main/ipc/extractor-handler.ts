@@ -3,6 +3,7 @@ import { ErpAuthService } from '../services/erp/erp-auth'
 import { ExtractorService } from '../services/erp/extractor'
 import { OrderNumberResolver } from '../services/erp/order-resolver'
 import { create, type IDatabaseService } from '../services/database'
+import { ExtractorOperationHistoryDAO } from '../services/database/extractor-operation-history-dao'
 import { createLogger } from '../services/logger'
 import { logAudit } from '../services/logger/audit-logger'
 import { SessionManager } from '../services/user/session-manager'
@@ -12,6 +13,7 @@ import type { ExtractorInput, ExtractorResult, ExtractionProgress } from '../typ
 import { UserErpConfigService } from '../services/user/user-erp-config-service'
 import { ConfigManager } from '../services/config/config-manager'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
+import { randomUUID } from 'crypto'
 
 const log = createLogger('ExtractorHandler')
 
@@ -141,6 +143,29 @@ export function registerExtractorHandlers(): void {
 
           log.info('Resolved order numbers', { count: validOrderNumbers.length })
 
+          // Initialize operation history recording
+          const currentUser = SessionManager.getInstance().getUserInfo()
+          const historyDao = new ExtractorOperationHistoryDAO()
+          const batchId = randomUUID()
+
+          // Save order records to history (preserve productionId -> orderNumber mapping)
+          if (currentUser) {
+            const orderRecords = mappings.map((m) => ({
+              productionId: m.productionId || null,
+              orderNumber: m.orderNumber || m.input
+            }))
+            await historyDao.insertBatchRecords(
+              batchId,
+              currentUser.id,
+              currentUser.username,
+              orderRecords
+            )
+            log.info('Operation history batch created', {
+              batchId,
+              recordCount: orderRecords.length
+            })
+          }
+
           // Log deduplication summary
           sendLog(sender, 'info', dedupReport.summary)
 
@@ -223,11 +248,22 @@ export function registerExtractorHandlers(): void {
             })
           }
 
+          // Update operation history batch status
+          if (currentUser) {
+            const status: 'success' | 'failed' | 'partial' =
+              result.errors.length > 0 && result.recordCount > 0
+                ? 'partial'
+                : result.errors.length > 0
+                  ? 'failed'
+                  : 'success'
+            await historyDao.updateBatchStatus(batchId, status, result.recordCount)
+            log.info('Operation history batch status updated', { batchId, status })
+          }
+
           // Audit log: EXTRACT (non-blocking)
           const os = await import('os')
-          const currentUser = SessionManager.getInstance().getUserInfo()
           if (currentUser) {
-            const status: 'success' | 'failure' | 'partial' =
+            const auditStatus: 'success' | 'failure' | 'partial' =
               result.errors.length > 0 && result.recordCount > 0
                 ? 'partial'
                 : result.errors.length > 0
@@ -237,7 +273,7 @@ export function registerExtractorHandlers(): void {
               username: currentUser.username,
               computerName: os.hostname(),
               resource: 'MATERIAL_PLAN',
-              status,
+              status: auditStatus,
               metadata: {
                 orderCount: validOrderNumbers.length,
                 recordCount: result.recordCount,

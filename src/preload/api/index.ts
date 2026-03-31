@@ -17,6 +17,7 @@ import {
 } from './materials'
 import { loggerApi } from './logger'
 import { playwrightBrowserApi } from './browser-download'
+import { operationHistoryApi } from './operation-history'
 
 export const api = {
   process: processApi,
@@ -35,7 +36,8 @@ export const api = {
   logger: loggerApi,
   report: reportApi,
   update: updateApi,
-  playwrightBrowser: playwrightBrowserApi
+  playwrightBrowser: playwrightBrowserApi,
+  operationHistory: operationHistoryApi
 } as const
 
 export type ElectronApi = typeof api
