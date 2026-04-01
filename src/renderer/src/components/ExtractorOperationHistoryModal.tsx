@@ -14,13 +14,15 @@ import {
   ChevronRight,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Copy
 } from 'lucide-react'
 import type { UserInfo } from './UserSelectionDialog'
 import type {
   BatchStats,
   OperationHistoryRecord
 } from '../../../main/types/operation-history.types'
+import { showSuccess, showError, showWarning } from '../stores/useAppStore'
 
 interface ExtractorOperationHistoryModalProps {
   isOpen: boolean
@@ -167,6 +169,26 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
     }
   }
 
+  const handleCopyColumn = async (field: 'productionId' | 'orderNumber', batchId: string) => {
+    const details = batchDetails.get(batchId) || []
+    const values = details
+      .map((d) => (field === 'productionId' ? d.productionId : d.orderNumber))
+      .filter(Boolean) // 移除空值
+      .join('\n') // 使用换行符分隔
+
+    if (!values) {
+      showWarning('没有可复制的数据')
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(values)
+      showSuccess(`已复制 ${values.split('\n').length} 条数据`)
+    } catch {
+      showError('复制失败，请手动复制')
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -301,10 +323,38 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
                             <thead className="bg-gray-50">
                               <tr>
                                 <th className="px-4 py-2 text-left font-medium text-gray-600">
-                                  总排号
+                                  <div className="flex items-center gap-2">
+                                    总排号
+                                    <button
+                                      className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                      onClick={() =>
+                                        void handleCopyColumn('productionId', batch.batchId)
+                                      }
+                                      title="复制所有总排号"
+                                    >
+                                      <Copy
+                                        size={14}
+                                        className="text-gray-500 hover:text-gray-700"
+                                      />
+                                    </button>
+                                  </div>
                                 </th>
                                 <th className="px-4 py-2 text-left font-medium text-gray-600">
-                                  订单号
+                                  <div className="flex items-center gap-2">
+                                    订单号
+                                    <button
+                                      className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                      onClick={() =>
+                                        void handleCopyColumn('orderNumber', batch.batchId)
+                                      }
+                                      title="复制所有订单号"
+                                    >
+                                      <Copy
+                                        size={14}
+                                        className="text-gray-500 hover:text-gray-700"
+                                      />
+                                    </button>
+                                  </div>
                                 </th>
                                 <th className="px-4 py-2 text-left font-medium text-gray-600">
                                   状态
