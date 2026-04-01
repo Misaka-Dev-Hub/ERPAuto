@@ -22,6 +22,17 @@ import type {
 const log = createLogger('ExtractorOperationHistoryDAO')
 
 /**
+ * Format datetime value from database to ISO string
+ * mssql driver returns Date objects in UTC format
+ */
+function formatDateTime(value: unknown): string {
+  if (value instanceof Date) {
+    return value.toISOString()
+  }
+  return value ? String(value) : new Date().toISOString()
+}
+
+/**
  * Configuration for ExtractorOperationHistory table
  */
 export const EXTRACTOR_OPERATION_HISTORY_CONFIG = {
@@ -324,9 +335,7 @@ export class ExtractorOperationHistoryDAO {
         batchId: row.BatchId as string,
         userId: row.UserId as number,
         username: row.Username as string,
-        operationTime: row.OperationTime
-          ? new Date(row.OperationTime as string).toISOString()
-          : new Date().toISOString(),
+        operationTime: formatDateTime(row.OperationTime),
         status: row.Status as string,
         totalOrders: row.TotalOrders as number,
         totalRecords: (row.TotalRecords as number) || 0,
@@ -432,9 +441,7 @@ export class ExtractorOperationHistoryDAO {
         batchId: row.BatchId as string,
         userId: row.UserId as number,
         username: row.Username as string,
-        operationTime: row.OperationTime
-          ? new Date(row.OperationTime as string).toISOString()
-          : new Date().toISOString(),
+        operationTime: formatDateTime(row.OperationTime),
         status: row.Status as string,
         totalOrders: row.TotalOrders as number,
         totalRecords: (row.TotalRecords as number) || 0,
