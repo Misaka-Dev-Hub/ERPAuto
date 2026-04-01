@@ -5,6 +5,7 @@ import { CleanerSidebar } from '../components/cleaner/CleanerSidebar'
 import { CleanerToolbar } from '../components/cleaner/CleanerToolbar'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { useCleaner } from '../hooks/useCleaner'
+import { Card } from '../components/ui/card'
 
 const MaterialTypeManagementDialog = React.lazy(
   () => import('../components/MaterialTypeManagementDialog')
@@ -81,7 +82,7 @@ const CleanerPage: React.FC = () => {
         />
       )}
 
-      <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+      <Card className="flex-1 rounded-xl shadow-sm border-slate-200 flex flex-col overflow-hidden">
         <CleanerToolbar
           validationResults={validationResults}
           filteredResults={filteredResults}
@@ -132,7 +133,7 @@ const CleanerPage: React.FC = () => {
           isRunning={isRunning}
           executeButtonRef={executeButtonRef}
         />
-      </div>
+      </Card>
 
       <Suspense fallback={null}>
         <MaterialTypeManagementDialog

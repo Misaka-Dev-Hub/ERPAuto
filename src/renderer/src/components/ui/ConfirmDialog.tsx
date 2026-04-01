@@ -1,13 +1,21 @@
 /**
  * ConfirmDialog Component
  *
- * A confirmation dialog component for displaying confirmation prompts.
- * Extends the Modal component with consistent styling and behavior.
+ * A confirmation dialog component for displaying confirmation prompts using shadcn/ui.
  */
 
 import React, { useCallback, useEffect } from 'react'
 import { AlertTriangle, Info, AlertCircle } from 'lucide-react'
-import { Modal } from './Modal'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from './alert-dialog'
 import { Button } from './Button'
 
 export type ConfirmDialogVariant = 'danger' | 'warning' | 'info'
@@ -79,39 +87,33 @@ export function ConfirmDialog({
   const styles = variantStyles[variant]
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onCancel}
-      title={title}
-      size="md"
-      showCloseButton={false}
-      isAlertDialog={true}
-      initialFocusSelector="[data-autofocus]"
-    >
-      <div className="flex items-start gap-4">
-        {/* Icon */}
-        <div className={`flex-shrink-0 ${styles.iconColor}`}>{styles.icon}</div>
-
-        {/* Message */}
-        <div className="flex-1">
-          {typeof message === 'string' ? (
-            <p className="text-gray-700 whitespace-pre-wrap">{message}</p>
-          ) : (
-            message
-          )}
-        </div>
-      </div>
-
-      {/* Buttons */}
-      <div className="flex justify-end gap-3 mt-6">
-        <Button variant="secondary" onClick={onCancel}>
-          {cancelText}
-        </Button>
-        <Button data-autofocus="true" variant={styles.buttonVariant} onClick={onConfirm}>
-          {confirmText}
-        </Button>
-      </div>
-    </Modal>
+    <AlertDialog open={isOpen} onOpenChange={(open) => {
+      if (!open) onCancel()
+    }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <span className={styles.iconColor}>{styles.icon}</span>
+            {title}
+          </AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="pt-2">
+              {typeof message === 'string' ? (
+                <p className="text-gray-700 whitespace-pre-wrap">{message}</p>
+              ) : (
+                message
+              )}
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>{cancelText}</AlertDialogCancel>
+          <AlertDialogAction asChild>
+            <Button variant={styles.buttonVariant} onClick={onConfirm}>{confirmText}</Button>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 

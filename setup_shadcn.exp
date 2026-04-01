@@ -1,0 +1,35 @@
+#!/usr/bin/expect -f
+set timeout -1
+spawn npx shadcn@latest init
+
+expect "Select a component library"
+send "\r"
+
+expect "Select a framework"
+send "\r"
+
+expect "Would you like to use TypeScript?"
+send "y\r"
+
+expect "Where is your global CSS file?"
+send "src/renderer/src/assets/main.css\r"
+
+expect "Would you like to use CSS variables for colors?"
+send "y\r"
+
+expect "Where is your tailwind.config.js located?"
+send "tailwind.config.js\r"
+
+expect "Configure the import alias for components:"
+send "@/components\r"
+
+expect "Configure the import alias for utils:"
+send "@/lib/utils\r"
+
+expect "Are you using React Server Components?"
+send "n\r"
+
+expect "Write configuration to components.json. Proceed?"
+send "y\r"
+
+expect eof
