@@ -246,12 +246,19 @@ export function useAppBootstrap() {
   }, [])
 
   const handleLogout = useCallback(async () => {
+    // 退出登录，清空后端状态
     await window.electron.auth.logout()
+
+    // 清空前端状态
     setIsAuthenticated(false)
     setCurrentUser(null)
     setIsSwitchedByAdmin(false)
-    setShowLoginDialog(true)
-  }, [])
+    setShowUserSelection(false)
+    setShowLoginDialog(false)
+
+    // 重新进行静默登录，如果是 Admin 会自动弹出用户选择界面
+    await initializeAuth()
+  }, [initializeAuth])
 
   const openUpdateDialog = useCallback(async () => {
     await Promise.all([refreshUpdateCatalog(), refreshUpdateState()])
