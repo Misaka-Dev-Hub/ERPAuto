@@ -173,10 +173,7 @@ export class ExtractorOperationHistoryDAO {
    * @param status - New status (success, failed, partial)
    * @returns Update result
    */
-  async updateBatchStatus(
-    batchId: string,
-    status: string
-  ): Promise<UpdateBatchStatusResult> {
+  async updateBatchStatus(batchId: string, status: string): Promise<UpdateBatchStatusResult> {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
@@ -265,7 +262,7 @@ export class ExtractorOperationHistoryDAO {
   /**
    * Get batch statistics with optional user filtering
    * @param userId - Optional user ID for filtering (Admin gets all, User gets own)
-   * @param options - Query options (limit, offset)
+   * @param options - Query options (limit, offset, usernames)
    * @returns Array of batch statistics
    */
   async getBatches(userId?: number, options?: GetBatchesOptions): Promise<BatchStats[]> {
@@ -293,6 +290,11 @@ export class ExtractorOperationHistoryDAO {
       if (userId !== undefined) {
         sqlString += isSqlServer ? ` WHERE UserId = @p0 ` : ` WHERE UserId = ? `
         params.push(userId)
+      } else if (options?.usernames && options.usernames.length > 0) {
+        // Admin user filtering by multiple usernames using IN clause
+        const placeholders = this.buildPlaceholders(options.usernames.length, isSqlServer)
+        sqlString += ` WHERE Username IN (${placeholders}) `
+        params.push(...options.usernames)
       }
 
       sqlString += `
@@ -573,9 +575,10 @@ export class ExtractorOperationHistoryDAO {
   /**
    * Count total batches with optional user filtering
    * @param userId - Optional user ID for filtering
+   * @param usernames - Optional usernames filter for Admin users
    * @returns Total number of batches
    */
-  async countBatches(userId?: number): Promise<number> {
+  async countBatches(userId?: number, usernames?: string[]): Promise<number> {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
@@ -586,11 +589,16 @@ export class ExtractorOperationHistoryDAO {
         FROM ${tableName}
       `
 
-      const params: number[] = []
+      const params: (number | string)[] = []
 
       if (userId !== undefined) {
         sqlString += isSqlServer ? ` WHERE UserId = @p0 ` : ` WHERE UserId = ? `
         params.push(userId)
+      } else if (usernames && usernames.length > 0) {
+        // Admin user filtering by multiple usernames using IN clause
+        const placeholders = this.buildPlaceholders(usernames.length, isSqlServer)
+        sqlString += ` WHERE Username IN (${placeholders}) `
+        params.push(...usernames)
       }
 
       const result = await dbService.query(sqlString, params)

@@ -185,7 +185,7 @@ export function AuthenticatedAppShell({
               </div>
             </div>
           )}
-          {currentPage === 'extractor' && <ExtractorPage />}
+          {currentPage === 'extractor' && <ExtractorPage currentUser={currentUser} />}
           {currentPage === 'cleaner' && <CleanerPage />}
           {currentPage === 'settings' && <SettingsPage />}
         </main>

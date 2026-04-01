@@ -7,12 +7,28 @@ import { useSharedProductionIds } from '../hooks/useSharedProductionIds'
 import LogPanel from '../components/ui/LogPanel'
 import { SegmentedProgressBar } from '../components/ui/SegmentedProgressBar'
 import ExtractorOperationHistoryModal from '../components/ExtractorOperationHistoryModal'
-import { useUserStore } from '../stores/useUserStore'
+import type { CurrentUser } from '../hooks/useAppBootstrap'
 
-const ExtractorPage: React.FC = () => {
+interface ExtractorPageProps {
+  currentUser: CurrentUser | null
+}
+
+const ExtractorPage: React.FC<ExtractorPageProps> = ({ currentUser }) => {
   const [orderNumbers, setOrderNumbers] = usePersistentTextState('extractor_orderNumbers')
   const [showHistoryModal, setShowHistoryModal] = React.useState(false)
-  const user = useUserStore((state) => state.user)
+
+  // Convert currentUser to UserInfo format for the modal
+  const user = React.useMemo(
+    () =>
+      currentUser
+        ? {
+            id: 0, // ID is not needed for modal display logic
+            username: currentUser.username,
+            userType: currentUser.userType
+          }
+        : null,
+    [currentUser]
+  )
 
   const {
     isRunning,

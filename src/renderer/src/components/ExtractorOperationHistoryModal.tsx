@@ -80,6 +80,8 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
   const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set())
   const [batchDetails, setBatchDetails] = useState<Map<string, OperationHistoryRecord[]>>(new Map())
   const [deleting, setDeleting] = useState<Set<string>>(new Set())
+  const [allUsers, setAllUsers] = useState<string[]>([])
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([])
 
   const isAdmin = user?.userType === 'Admin'
 
@@ -87,7 +89,13 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
     setLoading(true)
     setError(null)
     try {
-      const result = await window.electron.operationHistory.getBatches({ limit: 100 })
+      // Admin user can pass usernames filter
+      const options =
+        isAdmin && selectedUsers.length > 0
+          ? { limit: 100, usernames: selectedUsers }
+          : { limit: 100 }
+
+      const result = await window.electron.operationHistory.getBatches(options)
       if (result.success && result.data) {
         setBatches(result.data)
       } else {
@@ -97,6 +105,18 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
       setError(err instanceof Error ? err.message : '获取历史记录失败')
     } finally {
       setLoading(false)
+    }
+  }, [isAdmin, selectedUsers])
+
+  const fetchAllUsers = useCallback(async () => {
+    try {
+      const result = await window.electron.auth.getAllUsers()
+      if (result.success && result.data) {
+        const usernames = result.data.map((u: UserInfo) => u.username)
+        setAllUsers(usernames)
+      }
+    } catch (err) {
+      console.error('Failed to fetch users:', err)
     }
   }, [])
 
@@ -123,8 +143,11 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
   useEffect(() => {
     if (isOpen) {
       void fetchBatches()
+      if (isAdmin) {
+        void fetchAllUsers()
+      }
     }
-  }, [isOpen, fetchBatches])
+  }, [isOpen, fetchBatches, fetchAllUsers, isAdmin])
 
   const toggleBatchExpansion = (batchId: string) => {
     setExpandedBatches((prev) => {
@@ -196,27 +219,74 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
     }
   }
 
+  const toggleUserFilter = (username: string) => {
+    setSelectedUsers((prev) =>
+      prev.includes(username)
+        ? prev.filter((u) => u !== username)
+        : [...prev, username]
+    )
+  }
+
+  const clearUserFilters = () => {
+    setSelectedUsers([])
+  }
+
   if (!isOpen) return null
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="操作历史" size="3xl">
       <div className="flex flex-col h-[70vh]">
         {/* Toolbar */}
-        <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">
-              {isAdmin ? (
-                <span className="text-amber-600 font-medium">管理员模式：显示所有用户记录</span>
-              ) : (
-                <span>仅显示您的操作记录</span>
-              )}
-            </span>
-            {batches.length > 0 && (
-              <span className="text-sm text-gray-500">共 {batches.length} 条批次</span>
+        <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
+          <div className="flex-1">
+            {isAdmin && allUsers.length > 0 && (
+              <div className="mb-3">
+                <div className="text-xs text-gray-500 mb-2">筛选用户：</div>
+                <div className="flex flex-wrap gap-2">
+                  {allUsers.map((username) => {
+                    const isSelected = selectedUsers.includes(username)
+                    return (
+                      <button
+                        key={username}
+                        onClick={() => toggleUserFilter(username)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {username}
+                      </button>
+                    )
+                  })}
+                  {selectedUsers.length > 0 && (
+                    <button
+                      onClick={clearUserFilters}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-all"
+                    >
+                      清空筛选
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-600">
+                {isAdmin ? (
+                  <span className="text-amber-600 font-medium">
+                    管理员模式：{selectedUsers.length > 0 ? `已选择 ${selectedUsers.length} 个用户` : '显示所有用户记录'}
+                  </span>
+                ) : (
+                  <span>仅显示您的操作记录</span>
+                )}
+              </span>
+              {batches.length > 0 && (
+                <span className="text-sm text-gray-500">共 {batches.length} 条批次</span>
+              )}
+            </div>
           </div>
           <button
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
             onClick={() => void fetchBatches()}
             disabled={loading}
             title="刷新"
@@ -309,17 +379,19 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
                         </div>
                       </div>
 
-                      <button
-                        className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors disabled:opacity-50"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void handleDeleteBatch(batch.batchId)
-                        }}
-                        disabled={isDeleting}
-                        title="删除批次"
-                      >
-                        <Trash2 size={16} className={isDeleting ? 'animate-pulse' : ''} />
-                      </button>
+                      {isAdmin && (
+                        <button
+                          className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors disabled:opacity-50"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void handleDeleteBatch(batch.batchId)
+                          }}
+                          disabled={isDeleting}
+                          title="删除批次"
+                        >
+                          <Trash2 size={16} className={isDeleting ? 'animate-pulse' : ''} />
+                        </button>
+                      )}
                     </div>
 
                     {/* Batch details */}

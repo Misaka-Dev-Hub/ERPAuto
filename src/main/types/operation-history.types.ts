@@ -83,4 +83,6 @@ export interface GetBatchesOptions {
   limit?: number
   /** Number of batches to skip (for pagination) */
   offset?: number
+  /** Optional username filter for Admin users (supports multiple) */
+  usernames?: string[]
 }
