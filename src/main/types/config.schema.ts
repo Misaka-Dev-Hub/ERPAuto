@@ -83,7 +83,8 @@ export const extractionConfigSchema = z.object({
   verbose: z.boolean().default(true),
   autoConvert: z.boolean().default(true),
   mergeBatches: z.boolean().default(true),
-  enableDbPersistence: z.boolean().default(true)
+  enableDbPersistence: z.boolean().default(true),
+  headless: z.boolean().default(true)
 })
 
 /**

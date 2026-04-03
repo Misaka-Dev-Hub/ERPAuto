@@ -78,7 +78,8 @@ const DEFAULT_CONFIG: FullConfig = {
     verbose: true,
     autoConvert: true,
     mergeBatches: true,
-    enableDbPersistence: true
+    enableDbPersistence: true,
+    headless: true
   },
   validation: {
     dataSource: 'database_full',

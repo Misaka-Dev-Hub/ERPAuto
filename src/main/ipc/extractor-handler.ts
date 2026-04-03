@@ -90,6 +90,10 @@ export function registerExtractorHandlers(): void {
           log.info('Fetching ERP configuration from database...')
           const erpConfig = await getErpConfig()
 
+          // Read headless setting from global config
+          const configManager = ConfigManager.getInstance()
+          const globalConfig = configManager.getConfig()
+
           log.info('ERP config retrieved', {
             url: erpConfig.url ? 'configured' : 'EMPTY',
             username: erpConfig.username ? 'configured' : 'EMPTY'
@@ -188,7 +192,7 @@ export function registerExtractorHandlers(): void {
             url: erpConfig.url,
             username: erpConfig.username,
             password: erpConfig.password,
-            headless: true
+            headless: globalConfig.extraction.headless
           })
 
           sendProgress(sender, '登录 ERP 系统...', 9.99, {

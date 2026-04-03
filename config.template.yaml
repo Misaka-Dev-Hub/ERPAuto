@@ -40,6 +40,7 @@ extraction:
   autoConvert: true
   mergeBatches: true
   enableDbPersistence: true
+  headless: true # 浏览器无头模式，true=后台运行，false=显示浏览器窗口（调试用）
 
 validation:
   dataSource: database_full
