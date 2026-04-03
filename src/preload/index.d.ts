@@ -130,6 +130,7 @@ export interface ConfigAPI {
 export interface LoggerAPI {
   log: (level: LogLevel, message: string, context?: Record<string, unknown>) => void
   fetchLevel: () => Promise<void>
+  cleanup: () => void
 }
 
 export interface UpdateAPI {

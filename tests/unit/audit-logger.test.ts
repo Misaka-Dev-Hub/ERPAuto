@@ -92,7 +92,7 @@ describe('Audit Logger - Real File Integration', () => {
 
     const entry = createTestEntry()
 
-    await logAudit(entry.action as string, entry.userId as string, {
+    logAudit(entry.action as string, entry.userId as string, {
       username: entry.username as string,
       computerName: entry.computerName as string,
       resource: entry.resource as string,
@@ -101,7 +101,7 @@ describe('Audit Logger - Real File Integration', () => {
     })
 
     // Close logger to flush writes
-    await closeAuditLogger()
+    closeAuditLogger()
 
     // Find the audit log file (should be today's file)
     const today = new Date().toISOString().split('T')[0]
@@ -122,7 +122,7 @@ describe('Audit Logger - Real File Integration', () => {
       await import('../../src/main/services/logger/audit-logger')
 
     // Test success status
-    await logAudit('EXTRACT', 'user1', {
+    logAudit('EXTRACT', 'user1', {
       username: 'extractor',
       computerName: 'PC-001',
       resource: 'materials',
@@ -130,7 +130,7 @@ describe('Audit Logger - Real File Integration', () => {
     })
 
     // Test failure status
-    await logAudit('DELETE', 'user2', {
+    logAudit('DELETE', 'user2', {
       username: 'cleaner',
       computerName: 'PC-002',
       resource: 'temp_files',
@@ -139,7 +139,7 @@ describe('Audit Logger - Real File Integration', () => {
     })
 
     // Test partial status
-    await logAudit('UPDATE', 'user3', {
+    logAudit('UPDATE', 'user3', {
       username: 'updater',
       computerName: 'PC-003',
       resource: 'config',
@@ -147,7 +147,7 @@ describe('Audit Logger - Real File Integration', () => {
       metadata: { updated: 5, failed: 2 }
     })
 
-    await closeAuditLogger()
+    closeAuditLogger()
 
     // Verify all entries were processed
     expect(true).toBe(true) // Logger accepted all status types without error
@@ -158,7 +158,7 @@ describe('Audit Logger - Real File Integration', () => {
       await import('../../src/main/services/logger/audit-logger')
 
     // Without metadata
-    await logAudit('LOGIN', 'user-no-meta', {
+    logAudit('LOGIN', 'user-no-meta', {
       username: 'no.meta',
       computerName: 'PC-001',
       resource: 'ERP',
@@ -166,7 +166,7 @@ describe('Audit Logger - Real File Integration', () => {
     })
 
     // With metadata
-    await logAudit('LOGOUT', 'user-with-meta', {
+    logAudit('LOGOUT', 'user-with-meta', {
       username: 'with.meta',
       computerName: 'PC-002',
       resource: 'ERP',
@@ -174,7 +174,7 @@ describe('Audit Logger - Real File Integration', () => {
       metadata: { sessionDuration: 3600, actionsPerformed: 15 }
     })
 
-    await closeAuditLogger()
+    closeAuditLogger()
 
     // Both entries should be processed successfully
     expect(true).toBe(true)
@@ -186,14 +186,14 @@ describe('Audit Logger - Real File Integration', () => {
 
     const beforeLog = Date.now()
 
-    await logAudit('TEST', 'timestamp-user', {
+    logAudit('TEST', 'timestamp-user', {
       username: 'timestamp.test',
       computerName: 'PC-TS',
       resource: 'test_resource',
       status: 'success'
     })
 
-    await closeAuditLogger()
+    closeAuditLogger()
 
     const afterLog = Date.now()
 
@@ -212,7 +212,7 @@ describe('Audit Logger - Real File Integration', () => {
     const { logAudit, closeAuditLogger } =
       await import('../../src/main/services/logger/audit-logger')
 
-    await logAudit('LOGIN_ATTEMPT', 'user-special', {
+    logAudit('LOGIN_ATTEMPT', 'user-special', {
       username: 'user.name+test@example.com',
       computerName: 'DESKTOP-特殊字符-001',
       resource: 'ERP/子系统',
@@ -220,7 +220,7 @@ describe('Audit Logger - Real File Integration', () => {
       metadata: { reason: '密码错误', attempt: 3 }
     })
 
-    await closeAuditLogger()
+    closeAuditLogger()
 
     // Should handle without errors
     expect(true).toBe(true)
@@ -230,7 +230,7 @@ describe('Audit Logger - Real File Integration', () => {
     const { logAudit, closeAuditLogger } =
       await import('../../src/main/services/logger/audit-logger')
 
-    await logAudit('PING', 'ping-user', {
+    logAudit('PING', 'ping-user', {
       username: 'pinger',
       computerName: 'PC-PING',
       resource: 'health_check',
@@ -238,7 +238,7 @@ describe('Audit Logger - Real File Integration', () => {
       metadata: {}
     })
 
-    await closeAuditLogger()
+    closeAuditLogger()
 
     // Should handle empty metadata
     expect(true).toBe(true)

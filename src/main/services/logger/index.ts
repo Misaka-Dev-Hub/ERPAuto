@@ -61,10 +61,13 @@ const consoleFormat = winston.format.combine(
       try {
         metaStr = ` ${JSON.stringify(meta, null, 2)}`
       } catch {
-        // Fallback for circular references: stringify primitives, replace objects with placeholder
+        // Fallback for circular references: stringify primitives, replace complex objects with placeholder
         metaStr = ` ${JSON.stringify(
           Object.fromEntries(
-            Object.entries(meta).map(([k, v]) => [k, typeof v === 'object' ? '[Object]' : v])
+            Object.entries(meta).map(([k, v]) => [
+              k,
+              v !== null && typeof v === 'object' ? `[Object]` : v
+            ])
           ),
           null,
           2
