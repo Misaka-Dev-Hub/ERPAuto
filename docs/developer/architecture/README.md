@@ -48,13 +48,13 @@ graph TD
 
 ## 文档职责一览
 
-| 文档 | 主要回答的问题 |
-| --- | --- |
-| `overview.md` | 这个项目整体是什么、做什么、核心目录和主链路是什么 |
-| `runtime-architecture.md` | `main / preload / renderer` 如何协作 |
-| `data-flow.md` | 核心业务数据如何在各层之间流动 |
-| `file-map.md` | 关键文件在哪里、应该先看哪些入口 |
-| `decision-log.md` | 最近几轮重要重构和架构决策是什么 |
+| 文档                      | 主要回答的问题                                     |
+| ------------------------- | -------------------------------------------------- |
+| `overview.md`             | 这个项目整体是什么、做什么、核心目录和主链路是什么 |
+| `runtime-architecture.md` | `main / preload / renderer` 如何协作               |
+| `data-flow.md`            | 核心业务数据如何在各层之间流动                     |
+| `file-map.md`             | 关键文件在哪里、应该先看哪些入口                   |
+| `decision-log.md`         | 最近几轮重要重构和架构决策是什么                   |
 
 ## 按问题选择阅读路径
 

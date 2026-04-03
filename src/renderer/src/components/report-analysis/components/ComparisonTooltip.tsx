@@ -47,7 +47,10 @@ export const ComparisonTooltip = React.memo(
                   {user || '未分配'}:
                 </span>
                 <span className="font-medium text-slate-900">
-                  {firstMetric === 'executionTimeSecs' ? Number(userEntry.value).toFixed(1) : userEntry.value} {firstMetric === 'executionTimeSecs' ? '秒' : ''}
+                  {firstMetric === 'executionTimeSecs'
+                    ? Number(userEntry.value).toFixed(1)
+                    : userEntry.value}{' '}
+                  {firstMetric === 'executionTimeSecs' ? '秒' : ''}
                 </span>
               </div>
             )

@@ -68,15 +68,21 @@ export function withErrorHandling<T>(
       }
 
       if (isBaseError(error)) {
-        logError(log, `[${context}] ${error.name}`, error, {
-          code,
-          cause: getErrorCauseMessage(error),
-          handler: context
+        logError(log, error, {
+          message: `[${context}] ${error.name}`,
+          context: {
+            code,
+            cause: getErrorCauseMessage(error),
+            handler: context
+          }
         })
       } else {
-        logError(log, `[${context}] Error`, error, {
-          code,
-          handler: context
+        logError(log, error, {
+          message: `[${context}] Error`,
+          context: {
+            code,
+            handler: context
+          }
         })
       }
 

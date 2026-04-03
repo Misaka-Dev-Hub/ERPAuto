@@ -59,14 +59,14 @@ graph TD
 
 ## 模块目录一览
 
-| 模块 | 文档 | 核心职责 |
-| --- | --- | --- |
-| Auth | `auth.md` | 登录、silent login、管理员代切用户、用户上下文同步 |
-| Extractor | `extractor.md` | 订单号输入、提取执行、日志与共享订单号同步 |
+| 模块       | 文档            | 核心职责                                                  |
+| ---------- | --------------- | --------------------------------------------------------- |
+| Auth       | `auth.md`       | 登录、silent login、管理员代切用户、用户上下文同步        |
+| Extractor  | `extractor.md`  | 订单号输入、提取执行、日志与共享订单号同步                |
 | Validation | `validation.md` | 共享 Production IDs、校验查询、结果富化、Cleaner 数据准备 |
-| Cleaner | `cleaner.md` | 物料校验展示、删除计划保存、ERP 清理执行、报告展示 |
-| Update | `update.md` | 更新目录、状态广播、下载、安装、用户/管理员更新视图 |
-| Settings | `settings.md` | ERP 凭据加载与保存、当前用户配置管理 |
+| Cleaner    | `cleaner.md`    | 物料校验展示、删除计划保存、ERP 清理执行、报告展示        |
+| Update     | `update.md`     | 更新目录、状态广播、下载、安装、用户/管理员更新视图       |
+| Settings   | `settings.md`   | ERP 凭据加载与保存、当前用户配置管理                      |
 
 ## 模块入口地图
 

@@ -92,6 +92,7 @@ export const IPC_CHANNELS = {
 
   // Logger
   LOGGER_FORWARD: 'logger:forward',
+  LOGGER_GET_LEVEL: 'logger:getLevel',
 
   // Report
   REPORT_LIST_ALL: 'report:listAll',
@@ -122,4 +123,4 @@ export const IPC_CHANNELS = {
 /**
  * Log level for logger service
  */
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'verbose'

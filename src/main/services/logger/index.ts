@@ -11,25 +11,8 @@
 import winston from 'winston'
 import DailyRotateFile from 'winston-daily-rotate-file'
 import path from 'path'
-import { app } from 'electron'
-import fs from 'fs'
 import { serializeError, sanitizeError } from './error-utils'
-
-// Get log directory - use app.getPath('logs') in production, or local logs dir in development
-function getLogDir(): string {
-  if (app && app.isReady()) {
-    return app.getPath('logs')
-  }
-  // Fallback for development or before app is ready
-  const devLogDir = path.join(process.cwd(), 'logs')
-  if (!fs.existsSync(devLogDir)) {
-    fs.mkdirSync(devLogDir, { recursive: true })
-  }
-  return devLogDir
-}
-
-// Check if running in production
-const isProduction = app?.isPackaged ?? process.env.NODE_ENV === 'production'
+import { getLogDir, isProduction } from './shared'
 
 // Custom format for console output - includes full error details
 const consoleFormat = winston.format.combine(
@@ -41,7 +24,9 @@ const consoleFormat = winston.format.combine(
     // Format error with full stack trace
     let errorStr = ''
     if (error) {
-      const serialized = isProduction ? sanitizeError(serializeError(error)) : serializeError(error)
+      const serialized = isProduction()
+        ? sanitizeError(serializeError(error))
+        : serializeError(error)
       if (serialized.stack) {
         errorStr = `\n${serialized.stack}`
       } else {
@@ -60,7 +45,7 @@ const fileFormat = winston.format.combine(
   winston.format((info) => {
     // Serialize errors in metadata
     if (info.error) {
-      info.error = isProduction
+      info.error = isProduction()
         ? sanitizeError(serializeError(info.error))
         : serializeError(info.error)
     }
@@ -68,7 +53,7 @@ const fileFormat = winston.format.combine(
     // Serialize any error in meta fields
     for (const key of Object.keys(info)) {
       if (key !== 'error' && info[key] instanceof Error) {
-        info[key] = isProduction
+        info[key] = isProduction()
           ? sanitizeError(serializeError(info[key]))
           : serializeError(info[key])
       }
@@ -80,19 +65,20 @@ const fileFormat = winston.format.combine(
 )
 
 // Daily rotate file transport configuration
-const createFileTransport = (level?: string): DailyRotateFile => {
+const createFileTransport = (level?: string, maxFiles?: string): DailyRotateFile => {
   return new DailyRotateFile({
     filename: path.join(getLogDir(), 'app-%DATE%.log'),
     datePattern: 'YYYY-MM-DD',
     zippedArchive: true,
     maxSize: '20m',
-    maxFiles: '14d',
+    maxFiles: maxFiles || '14d',
     level,
     format: fileFormat
   })
 }
 
-// Create the logger instance with default level
+// Create the logger instance with default level - Console only initially
+// File transports are added after config is loaded via applyLoggingConfig()
 const logger = winston.createLogger({
   level: 'info', // Default level, can be updated via setLogLevel()
   defaultMeta: { service: 'erpauto' },
@@ -100,9 +86,7 @@ const logger = winston.createLogger({
     // Console transport - always enabled
     new winston.transports.Console({
       format: consoleFormat
-    }),
-    // File transport for all levels
-    createFileTransport()
+    })
   ]
 })
 
@@ -114,19 +98,40 @@ export function setLogLevel(level: string): void {
   logger.level = level
 }
 
-// Add error-specific file transport in production
-if (app?.isPackaged) {
-  logger.add(
-    new DailyRotateFile({
-      filename: path.join(getLogDir(), 'error-%DATE%.log'),
-      datePattern: 'YYYY-MM-DD',
-      zippedArchive: true,
-      maxSize: '20m',
-      maxFiles: '14d',
-      level: 'error',
-      format: fileFormat
-    })
-  )
+/**
+ * Apply logging configuration from config file
+ * Removes existing DailyRotateFile transports and recreates them with config values
+ *
+ * @param config - Logging configuration from config.yaml
+ */
+export function applyLoggingConfig(config: { level: string; appRetention: number }): void {
+  // Update log level
+  setLogLevel(config.level)
+
+  // Remove existing DailyRotateFile transports
+  const existingFileTransports = logger.transports.filter((t) => t instanceof DailyRotateFile)
+  for (const transport of existingFileTransports) {
+    logger.remove(transport)
+  }
+
+  // Add app log transport with configured retention
+  const retentionStr = `${config.appRetention}d`
+  logger.add(createFileTransport(undefined, retentionStr))
+
+  // Add error-specific file transport in production
+  if (isProduction()) {
+    logger.add(
+      new DailyRotateFile({
+        filename: path.join(getLogDir(), 'error-%DATE%.log'),
+        datePattern: 'YYYY-MM-DD',
+        zippedArchive: true,
+        maxSize: '20m',
+        maxFiles: retentionStr,
+        level: 'error',
+        format: fileFormat
+      })
+    )
+  }
 }
 
 /**
@@ -138,23 +143,8 @@ export function createLogger(context: string): winston.Logger {
   return logger.child({ context })
 }
 
-/**
- * Log an error with full context and stack trace
- * This is the recommended way to log errors in the application
- *
- * @param log - Logger instance
- * @param message - Error message
- * @param error - The error object (Error, BaseError, or any)
- * @param meta - Additional metadata to include
- */
-export function logError(
-  log: winston.Logger,
-  message: string,
-  error: unknown,
-  meta?: Record<string, unknown>
-): void {
-  log.error(message, { error, ...meta })
-}
+// Re-export error utilities for convenience
+export { logError, formatErrorForLogging, serializeError, extractErrorContext } from './error-utils'
 
 // Export the main logger for direct use
 export default logger

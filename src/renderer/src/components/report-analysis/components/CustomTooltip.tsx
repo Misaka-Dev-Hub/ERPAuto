@@ -40,7 +40,10 @@ export const CustomTooltip = React.memo(
                 {entry.name}:
               </span>
               <span className="font-medium text-slate-900">
-                {entry.dataKey === 'executionTimeSecs' ? Number(entry.value).toFixed(1) : entry.value} {entry.dataKey === 'executionTimeSecs' ? '秒' : ''}
+                {entry.dataKey === 'executionTimeSecs'
+                  ? Number(entry.value).toFixed(1)
+                  : entry.value}{' '}
+                {entry.dataKey === 'executionTimeSecs' ? '秒' : ''}
               </span>
             </div>
           ))}

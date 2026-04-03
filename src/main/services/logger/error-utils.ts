@@ -6,6 +6,7 @@
  */
 
 import type { ErrorLike, SerializedError } from '../../types/errors'
+import { isProduction } from './shared'
 
 /**
  * Check if value is an Error or Error-like object
@@ -84,7 +85,7 @@ export function sanitizeError(error: SerializedError): SerializedError {
   const sanitized: SerializedError = { ...error }
 
   // Sanitize message in production
-  if (process.env.NODE_ENV === 'production') {
+  if (isProduction()) {
     // Keep error name and structure, but sanitize message
     if (sensitiveKeys.some((key) => error.message?.toLowerCase().includes(key))) {
       sanitized.message = 'An error occurred due to invalid credentials or configuration'
@@ -165,7 +166,7 @@ export function formatErrorForLogging(
   metadata: Record<string, unknown>
 } {
   const serialized = serializeError(error)
-  const isProd = process.env.NODE_ENV === 'production'
+  const isProd = isProduction()
   const errorToLog = isProd ? sanitizeError(serialized) : serialized
   const errorContext = extractErrorContext(errorToLog)
 

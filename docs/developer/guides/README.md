@@ -66,13 +66,13 @@ flowchart TD
 
 ## 当前文档一览
 
-| 文档 | 主要内容 |
-| --- | --- |
-| `local-development.md` | 环境准备、启动、构建、常用命令、本地验证 |
-| `debugging.md` | 分层调试思路、调试入口、主链路定位方法 |
+| 文档                      | 主要内容                                 |
+| ------------------------- | ---------------------------------------- |
+| `local-development.md`    | 环境准备、启动、构建、常用命令、本地验证 |
+| `debugging.md`            | 分层调试思路、调试入口、主链路定位方法   |
 | `renderer-development.md` | React 渲染层开发方式、页面/hook/组件边界 |
-| `ipc-development.md` | 新增或修改 IPC 能力的推荐实现路径 |
-| `release-process.md` | 构建、发布、更新产物与上传流程 |
+| `ipc-development.md`      | 新增或修改 IPC 能力的推荐实现路径        |
+| `release-process.md`      | 构建、发布、更新产物与上传流程           |
 
 ## 与其他文档目录的关系
 

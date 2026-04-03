@@ -163,10 +163,10 @@ export class BIPUsersDAO {
         return null
       }
     } catch (error) {
-      logError(log, 'Authenticate failed', error, {
+      logError(log, error, {
+        message: 'Authenticate failed',
         operation: 'authenticate',
-        username,
-        dbType: this.dbType
+        context: { username, dbType: this.dbType }
       })
       return null
     }
@@ -222,10 +222,10 @@ export class BIPUsersDAO {
         return null
       }
     } catch (error) {
-      logError(log, 'Silent login failed', error, {
+      logError(log, error, {
+        message: 'Silent login failed',
         operation: 'authenticateByComputerName',
-        computerName,
-        dbType: this.dbType
+        context: { computerName, dbType: this.dbType }
       })
       return null
     }
@@ -258,9 +258,10 @@ export class BIPUsersDAO {
         createTime: row.CreateTime as Date | undefined
       }))
     } catch (error) {
-      logError(log, 'Get all users failed', error, {
+      logError(log, error, {
+        message: 'Get all users failed',
         operation: 'getAllUsers',
-        dbType: this.dbType
+        context: { dbType: this.dbType }
       })
       return []
     }
@@ -345,11 +346,10 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      logError(log, 'Create user failed', error, {
+      logError(log, error, {
+        message: 'Create user failed',
         operation: 'createUser',
-        username,
-        userType,
-        dbType: this.dbType
+        context: { username, userType, dbType: this.dbType }
       })
       return false
     }
@@ -389,11 +389,10 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      logError(log, 'Update user type failed', error, {
+      logError(log, error, {
+        message: 'Update user type failed',
         operation: 'updateUserType',
-        username,
-        userType,
-        dbType: this.dbType
+        context: { username, userType, dbType: this.dbType }
       })
       return false
     }
@@ -433,10 +432,10 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      logError(log, 'Update password failed', error, {
+      logError(log, error, {
+        message: 'Update password failed',
         operation: 'updatePassword',
-        username,
-        dbType: this.dbType
+        context: { username, dbType: this.dbType }
       })
       return false
     }
@@ -472,10 +471,10 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      logError(log, 'Delete user failed', error, {
+      logError(log, error, {
+        message: 'Delete user failed',
         operation: 'deleteUser',
-        username,
-        dbType: this.dbType
+        context: { username, dbType: this.dbType }
       })
       return false
     }
@@ -513,10 +512,10 @@ export class BIPUsersDAO {
         return result.rows.length > 0 && (result.rows[0].count as number) > 0
       }
     } catch (error) {
-      logError(log, 'Check user exists failed', error, {
+      logError(log, error, {
+        message: 'Check user exists failed',
         operation: 'userExists',
-        username,
-        dbType: this.dbType
+        context: { username, dbType: this.dbType }
       })
       return false
     }
@@ -574,10 +573,10 @@ export class BIPUsersDAO {
         return null
       }
     } catch (error) {
-      logError(log, 'Get user ERP credentials failed', error, {
+      logError(log, error, {
+        message: 'Get user ERP credentials failed',
         operation: 'getUserErpCredentials',
-        username,
-        dbType: this.dbType
+        context: { username, dbType: this.dbType }
       })
       return null
     }
@@ -626,10 +625,10 @@ export class BIPUsersDAO {
         return true
       }
     } catch (error) {
-      logError(log, 'Update user ERP credentials failed', error, {
+      logError(log, error, {
+        message: 'Update user ERP credentials failed',
         operation: 'updateUserErpCredentials',
-        username,
-        dbType: this.dbType
+        context: { username, dbType: this.dbType }
       })
       return false
     }
@@ -668,9 +667,10 @@ export class BIPUsersDAO {
         erpUsername: (row[cols.ERP_USERNAME] as string) || ''
       }))
     } catch (error) {
-      logError(log, 'Get all users ERP config failed', error, {
+      logError(log, error, {
+        message: 'Get all users ERP config failed',
         operation: 'getAllUsersErpConfig',
-        dbType: this.dbType
+        context: { dbType: this.dbType }
       })
       return []
     }

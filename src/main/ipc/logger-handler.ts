@@ -10,7 +10,9 @@
  */
 
 import { ipcMain } from 'electron'
+import winston from 'winston'
 import { createLogger } from '../services/logger'
+import logger from '../services/logger'
 import { IPC_CHANNELS, type LogLevel } from '../../shared/ipc-channels'
 
 const log = createLogger('LoggerHandler')
@@ -41,6 +43,7 @@ class LoggerHandlerState {
   private buffer: LogEntry[] = []
   private debounceTimer: NodeJS.Timeout | null = null
   private discardedCount = 0
+  private childLoggerCache = new Map<string, winston.Logger>()
 
   /**
    * Add log entry to buffer
@@ -132,15 +135,26 @@ class LoggerHandlerState {
   }
 
   /**
+   * Get or create a cached child logger for a component
+   * Avoids creating a new child logger for every log entry
+   * @param component - Component name for the child logger
+   */
+  private getChildLogger(component: string): winston.Logger {
+    let child = this.childLoggerCache.get(component)
+    if (!child) {
+      child = log.child({ source: 'renderer', component })
+      this.childLoggerCache.set(component, child)
+    }
+    return child
+  }
+
+  /**
    * Forward a single log entry to Winston logger
    * @param entry - Log entry to forward
    */
   private forwardToWinston(entry: LogEntry): void {
     const context = (entry.context?.component as string) || 'renderer'
-    const childLogger = log.child({
-      source: 'renderer',
-      component: context
-    })
+    const childLogger = this.getChildLogger(context)
 
     const message = entry.context?.message
       ? `[${entry.context.message}] ${entry.message}`
@@ -187,6 +201,7 @@ class LoggerHandlerState {
     }
     this.buffer = []
     this.discardedCount = 0
+    this.childLoggerCache.clear()
   }
 }
 
@@ -197,6 +212,11 @@ const state = new LoggerHandlerState()
  * Register IPC handlers for logger
  */
 export function registerLoggerHandlers(): void {
+  // Return current log level to preload for client-side filtering
+  ipcMain.handle(IPC_CHANNELS.LOGGER_GET_LEVEL, () => {
+    return logger.level as LogLevel
+  })
+
   // Use ipcMain.on with send() - fire-and-forget, non-blocking
   ipcMain.on(IPC_CHANNELS.LOGGER_FORWARD, (_event, entry: LogEntry) => {
     // Validate entry

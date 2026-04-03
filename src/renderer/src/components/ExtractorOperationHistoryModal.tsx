@@ -221,9 +221,7 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
 
   const toggleUserFilter = (username: string) => {
     setSelectedUsers((prev) =>
-      prev.includes(username)
-        ? prev.filter((u) => u !== username)
-        : [...prev, username]
+      prev.includes(username) ? prev.filter((u) => u !== username) : [...prev, username]
     )
   }
 
@@ -274,7 +272,10 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
               <span className="text-sm text-gray-600">
                 {isAdmin ? (
                   <span className="text-amber-600 font-medium">
-                    管理员模式：{selectedUsers.length > 0 ? `已选择 ${selectedUsers.length} 个用户` : '显示所有用户记录'}
+                    管理员模式：
+                    {selectedUsers.length > 0
+                      ? `已选择 ${selectedUsers.length} 个用户`
+                      : '显示所有用户记录'}
                   </span>
                 ) : (
                   <span>仅显示您的操作记录</span>

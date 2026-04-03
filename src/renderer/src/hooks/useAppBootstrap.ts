@@ -68,6 +68,10 @@ export function useAppBootstrap() {
 
   const initializeAuth = useCallback(async () => {
     logger.info('=== Starting initializeAuth ===')
+
+    // Fetch log level early so client-side filtering takes effect
+    await window.electron.logger.fetchLevel()
+
     try {
       logger.debug('Getting computer name...')
       const computerNameResult = await window.electron.auth.getComputerName()

@@ -20,7 +20,8 @@ import { dirname } from 'path'
 import { app } from 'electron'
 import yaml from 'js-yaml'
 import { z } from 'zod'
-import { createLogger, setLogLevel } from '../logger'
+import { createLogger, applyLoggingConfig } from '../logger'
+import { applyAuditConfig } from '../logger/audit-logger'
 import {
   fullConfigSchema,
   type FullConfig,
@@ -170,7 +171,8 @@ export class ConfigManager {
       await this.saveConfig(DEFAULT_CONFIG)
       this.config = DEFAULT_CONFIG
       // Apply logging configuration from default config
-      setLogLevel(DEFAULT_CONFIG.logging.level)
+      applyLoggingConfig(DEFAULT_CONFIG.logging)
+      applyAuditConfig(DEFAULT_CONFIG.logging.auditRetention)
       return
     }
 
@@ -190,7 +192,8 @@ export class ConfigManager {
       this.config = validated
 
       // Apply logging configuration
-      setLogLevel(validated.logging.level)
+      applyLoggingConfig(validated.logging)
+      applyAuditConfig(validated.logging.auditRetention)
 
       log.info('Configuration loaded and validated successfully')
     } catch (error) {

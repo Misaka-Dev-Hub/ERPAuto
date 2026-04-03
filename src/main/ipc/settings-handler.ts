@@ -27,16 +27,13 @@ export function registerSettingsHandlers(): void {
   const erpConfigService = UserErpConfigService.getInstance()
 
   ipcMain.handle(IPC_CHANNELS.SETTINGS_GET_USER_TYPE, async (): Promise<IpcResult<UserType>> => {
-    return withErrorHandling(
-      async () => {
-        const userType = sessionManager.getUserType()
-        if (!userType) {
-          throw new ValidationError('未找到用户类型', 'VAL_INVALID_INPUT')
-        }
-        return userType as UserType
-      },
-      'settings:getUserType'
-    )
+    return withErrorHandling(async () => {
+      const userType = sessionManager.getUserType()
+      if (!userType) {
+        throw new ValidationError('未找到用户类型', 'VAL_INVALID_INPUT')
+      }
+      return userType as UserType
+    }, 'settings:getUserType')
   })
 
   ipcMain.handle(

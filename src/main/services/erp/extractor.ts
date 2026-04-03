@@ -123,9 +123,7 @@ export class ExtractorService {
    * @param filePaths - Array of downloaded Excel file paths
    * @returns Merged file path, total record count, and optional error message
    */
-  private async mergeFiles(
-    filePaths: string[]
-  ): Promise<{
+  private async mergeFiles(filePaths: string[]): Promise<{
     mergedFile: string | null
     recordCount: number
     error?: string
@@ -197,7 +195,12 @@ export class ExtractorService {
       const errorStack = error instanceof Error ? error.stack : ''
       log.error('Failed to save merged file', { error: errorMsg, stack: errorStack })
       // Return parsed record count and error info even if save fails
-      return { mergedFile: null, recordCount, orderRecordCounts, error: `保存合并文件失败：${errorMsg}` }
+      return {
+        mergedFile: null,
+        recordCount,
+        orderRecordCounts,
+        error: `保存合并文件失败：${errorMsg}`
+      }
     }
   }
 

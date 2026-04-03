@@ -6,8 +6,7 @@
 import winston from 'winston'
 import DailyRotateFile from 'winston-daily-rotate-file'
 import path from 'path'
-import { app } from 'electron'
-import fs from 'fs'
+import { getLogDir } from './shared'
 
 /**
  * Audit log entry structure
@@ -33,22 +32,6 @@ export interface AuditEntry {
 }
 
 /**
- * Get the log directory for audit logs
- * Uses app.getPath('logs') in production, local logs dir in development
- */
-function getLogDir(): string {
-  if (app && app.isReady()) {
-    return app.getPath('logs')
-  }
-  // Fallback for development or before app is ready
-  const devLogDir = path.join(process.cwd(), 'logs')
-  if (!fs.existsSync(devLogDir)) {
-    fs.mkdirSync(devLogDir, { recursive: true })
-  }
-  return devLogDir
-}
-
-/**
  * JSONL formatter - outputs one JSON object per line
  * This is the key difference from the standard JSON formatter
  */
@@ -59,26 +42,40 @@ const jsonlFormat = winston.format.printf(({ message }) => {
 
 /**
  * Create the audit logger instance with daily rotation
- * Configured for 30-day retention as per requirements
+ * Initially silent (no transports). Call applyAuditConfig() after config is loaded.
  */
 const auditLogger = winston.createLogger({
   level: 'info',
   silent: false,
-  transports: [
+  transports: []
+})
+
+/**
+ * Apply audit log retention configuration
+ * Creates the DailyRotateFile transport with the configured retention period
+ *
+ * @param retentionDays - Number of days to retain audit logs
+ */
+export function applyAuditConfig(retentionDays: number): void {
+  // Remove existing DailyRotateFile transports
+  const existingTransports = auditLogger.transports.filter((t) => t instanceof DailyRotateFile)
+  for (const transport of existingTransports) {
+    auditLogger.remove(transport)
+  }
+
+  // Add audit transport with configured retention
+  auditLogger.add(
     new DailyRotateFile({
       filename: path.join(getLogDir(), 'audit-%DATE%.jsonl'),
       datePattern: 'YYYY-MM-DD',
       zippedArchive: true,
       maxSize: '20m',
-      maxFiles: '30d', // 30-day retention
+      maxFiles: `${retentionDays}d`,
       level: 'info',
-      format: winston.format.combine(
-        winston.format.timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' }),
-        jsonlFormat
-      )
+      format: jsonlFormat
     })
-  ]
-})
+  )
+}
 
 /**
  * Log an audit event

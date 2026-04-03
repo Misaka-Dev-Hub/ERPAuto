@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import logger from '../services/logger/index'
-import { logAudit } from '../services/logger/audit-logger'
+import { logAudit, closeAuditLogger } from '../services/logger/audit-logger'
 
 export function setupProcessGuards(): void {
   process.on('uncaughtException', async (err) => {
@@ -36,5 +36,11 @@ export function setupProcessGuards(): void {
   app.on('child-process-gone', (_, details) => {
     logger.error('Child process gone', { details })
     console.error('Child process gone:', details)
+  })
+
+  // Flush and close loggers before quit to prevent log loss
+  app.on('before-quit', () => {
+    logger.close()
+    closeAuditLogger()
   })
 }

@@ -259,7 +259,13 @@ export function registerExtractorHandlers(): void {
 
             // Write per-order record counts
             for (const { orderNumber, recordCount } of result.orderRecordCounts) {
-              await historyDao.updateRecordStatus(batchId, orderNumber, status, undefined, recordCount)
+              await historyDao.updateRecordStatus(
+                batchId,
+                orderNumber,
+                status,
+                undefined,
+                recordCount
+              )
             }
 
             // Update batch status without recordCount (per-order counts are set individually)
