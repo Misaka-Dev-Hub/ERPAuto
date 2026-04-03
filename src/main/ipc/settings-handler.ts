@@ -74,7 +74,7 @@ export function registerSettingsHandlers(): void {
             resource: 'ERP_CONFIG',
             status: 'success',
             metadata: { changeType: 'erp_credentials', usernameChanged: !!settings.erp.username }
-          }).catch((err) => log.warn('Failed to write audit log', { err }))
+          })
         }
 
         return { success: true }

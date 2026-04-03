@@ -204,8 +204,8 @@ describe('Audit Logger - Real File Integration', () => {
   it('should close audit logger without errors', async () => {
     const { closeAuditLogger } = await import('../../src/main/services/logger/audit-logger')
 
-    // Should resolve without throwing
-    await expect(closeAuditLogger()).resolves.toBeUndefined()
+    // Should complete without throwing
+    expect(() => closeAuditLogger()).not.toThrow()
   })
 
   it('should handle special characters in fields', async () => {

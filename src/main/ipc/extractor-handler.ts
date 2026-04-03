@@ -292,7 +292,7 @@ export function registerExtractorHandlers(): void {
                 recordCount: result.recordCount,
                 errorCount: result.errors.length
               }
-            }).catch((err) => log.warn('Failed to write audit log', { err }))
+            })
           }
 
           return result

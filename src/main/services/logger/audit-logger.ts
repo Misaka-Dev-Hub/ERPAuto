@@ -46,7 +46,7 @@ const jsonlFormat = winston.format.printf(({ message }) => {
  */
 const auditLogger = winston.createLogger({
   level: 'info',
-  silent: false,
+  silent: true,
   transports: []
 })
 
@@ -57,6 +57,9 @@ const auditLogger = winston.createLogger({
  * @param retentionDays - Number of days to retain audit logs
  */
 export function applyAuditConfig(retentionDays: number): void {
+  // Enable logging now that config is loaded
+  auditLogger.silent = false
+
   // Remove existing DailyRotateFile transports
   const existingTransports = auditLogger.transports.filter((t) => t instanceof DailyRotateFile)
   for (const transport of existingTransports) {
@@ -83,9 +86,8 @@ export function applyAuditConfig(retentionDays: number): void {
  * @param action - The action that was performed
  * @param userId - User ID who performed the action
  * @param details - Additional details including username, computerName, resource, status, and optional metadata
- * @returns Promise that resolves when the log is written (non-blocking)
  */
-export async function logAudit(
+export function logAudit(
   action: string,
   userId: string,
   details: {
@@ -95,7 +97,7 @@ export async function logAudit(
     status: 'success' | 'failure' | 'partial'
     metadata?: Record<string, unknown>
   }
-): Promise<void> {
+): void {
   const entry: AuditEntry = {
     timestamp: new Date().toISOString(),
     action,
@@ -115,8 +117,7 @@ export async function logAudit(
 /**
  * Flush and close the audit logger (call on app shutdown)
  */
-export async function closeAuditLogger(): Promise<void> {
-  // Winston logger.close() is synchronous
+export function closeAuditLogger(): void {
   auditLogger.close()
 }
 

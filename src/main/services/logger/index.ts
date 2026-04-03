@@ -56,7 +56,21 @@ const consoleFormat = winston.format.combine(
       }
     }
 
-    const metaStr = Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta, null, 2)}` : ''
+    let metaStr = ''
+    if (Object.keys(meta).length > 0) {
+      try {
+        metaStr = ` ${JSON.stringify(meta, null, 2)}`
+      } catch {
+        // Fallback for circular references: stringify primitives, replace objects with placeholder
+        metaStr = ` ${JSON.stringify(
+          Object.fromEntries(
+            Object.entries(meta).map(([k, v]) => [k, typeof v === 'object' ? '[Object]' : v])
+          ),
+          null,
+          2
+        )}`
+      }
+    }
     return `${timestamp} [${level}]${contextStr} ${message}${errorStr}${metaStr}`
   })
 )
@@ -77,9 +91,7 @@ const fileFormat = winston.format.combine(
     // Serialize any error in meta fields (skip if already serialized)
     for (const key of Object.keys(info)) {
       if (key !== 'error' && info[key] instanceof Error) {
-        info[key] = IS_PROD
-          ? sanitizeError(serializeError(info[key]))
-          : serializeError(info[key])
+        info[key] = IS_PROD ? sanitizeError(serializeError(info[key])) : serializeError(info[key])
       }
     }
 

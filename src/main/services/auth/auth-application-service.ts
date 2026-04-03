@@ -176,8 +176,6 @@ export class AuthApplicationService {
     actorId: string,
     payload: Parameters<typeof logAudit>[2]
   ): void {
-    logAudit(action, actorId, payload).catch((err) =>
-      log.warn('Failed to write audit log', { err })
-    )
+    logAudit(action, actorId, payload)
   }
 }

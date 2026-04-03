@@ -3,9 +3,9 @@ import logger from '../services/logger/index'
 import { logAudit, closeAuditLogger } from '../services/logger/audit-logger'
 
 export function setupProcessGuards(): void {
-  process.on('uncaughtException', async (err) => {
+  process.on('uncaughtException', (err) => {
     logger.error('Uncaught exception', { error: err })
-    await logAudit('SYSTEM_CRASH', 'system', {
+    logAudit('SYSTEM_CRASH', 'system', {
       username: 'system',
       computerName: process.env.COMPUTERNAME || 'unknown',
       resource: 'main-process',
@@ -15,9 +15,9 @@ export function setupProcessGuards(): void {
     setTimeout(() => process.exit(1), 1000)
   })
 
-  process.on('unhandledRejection', async (reason) => {
+  process.on('unhandledRejection', (reason) => {
     logger.error('Unhandled Rejection', { reason: String(reason) })
-    await logAudit('SYSTEM_ERROR', 'system', {
+    logAudit('SYSTEM_ERROR', 'system', {
       username: 'system',
       computerName: process.env.COMPUTERNAME || 'unknown',
       resource: 'main-process',

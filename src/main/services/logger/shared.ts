@@ -16,6 +16,8 @@ export function getLogDir(): string {
     return app.getPath('logs')
   }
   // Fallback for development or before app is ready
+  // Note: synchronous FS calls are acceptable here because this branch only
+  // executes in dev environments when app is not yet ready (rare, at startup).
   const devLogDir = path.join(process.cwd(), 'logs')
   if (!fs.existsSync(devLogDir)) {
     fs.mkdirSync(devLogDir, { recursive: true })

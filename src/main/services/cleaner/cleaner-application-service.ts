@@ -274,7 +274,7 @@ export class CleanerApplicationService {
           ? 'failure'
           : 'success'
 
-    await logAudit('CLEAN', String(currentUser.id), {
+    logAudit('CLEAN', String(currentUser.id), {
       username: currentUser.username,
       computerName: (await import('os')).hostname(),
       resource: 'MATERIAL_PLAN',
@@ -288,7 +288,7 @@ export class CleanerApplicationService {
         materialsSkipped: result.materialsSkipped,
         errorCount: result.errors.length
       }
-    }).catch((err) => log.warn('Failed to write audit log', { err }))
+    })
   }
 
   private async generateAndUploadReport(

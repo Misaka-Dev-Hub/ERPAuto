@@ -9,7 +9,7 @@
  * - Error-level logs bypass circuit breaker
  */
 
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
 import winston from 'winston'
 import { createLogger } from '../services/logger'
 import logger from '../services/logger'
