@@ -14,6 +14,23 @@ import path from 'path'
 import { serializeError, sanitizeError } from './error-utils'
 import { getLogDir, isProduction } from './shared'
 
+// Cache isProduction() at module load — app.isPackaged never changes at runtime
+const IS_PROD = isProduction()
+
+/**
+ * Check if an error has already been serialized (plain object with name/message but not an Error instance).
+ * Prevents double-serialization when logError() output passes through the format pipeline.
+ */
+function isSerializedError(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !(value instanceof Error) &&
+    'name' in value &&
+    'message' in value
+  )
+}
+
 // Custom format for console output - includes full error details
 const consoleFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
@@ -24,9 +41,12 @@ const consoleFormat = winston.format.combine(
     // Format error with full stack trace
     let errorStr = ''
     if (error) {
-      const serialized = isProduction()
-        ? sanitizeError(serializeError(error))
-        : serializeError(error)
+      // Skip re-serialization if already a serialized error object
+      const serialized: { stack?: string; message: string } = isSerializedError(error)
+        ? (error as { stack?: string; message: string })
+        : IS_PROD
+          ? sanitizeError(serializeError(error))
+          : serializeError(error)
       if (serialized.stack) {
         errorStr = `\n${serialized.stack}`
       } else {
@@ -43,17 +63,19 @@ const consoleFormat = winston.format.combine(
 const fileFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format((info) => {
-    // Serialize errors in metadata
+    // Serialize errors in metadata (skip if already serialized)
     if (info.error) {
-      info.error = isProduction()
-        ? sanitizeError(serializeError(info.error))
-        : serializeError(info.error)
+      if (!isSerializedError(info.error)) {
+        info.error = IS_PROD
+          ? sanitizeError(serializeError(info.error))
+          : serializeError(info.error)
+      }
     }
 
-    // Serialize any error in meta fields
+    // Serialize any error in meta fields (skip if already serialized)
     for (const key of Object.keys(info)) {
       if (key !== 'error' && info[key] instanceof Error) {
-        info[key] = isProduction()
+        info[key] = IS_PROD
           ? sanitizeError(serializeError(info[key]))
           : serializeError(info[key])
       }
@@ -119,7 +141,7 @@ export function applyLoggingConfig(config: { level: string; appRetention: number
   logger.add(createFileTransport(undefined, retentionStr))
 
   // Add error-specific file transport in production
-  if (isProduction()) {
+  if (IS_PROD) {
     logger.add(
       new DailyRotateFile({
         filename: path.join(getLogDir(), 'error-%DATE%.log'),
