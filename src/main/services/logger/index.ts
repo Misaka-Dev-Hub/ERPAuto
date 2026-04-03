@@ -11,8 +11,10 @@
 import winston from 'winston'
 import DailyRotateFile from 'winston-daily-rotate-file'
 import path from 'path'
+import { BrowserWindow } from 'electron'
 import { serializeError, sanitizeError } from './error-utils'
 import { getLogDir, isProduction } from './shared'
+import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 
 // Cache isProduction() at module load — app.isPackaged never changes at runtime
 const IS_PROD = isProduction()
@@ -113,11 +115,18 @@ const logger = winston.createLogger({
 })
 
 /**
- * Update the logger level dynamically
+ * Update the logger level dynamically and notify renderer processes
  * @param level - The new log level
  */
 export function setLogLevel(level: string): void {
   logger.level = level
+
+  // Broadcast level change to all renderer windows so they update their cached level
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.LOGGER_LEVEL_CHANGED, level)
+    }
+  }
 }
 
 /**

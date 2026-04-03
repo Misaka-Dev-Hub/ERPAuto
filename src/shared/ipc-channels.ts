@@ -93,6 +93,7 @@ export const IPC_CHANNELS = {
   // Logger
   LOGGER_FORWARD: 'logger:forward',
   LOGGER_GET_LEVEL: 'logger:getLevel',
+  LOGGER_LEVEL_CHANGED: 'logger:levelChanged',
 
   // Report
   REPORT_LIST_ALL: 'report:listAll',

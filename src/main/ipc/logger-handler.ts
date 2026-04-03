@@ -9,7 +9,7 @@
  * - Error-level logs bypass circuit breaker
  */
 
-import { ipcMain } from 'electron'
+import { ipcMain, BrowserWindow } from 'electron'
 import winston from 'winston'
 import { createLogger } from '../services/logger'
 import logger from '../services/logger'
@@ -161,6 +161,9 @@ class LoggerHandlerState {
       : entry.message
 
     switch (entry.level) {
+      case 'verbose':
+        childLogger.verbose(message, entry.context)
+        break
       case 'debug':
         childLogger.debug(message, entry.context)
         break

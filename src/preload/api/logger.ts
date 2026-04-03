@@ -20,6 +20,11 @@ function shouldLog(level: LogLevel): boolean {
   return (priorities[level] ?? 0) >= (priorities[cachedLevel] ?? 2)
 }
 
+// Listener for level change broadcasts from main process
+function onLevelChanged(_event: Electron.IpcRendererEvent, level: LogLevel): void {
+  cachedLevel = level
+}
+
 export const loggerApi = {
   log: (level: LogLevel, message: string, context?: Record<string, unknown>): void => {
     // Drop messages below the configured log level
@@ -34,10 +39,19 @@ export const loggerApi = {
   },
 
   /**
-   * Fetch the current log level from main process and cache it
-   * Should be called early in renderer initialization
+   * Fetch the current log level from main process and cache it.
+   * Also registers a listener for future level changes.
+   * Should be called early in renderer initialization.
    */
   fetchLevel: async (): Promise<void> => {
     cachedLevel = (await ipcRenderer.invoke(IPC_CHANNELS.LOGGER_GET_LEVEL)) as LogLevel
+    ipcRenderer.on(IPC_CHANNELS.LOGGER_LEVEL_CHANGED, onLevelChanged)
+  },
+
+  /**
+   * Remove the level change listener (call on cleanup/unmount)
+   */
+  cleanup: (): void => {
+    ipcRenderer.removeListener(IPC_CHANNELS.LOGGER_LEVEL_CHANGED, onLevelChanged)
   }
 } as const
