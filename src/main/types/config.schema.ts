@@ -133,6 +133,21 @@ export const loggingConfigSchema = z.object({
 })
 
 /**
+ * Seq 日志聚合服务配置 Schema
+ */
+export const seqConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  serverUrl: z.string().url('Seq server URL must be a valid URL').optional().default(''),
+  apiKey: z.string().optional().default(''),
+  batchPostingLimit: z.number().int().min(1).max(1000).default(50),
+  period: z.number().int().min(1000).max(30000).default(2000), // milliseconds
+  queueLimit: z.number().int().min(1).max(10000).default(10000),
+  maxRetries: z.number().int().min(0).max(10).default(3)
+})
+
+export type SeqConfig = z.infer<typeof seqConfigSchema>
+
+/**
  * RustFS 对象存储配置 Schema
  */
 export const rustfsConfigSchema = z.object({
@@ -172,6 +187,7 @@ export const fullConfigSchema = z.object({
   cleaner: cleanerConfigSchema,
   orderResolution: orderResolutionSchema,
   logging: loggingConfigSchema,
+  seq: seqConfigSchema.optional(),
   rustfs: rustfsConfigSchema.optional(),
   update: updateConfigSchema.optional()
 })

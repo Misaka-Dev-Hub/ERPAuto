@@ -63,6 +63,16 @@ logging:
   auditRetention: 30
   appRetention: 14
 
+# Seq 日志聚合服务配置（可选，用于集中管理日志）
+seq:
+  enabled: false # 设置为 true 启用 Seq 日志发送
+  serverUrl: 'http://localhost:5341' # Seq 服务器地址
+  apiKey: '' # 可选：API key 用于认证
+  batchPostingLimit: 50 # 每批次最大日志条目数
+  period: 2000 # 发送间隔 (毫秒)
+  queueLimit: 10000 # 本地队列最大容量
+  maxRetries: 3 # 失败重试次数
+
 # RustFS 对象存储配置（用于持久化报告）
 rustfs:
   enabled: false # 设置为 true 启用 RustFS 上传

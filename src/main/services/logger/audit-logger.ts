@@ -6,6 +6,7 @@
 import winston from 'winston'
 import DailyRotateFile from 'winston-daily-rotate-file'
 import path from 'path'
+import { app } from 'electron'
 import { getLogDir } from './shared'
 
 /**
@@ -23,6 +24,8 @@ export interface AuditEntry {
   username: string
   /** Computer name from which the action was performed */
   computerName: string
+  /** Application version when the action was performed */
+  appVersion: string
   /** The resource that was affected (e.g., table name, file path) */
   resource: string
   /** Status of the action: 'success' | 'failure' | 'partial' */
@@ -104,6 +107,7 @@ export function logAudit(
     userId,
     username: details.username,
     computerName: details.computerName,
+    appVersion: app.getVersion(),
     resource: details.resource,
     status: details.status,
     metadata: details.metadata || {}

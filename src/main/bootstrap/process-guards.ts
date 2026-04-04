@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import logger from '../services/logger/index'
 import { logAudit, closeAuditLogger } from '../services/logger/audit-logger'
+import { serializeError } from '../services/logger/error-utils'
 
 export function setupProcessGuards(): void {
   process.on('uncaughtException', (err) => {
@@ -16,13 +17,17 @@ export function setupProcessGuards(): void {
   })
 
   process.on('unhandledRejection', (reason) => {
-    logger.error('Unhandled Rejection', { reason: String(reason) })
+    const errorMeta =
+      reason instanceof Error
+        ? { error: serializeError(reason) }
+        : { reason: String(reason) }
+    logger.error('Unhandled Rejection', errorMeta)
     logAudit('SYSTEM_ERROR', 'system', {
       username: 'system',
       computerName: process.env.COMPUTERNAME || 'unknown',
       resource: 'main-process',
       status: 'failure',
-      metadata: { reason: String(reason) }
+      metadata: errorMeta
     })
   })
 

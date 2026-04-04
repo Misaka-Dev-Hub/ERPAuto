@@ -11,11 +11,14 @@
 import winston from 'winston'
 import DailyRotateFile from 'winston-daily-rotate-file'
 import path from 'path'
-import { BrowserWindow } from 'electron'
+import os from 'os'
+import { app, BrowserWindow } from 'electron'
 import { serializeError, sanitizeError } from './error-utils'
 import { getLogDir, isProduction, cleanupOldScreenshots } from './shared'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 import { getContext, run } from './request-context'
+import { createSeqTransportSync } from './seq-transport'
+import type { SeqConfig } from '../../types/config.schema'
 
 // Cache isProduction() at module load — app.isPackaged never changes at runtime
 const IS_PROD = isProduction()
@@ -154,7 +157,11 @@ const createFileTransport = (level?: string, maxFiles?: string): DailyRotateFile
 // File transports are added after config is loaded via applyLoggingConfig()
 const logger = winston.createLogger({
   level: 'info', // Default level, can be updated via setLogLevel()
-  defaultMeta: { service: 'erpauto' },
+  defaultMeta: {
+    service: 'erpauto',
+    appVersion: app.getVersion(),
+    computerName: os.hostname()
+  },
   transports: [
     // Console transport - always enabled
     new winston.transports.Console({
@@ -181,10 +188,15 @@ export function setLogLevel(level: string): void {
 /**
  * Apply logging configuration from config file
  * Removes existing DailyRotateFile transports and recreates them with config values
+ * Also configures Seq transport if enabled
  *
  * @param config - Logging configuration from config.yaml
+ * @param seqConfig - Optional Seq configuration from config.yaml
  */
-export function applyLoggingConfig(config: { level: string; appRetention: number }): void {
+export function applyLoggingConfig(
+  config: { level: string; appRetention: number },
+  seqConfig?: SeqConfig
+): void {
   // Update log level
   setLogLevel(config.level)
 
@@ -211,6 +223,47 @@ export function applyLoggingConfig(config: { level: string; appRetention: number
         format: fileFormat
       })
     )
+  }
+
+  // Add Seq transport if configured and enabled
+  // Note: Uses sync wrapper which initializes asynchronously
+  if (seqConfig && seqConfig.enabled && seqConfig.serverUrl) {
+    try {
+      const seqTransport = createSeqTransportSync(seqConfig)
+      if (seqTransport) {
+        logger.add(seqTransport)
+        logger.info('Seq transport added successfully', {
+          serverUrl: seqConfig.serverUrl,
+          batchPostingLimit: seqConfig.batchPostingLimit,
+          period: seqConfig.period,
+          context: 'seq-transport'
+        })
+      } else {
+        // Transport not ready yet, will be initialized on next call
+        logger.debug('Seq transport initialization in progress', {
+          serverUrl: seqConfig.serverUrl,
+          context: 'seq-transport'
+        })
+        // Initialize and add when ready
+        import('./seq-transport').then(({ createSeqTransport }) => {
+          createSeqTransport(seqConfig).then((transport) => {
+            if (transport) {
+              logger.add(transport)
+              logger.info('Seq transport added (async init complete)', {
+                serverUrl: seqConfig.serverUrl,
+                context: 'seq-transport'
+              })
+            }
+          })
+        })
+      }
+    } catch (error) {
+      logger.error('Failed to add Seq transport', {
+        error: error instanceof Error ? error.message : String(error),
+        context: 'seq-transport'
+      })
+      // Don't throw - allow app to continue without Seq
+    }
   }
 
   // Clean up old screenshot files beyond the retention window

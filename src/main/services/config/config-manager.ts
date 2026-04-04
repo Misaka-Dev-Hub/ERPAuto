@@ -102,6 +102,15 @@ const DEFAULT_CONFIG: FullConfig = {
     auditRetention: 30,
     appRetention: 14
   },
+  seq: {
+    enabled: false,
+    serverUrl: '',
+    apiKey: '',
+    batchPostingLimit: 50,
+    period: 2000,
+    queueLimit: 10000,
+    maxRetries: 3
+  },
   rustfs: {
     enabled: false,
     endpoint: '',
@@ -207,7 +216,7 @@ export class ConfigManager {
       this.config = validated
 
       // Apply logging configuration
-      applyLoggingConfig(validated.logging)
+      applyLoggingConfig(validated.logging, validated.seq)
       applyAuditConfig(validated.logging.auditRetention)
 
       log.info('Configuration loaded and validated successfully', {

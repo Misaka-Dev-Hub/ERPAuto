@@ -35,6 +35,8 @@ export interface AuditEntry {
   username: string
   /** Computer name where action was performed */
   computerName: string
+  /** Application version when action was performed */
+  appVersion: string
   /** Resource affected by the action */
   resource?: string
   /** Status of the action */
