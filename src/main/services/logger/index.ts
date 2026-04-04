@@ -35,6 +35,52 @@ const PROJECT_LEVELS = {
 const IS_PROD = isProduction()
 
 /**
+ * Check if an IPv4 address is an RFC 1918 private address.
+ * Private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+ */
+function isPrivateIpv4(ip: string): boolean {
+  const parts = ip.split('.').map(Number)
+  if (parts.length !== 4) return false
+  // 10.0.0.0/8
+  if (parts[0] === 10) return true
+  // 172.16.0.0/12
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true
+  // 192.168.0.0/16
+  if (parts[0] === 192 && parts[1] === 168) return true
+  return false
+}
+
+/**
+ * Get the primary local IPv4 address (RFC 1918 private address).
+ *
+ * Strategy:
+ * 1. Collect all non-internal, non-APIPA IPv4 addresses from physical adapters
+ * 2. Return the first private (LAN) address found
+ * 3. Fallback to any remaining non-internal address
+ * 4. Returns 'N/A' if none found
+ */
+function getLocalIpAddress(): string {
+  const interfaces = os.networkInterfaces()
+  const candidates: string[] = []
+
+  for (const [, addrs] of Object.entries(interfaces)) {
+    if (!addrs) continue
+    for (const iface of addrs) {
+      if (iface.family === 'IPv4' && !iface.internal && !iface.address.startsWith('169.254.')) {
+        candidates.push(iface.address)
+      }
+    }
+  }
+
+  // Prefer private (LAN) addresses
+  const privateIp = candidates.find(isPrivateIpv4)
+  if (privateIp) return privateIp
+
+  // Fallback: any non-internal address
+  return candidates[0] || 'N/A'
+}
+
+/**
  * Check if an error has already been serialized (plain object with name/message but not an Error instance).
  * Prevents double-serialization when logError() output passes through the format pipeline.
  */
@@ -172,7 +218,8 @@ const logger = winston.createLogger({
   defaultMeta: {
     service: 'erpauto',
     appVersion: app.getVersion(),
-    computerName: os.hostname()
+    computerName: os.hostname(),
+    ipAddress: getLocalIpAddress()
   },
   transports: [
     // Console transport - always enabled
