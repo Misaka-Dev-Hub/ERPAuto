@@ -11,6 +11,7 @@ export interface ErpErrorContext {
   pageUrl?: string
   frameHierarchy?: Array<{ name: string; url: string }>
   targetSelector?: string
+  step?: string
 }
 
 /**
@@ -22,7 +23,8 @@ export interface ErpErrorContext {
  */
 export async function capturePageContext(
   page: Page,
-  targetSelector?: string
+  targetSelector?: string,
+  step?: string
 ): Promise<ErpErrorContext> {
   const ctx: ErpErrorContext = {}
 
@@ -41,6 +43,10 @@ export async function capturePageContext(
 
   if (targetSelector) {
     ctx.targetSelector = targetSelector
+  }
+
+  if (step) {
+    ctx.step = step
   }
 
   return ctx

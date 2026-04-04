@@ -366,7 +366,8 @@ export class CleanerService {
         totalMaterials,
         dryRun,
         orderNumbers: input.orderNumbers,
-        materialCodes: input.materialCodes
+        materialCodes: input.materialCodes,
+        ...(popupPage ? await capturePageContext(popupPage, undefined, 'cleaner.outerCatch') : {})
       })
       result.errors.push(`Clean failed: ${message}`)
     } finally {
@@ -388,34 +389,44 @@ export class CleanerService {
     const { page, mainFrame } = session
 
     await mainFrame.locator('i').first().click()
+    log.debug('导航: 已点击菜单图标')
 
     const popupPromise = page.waitForEvent('popup')
     await mainFrame.getByTitle('离散生产订单维护', { exact: true }).first().click()
     const popupPage = await popupPromise
+    log.debug('导航: 弹出窗口已打开')
 
     const forwardFrameLocator = popupPage.locator('#forwardFrame')
     const fFrame = forwardFrameLocator.contentFrame()
+    log.debug('导航: 已获取 forwardFrame')
 
     const innerFrameLocator = fFrame.locator('#mainiframe')
     await innerFrameLocator.waitFor({ state: 'visible', timeout: 30000 })
     const workFrame = innerFrameLocator.contentFrame()
+    log.debug('导航: 已获取内部工作框架')
 
     await workFrame.locator('#hot-key-head_list').waitFor({ state: 'visible', timeout: 30000 })
+    log.info('已导航到清理页面')
 
     return { popupPage, workFrame }
   }
 
   private async setupQueryInterface(innerFrame: FrameLocator): Promise<void> {
     await innerFrame.locator('.search-name-wrapper > .iconfont').click()
+    log.debug('查询界面: 已点击搜索图标')
     await innerFrame.getByText('订单号查询').click()
+    log.debug('查询界面: 已点击订单号查询')
     await innerFrame.getByRole('tab', { name: '全部' }).click()
+    log.debug('查询界面: 已切换到全部标签页')
 
     const inputEl = innerFrame.locator('#rc_select_0')
     await inputEl.fill('5000')
     await inputEl.press('Enter')
+    log.debug('查询界面: 已设置查询限制为5000')
   }
 
   private async queryOrders(workFrame: FrameLocator, orderNumbers: string[]): Promise<void> {
+    log.debug('开始查询订单', { orderCount: orderNumbers.length })
     const textbox = workFrame.getByRole('textbox', { name: '生产订单号' })
     await textbox.fill(orderNumbers.join(','))
     await workFrame.locator('.search-component-searchBtn').click()
@@ -434,6 +445,8 @@ export class CleanerService {
       }
       result.push({ rowIndex, orderNumber })
     }
+
+    log.debug('查询结果收集完成', { rowCount: result.length })
 
     return result
   }
@@ -507,7 +520,7 @@ export class CleanerService {
     }
 
     log.error('Failed to locate material plan menu item', {
-      attemptedSelectors: candidates.length
+      selectorsAttempted: candidates.length
     })
     throw new Error('无法定位”备料计划”菜单项（可能菜单结构已变化）')
   }
@@ -542,7 +555,9 @@ export class CleanerService {
       const detailInnerFrame = await detailInnerLocator.contentFrame()
 
       if (!detailInnerFrame) {
-        log.error('Failed to access detail inner frame')
+        log.error('Failed to access detail inner frame', {
+          ...(await capturePageContext(detailPage, undefined, 'processDetail.detailInnerFrame'))
+        })
         throw new Error('Failed to access detail inner frame')
       }
 
@@ -656,6 +671,7 @@ export class CleanerService {
 
               if (deleteSuccess) {
                 detail.materialsDeleted += 1
+                log.debug('物料已删除', { orderNumber, materialCode, rowNumber: currentRow })
               }
               continue
             }
@@ -668,6 +684,7 @@ export class CleanerService {
                 materialCode,
                 deleteSet
               })
+              log.debug('物料已跳过', { orderNumber, materialCode, reason })
               detail.skippedMaterials.push({
                 materialCode,
                 materialName,
@@ -691,6 +708,7 @@ export class CleanerService {
         if (!dryRun && detail.materialsDeleted > 0) {
           await saveButtonLocator.click()
           await saveButtonLocator.waitFor({ state: 'hidden', timeout: 60000 })
+          log.info('订单修改已保存', { orderNumber, materialsDeleted: detail.materialsDeleted })
         }
       }
 

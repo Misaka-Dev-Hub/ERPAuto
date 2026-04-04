@@ -31,6 +31,11 @@ export class ExtractorCore {
     }
 
     const totalBatches = this.createBatches(input.orderNumbers, input.batchSize).length
+    log.info('开始下载所有批次', {
+      totalOrders: input.orderNumbers.length,
+      totalBatches,
+      batchSize: input.batchSize
+    })
     const totalPoints = 1 + totalBatches + 2
     const progressPerPoint = 100 / totalPoints
 
@@ -63,9 +68,15 @@ export class ExtractorCore {
         result.downloadedFiles.push(filePath)
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
+        log.error('批次下载失败', { batchIndex: i, totalBatches, error: message })
         result.errors.push(`Batch ${i + 1}: ${message}`)
       }
     }
+
+    log.info('所有批次下载完成', {
+      downloadedCount: result.downloadedFiles.length,
+      errorCount: result.errors.length
+    })
 
     return result
   }
@@ -89,20 +100,23 @@ export class ExtractorCore {
     // Step 1: Click menu icon (Python line 266)
     // main_frame is #forwardFrame.content_frame returned from login
     await mainFrame.locator('i').first().click()
+    log.debug('导航: 已点击菜单图标')
 
     // Step 2: Click discrete material plan menu item and expect popup (Python lines 267-271)
     const popupPromise = page.waitForEvent('popup')
     await mainFrame.getByTitle('离散备料计划维护', { exact: true }).first().click()
     const popupPage = await popupPromise
+    log.debug('导航: 弹出窗口已打开')
 
     // Step 3 & 4: Get nested frame structure in popup window (Python lines 273-276)
     // popup page contains #forwardFrame, which contains #mainiframe
     const forwardFrameLocator = popupPage.locator('#forwardFrame')
     const fFrame = await forwardFrameLocator.contentFrame()
+    log.debug('导航: 已获取 forwardFrame')
 
     if (!fFrame) {
       log.error('Failed to access popup forward frame', {
-        ...(await capturePageContext(popupPage))
+        ...(await capturePageContext(popupPage, undefined, 'navigate.forwardFrame'))
       })
       throw new Error('Failed to access popup forward frame')
     }
@@ -110,14 +124,19 @@ export class ExtractorCore {
     const innerFrameLocator = fFrame.locator('#mainiframe')
     await innerFrameLocator.waitFor({ state: 'visible', timeout: 15000 })
     const workFrame = await innerFrameLocator.contentFrame()
+    log.debug('导航: 已获取内部工作框架')
 
     if (!workFrame) {
-      log.error('Failed to access inner work frame')
+      log.error('Failed to access inner work frame', {
+        ...(await capturePageContext(popupPage, undefined, 'navigate.innerFrame'))
+      })
       throw new Error('Failed to access inner work frame')
     }
 
     // Step 5: Setup query interface (Python line 278)
     await this.setupQueryInterface(workFrame)
+
+    log.info('提取器页面导航完成')
 
     return { popupPage, workFrame }
   }
@@ -129,17 +148,21 @@ export class ExtractorCore {
   private async setupQueryInterface(innerFrame: any): Promise<void> {
     // Click search icon (Python line 233)
     await innerFrame.locator('.search-name-wrapper > .iconfont').click()
+    log.debug('查询界面: 已点击搜索图标')
 
     // Click "订单号查询" menu item (Python line 234)
     await innerFrame.getByText('订单号查询').click()
+    log.debug('查询界面: 已点击订单号查询')
 
     // Click "全部" tab (Python line 235)
     await innerFrame.getByRole('tab', { name: '全部' }).click()
+    log.debug('查询界面: 已切换到全部标签页')
 
     // Set limit to 5000 (Python lines 237-239)
     const inputBox = innerFrame.locator('#rc_select_0')
     await inputBox.fill('5000')
     await inputBox.press('Enter')
+    log.debug('查询界面: 已设置查询限制为5000')
   }
 
   /**
@@ -155,16 +178,21 @@ export class ExtractorCore {
     _totalBatches: number,
     downloadDir: string
   ): Promise<string> {
+    log.info('开始下载批次', { batchIndex: batchIndex + 1, orderCount: orderNumbers.length })
+
     // Fill order numbers (Python lines 143-145)
     const textbox = workFrame.getByRole('textbox', { name: '来源生产订单号' })
     await textbox.fill('')
     await textbox.fill(orderNumbers.join(','))
+    log.debug('已填入订单号', { orderCount: orderNumbers.length })
 
     // Click search button (Python line 147)
     await workFrame.locator('.search-component-searchBtn').click()
+    log.debug('已点击搜索按钮')
 
     // Wait for loading (Python lines 148-153)
     await this.waitForLoading(workFrame)
+    log.debug('查询加载完成')
 
     // Click first row checkbox (Python line 155)
     await workFrame.getByRole('row', { name: '序号' }).getByLabel('').click()
@@ -188,6 +216,8 @@ export class ExtractorCore {
 
     const download = await downloadPromise
     await download.saveAs(downloadPath)
+
+    log.info('批次下载完成', { batchIndex: batchIndex + 1, downloadPath })
 
     return downloadPath
   }

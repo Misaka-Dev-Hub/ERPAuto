@@ -30,6 +30,8 @@ export class ErpAuthService {
       return this.session
     }
 
+    log.info('开始ERP登录', { url: this.config.url })
+
     // Launch browser with SSL certificate errors ignored
     const browser = await chromium.launch({
       headless: this.config.headless ?? false, // Use config or default to false
@@ -41,6 +43,8 @@ export class ErpAuthService {
         '--disable-web-security' // Disable web security for internal VPN
       ]
     })
+
+    log.debug('浏览器已启动', { headless: this.config.headless ?? false })
 
     const context = await browser.newContext({
       acceptDownloads: true,
@@ -56,6 +60,8 @@ export class ErpAuthService {
     const loginUrl = `${this.config.url}/yonbip/resources/uap/rbac/login/main/index.html`
     await page.goto(loginUrl)
 
+    log.debug('已导航到登录页面')
+
     // Wait for page to load
     await page.waitForLoadState('domcontentloaded', { timeout: PAGE_LOAD_TIMEOUT })
 
@@ -69,6 +75,7 @@ export class ErpAuthService {
     // This is the main working frame for all subsequent operations
     const frameLocator = page.locator('#forwardFrame')
     const contentFrame = await frameLocator.contentFrame()
+    log.debug('已获取 forwardFrame')
 
     if (!contentFrame) {
       log.error('Failed to access forwardFrame content frame', {
@@ -85,7 +92,8 @@ export class ErpAuthService {
       await contentFrame.getByRole('textbox', { name: '用户名' }).fill(this.config.username)
     } catch (e) {
       log.error('Failed to find username input', {
-        error: e instanceof Error ? e.message : String(e)
+        error: e instanceof Error ? e.message : String(e),
+        ...(await capturePageContext(page, undefined, 'login.username'))
       })
       throw new Error(`Failed to find username input: ${e}`)
     }
@@ -95,7 +103,8 @@ export class ErpAuthService {
       await contentFrame.getByRole('textbox', { name: '密码' }).fill(this.config.password)
     } catch (e) {
       log.error('Failed to find password input', {
-        error: e instanceof Error ? e.message : String(e)
+        error: e instanceof Error ? e.message : String(e),
+        ...(await capturePageContext(page, undefined, 'login.password'))
       })
       throw new Error(`Failed to find password input: ${e}`)
     }
@@ -105,7 +114,8 @@ export class ErpAuthService {
       await contentFrame.getByRole('button', { name: '登录' }).click()
     } catch (e) {
       log.error('Failed to click login button', {
-        error: e instanceof Error ? e.message : String(e)
+        error: e instanceof Error ? e.message : String(e),
+        ...(await capturePageContext(page, undefined, 'login.button'))
       })
       throw new Error(`Failed to click login button: ${e}`)
     }
@@ -124,6 +134,8 @@ export class ErpAuthService {
       mainFrame: mainFrame as any, // Store forwardFrame content frame for subsequent operations
       isLoggedIn: true
     }
+
+    log.info('ERP会话已建立')
 
     return this.session
   }
@@ -176,6 +188,7 @@ export class ErpAuthService {
    */
   async close(): Promise<void> {
     if (this.session) {
+      log.info('正在关闭ERP会话')
       await this.session.context.close()
       await this.session.browser.close()
       this.session = null
