@@ -112,6 +112,32 @@ npm run test:e2e
 
 # 查看测试报告
 npm run test:e2e:report
+
+# 查看覆盖率报告
+npm run test:coverage
+```
+
+### 测试基础设施
+
+P0 测试优化已完成（2026-04），性能提升 **41.5%**（7.65s → 4.49s）。
+
+**文档**:
+
+- [测试工厂使用指南](docs/TEST_FACTORY_USAGE.md) — 测试数据工厂 API 和最佳实践
+- [Mock 库使用指南](docs/MOCK_LIBRARY_USAGE.md) — Mock 工厂函数和迁移指南
+
+**快速示例**:
+
+```typescript
+// 使用测试工厂
+import { UserFactory, OrderFactory } from '@/tests/fixtures/factory'
+const admin = UserFactory.createAdmin()
+const order = OrderFactory.createOrder()
+
+// 使用 Mock 库
+import { createMockLogger, createMockConfigManager } from '@/tests/mocks'
+const logger = createMockLogger()
+const config = createMockConfigManager({ logging: { level: 'debug' } })
 ```
 
 ## 项目结构

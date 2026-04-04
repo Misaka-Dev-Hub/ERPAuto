@@ -18,7 +18,27 @@ export default defineConfig({
     bail: process.env.CI ? 1 : undefined,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html']
+      reporter: ['text', 'json', 'html', 'lcov'],
+      thresholds: {
+        global: {
+          branches: 60,
+          functions: 70,
+          lines: 70,
+          statements: 70
+        },
+        'src/main/services/erp/**': {
+          branches: 70,
+          functions: 80,
+          lines: 80,
+          statements: 80
+        },
+        'src/main/services/update/**': {
+          branches: 70,
+          functions: 80,
+          lines: 80,
+          statements: 80
+        }
+      }
     }
   },
   resolve: {
