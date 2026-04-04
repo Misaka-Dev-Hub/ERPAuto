@@ -20,6 +20,17 @@ import { getContext, run } from './request-context'
 import { createSeqTransportSync } from './seq-transport'
 import type { SeqConfig } from '../../types/config.schema'
 
+// Custom log levels matching project semantics:
+// verbose (most detailed) → error (most severe)
+// Winston rule: logs with level value <= threshold are emitted.
+const PROJECT_LEVELS = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  debug: 3,
+  verbose: 4
+} as const
+
 // Cache isProduction() at module load — app.isPackaged never changes at runtime
 const IS_PROD = isProduction()
 
@@ -156,6 +167,7 @@ const createFileTransport = (level?: string, maxFiles?: string): DailyRotateFile
 // Create the logger instance with default level - Console only initially
 // File transports are added after config is loaded via applyLoggingConfig()
 const logger = winston.createLogger({
+  levels: PROJECT_LEVELS,
   level: 'info', // Default level, can be updated via setLogLevel()
   defaultMeta: {
     service: 'erpauto',
