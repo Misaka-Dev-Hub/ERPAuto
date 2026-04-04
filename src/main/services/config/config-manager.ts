@@ -20,7 +20,7 @@ import { dirname } from 'path'
 import { app } from 'electron'
 import yaml from 'js-yaml'
 import { z } from 'zod'
-import { createLogger, applyLoggingConfig } from '../logger'
+import { createLogger, applyLoggingConfig, trackDuration } from '../logger'
 import { applyAuditConfig } from '../logger/audit-logger'
 import {
   fullConfigSchema,
@@ -141,14 +141,22 @@ export class ConfigManager {
       // 开发环境：配置文件放在项目根目录，方便编辑和调试
       this.configPath = path.resolve(__dirname, '../../config.yaml')
       this.backupPath = path.resolve(__dirname, '../../config.yaml.backup')
-      log.info('Running in development mode', { configPath: this.configPath })
+      log.info('Running in development mode', {
+        configPath: this.configPath,
+        isDev: true,
+        environment: process.env.NODE_ENV || 'not-set'
+      })
     } else {
       // 生产环境（包括安装版和便携版）：配置文件放在用户数据目录
       // Windows: C:\Users\<user>\AppData\Roaming\erpauto\config.yaml
       // 这样配置会在应用升级时保留，且不会暴露在应用目录中
       this.configPath = path.join(app.getPath('userData'), 'config.yaml')
       this.backupPath = path.join(app.getPath('userData'), 'config.yaml.backup')
-      log.info('Running in production mode', { configPath: this.configPath })
+      log.info('Running in production mode', {
+        configPath: this.configPath,
+        isDev: false,
+        userDataPath: app.getPath('userData')
+      })
     }
 
     this.initialized = true
@@ -168,12 +176,18 @@ export class ConfigManager {
    */
   public async initialize(): Promise<void> {
     if (!fs.existsSync(this.configPath)) {
-      log.info('Config file not found, creating default config.yaml')
+      log.info('Config file not found, creating default config.yaml', {
+        configPath: this.configPath
+      })
       await this.saveConfig(DEFAULT_CONFIG)
       this.config = DEFAULT_CONFIG
       // Apply logging configuration from default config
       applyLoggingConfig(DEFAULT_CONFIG.logging)
       applyAuditConfig(DEFAULT_CONFIG.logging.auditRetention)
+      log.info('Default configuration created and applied', {
+        configPath: this.configPath,
+        logLevel: DEFAULT_CONFIG.logging.level
+      })
       return
     }
 
@@ -196,14 +210,26 @@ export class ConfigManager {
       applyLoggingConfig(validated.logging)
       applyAuditConfig(validated.logging.auditRetention)
 
-      log.info('Configuration loaded and validated successfully')
+      log.info('Configuration loaded and validated successfully', {
+        configPath: this.configPath,
+        logLevel: validated.logging.level,
+        auditRetention: validated.logging.auditRetention,
+        appRetention: validated.logging.appRetention,
+        isDev: process.env.NODE_ENV === 'development' || !(app?.isPackaged ?? false)
+      })
     } catch (error) {
       if (error instanceof z.ZodError) {
         const messages = error.issues.map(formatZodIssue)
-        log.error('Configuration validation failed', { errors: messages })
-        throw new Error(`配置文件验证失败:\n${messages.join('\n')}`)
+        log.error('Configuration validation failed', {
+          configPath: this.configPath,
+          errors: messages
+        })
+        throw new Error(`配置文件验证失败：\n${messages.join('\n')}`)
       }
-      log.error('Failed to load configuration', { error })
+      log.error('Failed to load configuration', {
+        configPath: this.configPath,
+        error
+      })
       throw error
     }
   }
@@ -216,6 +242,7 @@ export class ConfigManager {
       // 备份现有配置
       if (fs.existsSync(this.configPath)) {
         fs.copyFileSync(this.configPath, this.backupPath)
+        log.debug('Config backup created', { backupPath: this.backupPath })
       }
 
       // 转换为 YAML
@@ -230,13 +257,21 @@ export class ConfigManager {
       fs.writeFileSync(this.configPath, content, 'utf-8')
 
       this.config = config
-      log.info('Configuration saved successfully')
+      log.info('Configuration saved successfully', {
+        configPath: this.configPath,
+        logLevel: config.logging.level,
+        auditRetention: config.logging.auditRetention
+      })
       return true
     } catch (error) {
-      log.error('Failed to save configuration', { error })
+      log.error('Failed to save configuration', {
+        configPath: this.configPath,
+        error
+      })
       // 恢复备份
       if (fs.existsSync(this.backupPath)) {
         fs.copyFileSync(this.backupPath, this.configPath)
+        log.warn('Configuration restored from backup', { backupPath: this.backupPath })
       }
       return false
     }
@@ -295,6 +330,11 @@ export class ConfigManager {
         await this.loadConfig()
       }
 
+      log.info('Updating configuration', {
+        configPath: this.configPath,
+        updateKeys: Object.keys(updates)
+      })
+
       // 深合并
       const merged = this.deepMerge(this.config!, updates)
 
@@ -306,12 +346,24 @@ export class ConfigManager {
         return { success: false, error: '保存配置失败' }
       }
 
+      log.info('Configuration update completed', {
+        configPath: this.configPath,
+        updatedKeys: Object.keys(updates)
+      })
       return { success: true }
     } catch (error) {
       if (error instanceof z.ZodError) {
         const messages = error.issues.map(formatZodIssue)
-        return { success: false, error: `配置验证失败:\n${messages.join('\n')}` }
+        log.error('Configuration update validation failed', {
+          configPath: this.configPath,
+          errors: messages
+        })
+        return { success: false, error: `配置验证失败：\n${messages.join('\n')}` }
       }
+      log.error('Failed to update configuration', {
+        configPath: this.configPath,
+        error
+      })
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
   }

@@ -6,7 +6,7 @@
  */
 
 import { create, type IDatabaseService } from './index'
-import { createLogger } from '../logger'
+import { createLogger, run, getRequestId, trackDuration } from '../logger'
 
 const log = createLogger('MaterialsTypeToBeDeletedDAO')
 
@@ -87,14 +87,20 @@ export class MaterialsTypeToBeDeletedDAO {
         ORDER BY ManagerName, MaterialName
       `
 
-      const result = await dbService.query(sqlString)
-      return result.rows.map((row) => ({
+      const result = await trackDuration(async () => await dbService.query(sqlString), {
+        operationName: 'MaterialsTypeToBeDeletedDAO.getAllMaterials',
+        context: { tableName, operationType: 'SELECT' }
+      })
+      return result.result.rows.map((row) => ({
         id: row.ID as number,
         materialName: row.MaterialName as string,
         managerName: row.ManagerName as string
       }))
     } catch (error) {
       log.error('Get all materials error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return []
@@ -120,14 +126,23 @@ export class MaterialsTypeToBeDeletedDAO {
         ORDER BY MaterialName
       `
 
-      const result = await dbService.query(sqlString, [managerName])
-      return result.rows.map((row) => ({
+      const result = await trackDuration(
+        async () => await dbService.query(sqlString, [managerName]),
+        {
+          operationName: 'MaterialsTypeToBeDeletedDAO.getMaterialsByManager',
+          context: { tableName, operationType: 'SELECT' }
+        }
+      )
+      return result.result.rows.map((row) => ({
         id: row.ID as number,
         materialName: row.MaterialName as string,
         managerName: row.ManagerName as string
       }))
     } catch (error) {
       log.error('Get materials by manager error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return []
@@ -150,10 +165,16 @@ export class MaterialsTypeToBeDeletedDAO {
         ORDER BY ManagerName
       `
 
-      const result = await dbService.query(sqlString)
-      return result.rows.map((row) => row.ManagerName as string).filter(Boolean)
+      const result = await trackDuration(async () => await dbService.query(sqlString), {
+        operationName: 'MaterialsTypeToBeDeletedDAO.getManagers',
+        context: { tableName, operationType: 'SELECT' }
+      })
+      return result.result.rows.map((row) => row.ManagerName as string).filter(Boolean)
     } catch (error) {
       log.error('Get managers error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return []
@@ -170,7 +191,11 @@ export class MaterialsTypeToBeDeletedDAO {
    */
   async upsertMaterial(materialName: string, managerName: string): Promise<boolean> {
     if (!materialName || !materialName.trim()) {
-      log.error('MaterialName cannot be empty')
+      log.error('MaterialName cannot be empty', {
+        tableName: this.getTableName(),
+        operationType: 'UPSERT',
+        requestId: getRequestId()
+      })
       return false
     }
 
@@ -182,7 +207,6 @@ export class MaterialsTypeToBeDeletedDAO {
       const isSqlServer = dbService.type === 'sqlserver'
 
       if (isSqlServer) {
-        // SQL Server MERGE statement
         const sqlString = `
           MERGE ${tableName} AS target
           USING (VALUES (@p0, @p1)) AS source (MaterialName, ManagerName)
@@ -191,21 +215,29 @@ export class MaterialsTypeToBeDeletedDAO {
           WHEN NOT MATCHED THEN INSERT (MaterialName, ManagerName) VALUES (source.MaterialName, source.ManagerName);
         `
 
-        await dbService.query(sqlString, [name, manager])
+        await trackDuration(async () => await dbService.query(sqlString, [name, manager]), {
+          operationName: 'MaterialsTypeToBeDeletedDAO.upsertMaterial',
+          context: { tableName, operationType: 'MERGE' }
+        })
       } else {
-        // MySQL ON DUPLICATE KEY UPDATE
         const sqlString = `
           INSERT INTO ${tableName} (MaterialName, ManagerName)
           VALUES (?, ?)
           ON DUPLICATE KEY UPDATE ManagerName = VALUES(ManagerName)
         `
 
-        await dbService.query(sqlString, [name, manager])
+        await trackDuration(async () => await dbService.query(sqlString, [name, manager]), {
+          operationName: 'MaterialsTypeToBeDeletedDAO.upsertMaterial',
+          context: { tableName, operationType: 'INSERT' }
+        })
       }
 
       return true
     } catch (error) {
       log.error('Upsert material error', {
+        tableName: this.getTableName(),
+        operationType: 'UPSERT',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return false
@@ -247,10 +279,16 @@ export class MaterialsTypeToBeDeletedDAO {
         params = [name]
       }
 
-      const result = await dbService.query(sqlString, params)
-      return result.rowCount > 0
+      const result = await trackDuration(async () => await dbService.query(sqlString, params), {
+        operationName: 'MaterialsTypeToBeDeletedDAO.deleteMaterial',
+        context: { tableName, operationType: 'DELETE' }
+      })
+      return result.result.rowCount > 0
     } catch (error) {
       log.error('Delete material error', {
+        tableName: this.getTableName(),
+        operationType: 'DELETE',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return false
@@ -284,29 +322,46 @@ export class MaterialsTypeToBeDeletedDAO {
           SET MaterialName = @p0, ManagerName = @p1
           WHERE MaterialName = @p2 AND ManagerName = @p3
         `
-        const result = await dbService.query(sqlString, [
-          newName.trim(),
-          newManager.trim(),
-          oldName.trim(),
-          oldManager.trim()
-        ])
-        return result.rowCount > 0
+        const result = await trackDuration(
+          async () =>
+            await dbService.query(sqlString, [
+              newName.trim(),
+              newManager.trim(),
+              oldName.trim(),
+              oldManager.trim()
+            ]),
+          {
+            operationName: 'MaterialsTypeToBeDeletedDAO.updateMaterial',
+            context: { tableName, operationType: 'UPDATE' }
+          }
+        )
+        return result.result.rowCount > 0
       } else {
         const sqlString = `
           UPDATE ${tableName}
           SET MaterialName = ?, ManagerName = ?
           WHERE MaterialName = ? AND ManagerName = ?
         `
-        const result = await dbService.query(sqlString, [
-          newName.trim(),
-          newManager.trim(),
-          oldName.trim(),
-          oldManager.trim()
-        ])
-        return result.rowCount > 0
+        const result = await trackDuration(
+          async () =>
+            await dbService.query(sqlString, [
+              newName.trim(),
+              newManager.trim(),
+              oldName.trim(),
+              oldManager.trim()
+            ]),
+          {
+            operationName: 'MaterialsTypeToBeDeletedDAO.updateMaterial',
+            context: { tableName, operationType: 'UPDATE' }
+          }
+        )
+        return result.result.rowCount > 0
       }
     } catch (error) {
       log.error('Update material error', {
+        tableName: this.getTableName(),
+        operationType: 'UPDATE',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return false
@@ -323,9 +378,24 @@ export class MaterialsTypeToBeDeletedDAO {
   async upsertBatch(
     request: MaterialTypeBatchRequest
   ): Promise<{ total: number; success: number; failed: number }> {
+    const batchId = getRequestId() || `batch-${Date.now()}`
     const stats = { total: 0, success: 0, failed: 0 }
 
     try {
+      const tableName = this.getTableName()
+      const totalOperations =
+        request.toInsert.length + request.toUpdate.length + request.toDelete.length
+
+      log.info('Batch upsert started', {
+        tableName,
+        operationType: 'BATCH',
+        requestId: batchId,
+        totalOperations,
+        inserts: request.toInsert.length,
+        updates: request.toUpdate.length,
+        deletes: request.toDelete.length
+      })
+
       // Process inserts
       for (const record of request.toInsert) {
         stats.total++
@@ -355,9 +425,24 @@ export class MaterialsTypeToBeDeletedDAO {
         else stats.failed++
       }
 
+      log.info('Batch upsert completed', {
+        tableName,
+        operationType: 'BATCH',
+        requestId: batchId,
+        success: stats.success,
+        failed: stats.failed,
+        total: stats.total
+      })
+
       return stats
     } catch (error) {
       log.error('Batch upsert error', {
+        tableName: this.getTableName(),
+        operationType: 'BATCH',
+        requestId: batchId,
+        total: stats.total,
+        success: stats.success,
+        failed: stats.failed,
         error: error instanceof Error ? error.message : String(error)
       })
       return stats

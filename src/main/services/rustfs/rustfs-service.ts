@@ -15,7 +15,7 @@ import {
   type GetObjectCommandInput,
   type DeleteObjectCommandInput
 } from '@aws-sdk/client-s3'
-import { createLogger } from '../logger'
+import { createLogger, run, trackDuration } from '../logger'
 import type { RustfsConfig } from '../../types/config.schema'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -77,6 +77,7 @@ export class RustfsService {
     try {
       // Validate configuration
       if (!this.config.enabled) {
+        log.warn('RustFS upload skipped - disabled in config', { filePath, key })
         return {
           success: false,
           key,
@@ -86,6 +87,7 @@ export class RustfsService {
 
       // Check if file exists
       if (!fs.existsSync(filePath)) {
+        log.warn('RustFS upload skipped - file not found', { filePath, key })
         return {
           success: false,
           key,
@@ -103,7 +105,9 @@ export class RustfsService {
         filePath,
         key,
         contentType: mimeType,
-        size: fileContent.length
+        fileSize: fileContent.length,
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
       })
 
       const input: PutObjectCommandInput = {
@@ -116,9 +120,12 @@ export class RustfsService {
       const command = new PutObjectCommand(input)
       const response = await this.client.send(command)
 
-      log.info('File uploaded successfully', {
+      log.info('File uploaded successfully to RustFS', {
         key,
-        etag: response.ETag
+        fileSize: fileContent.length,
+        etag: response.ETag,
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
       })
 
       return {
@@ -131,7 +138,9 @@ export class RustfsService {
       log.error('Failed to upload file to RustFS', {
         filePath,
         key,
-        error: errorMessage
+        error: errorMessage,
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
       })
 
       return {
@@ -151,6 +160,10 @@ export class RustfsService {
   async uploadString(content: string, key: string, contentType?: string): Promise<UploadResult> {
     try {
       if (!this.config.enabled) {
+        log.warn('RustFS string upload skipped - disabled in config', {
+          key,
+          endpoint: this.config.endpoint
+        })
         return {
           success: false,
           key,
@@ -163,7 +176,9 @@ export class RustfsService {
       log.info('Uploading string content to RustFS', {
         key,
         contentType: mimeType,
-        size: content.length
+        fileSize: content.length,
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
       })
 
       const input: PutObjectCommandInput = {
@@ -176,9 +191,12 @@ export class RustfsService {
       const command = new PutObjectCommand(input)
       const response = await this.client.send(command)
 
-      log.info('String content uploaded successfully', {
+      log.info('String content uploaded successfully to RustFS', {
         key,
-        etag: response.ETag
+        fileSize: content.length,
+        etag: response.ETag,
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
       })
 
       return {
@@ -190,7 +208,9 @@ export class RustfsService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown upload error'
       log.error('Failed to upload string to RustFS', {
         key,
-        error: errorMessage
+        error: errorMessage,
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
       })
 
       return {
@@ -208,6 +228,10 @@ export class RustfsService {
   async downloadFile(key: string): Promise<DownloadResult> {
     try {
       if (!this.config.enabled) {
+        log.warn('RustFS download skipped - disabled in config', {
+          key,
+          endpoint: this.config.endpoint
+        })
         return {
           success: false,
           content: Buffer.alloc(0),
@@ -215,7 +239,11 @@ export class RustfsService {
         }
       }
 
-      log.info('Downloading file from RustFS', { key })
+      log.info('Downloading file from RustFS', {
+        key,
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
+      })
 
       const input: GetObjectCommandInput = {
         Bucket: this.config.bucket,
@@ -232,9 +260,11 @@ export class RustfsService {
 
       const content = Buffer.concat(chunks)
 
-      log.info('File downloaded successfully', {
+      log.info('File downloaded successfully from RustFS', {
         key,
-        size: content.length
+        fileSize: content.length,
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
       })
 
       return {
@@ -245,7 +275,9 @@ export class RustfsService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown download error'
       log.error('Failed to download file from RustFS', {
         key,
-        error: errorMessage
+        error: errorMessage,
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
       })
 
       return {
@@ -263,13 +295,21 @@ export class RustfsService {
   async deleteFile(key: string): Promise<{ success: boolean; error?: string }> {
     try {
       if (!this.config.enabled) {
+        log.warn('RustFS delete skipped - disabled in config', {
+          key,
+          endpoint: this.config.endpoint
+        })
         return {
           success: false,
           error: 'RustFS is not enabled in configuration'
         }
       }
 
-      log.info('Deleting file from RustFS', { key })
+      log.info('Deleting file from RustFS', {
+        key,
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
+      })
 
       const input: DeleteObjectCommandInput = {
         Bucket: this.config.bucket,
@@ -279,7 +319,11 @@ export class RustfsService {
       const command = new DeleteObjectCommand(input)
       await this.client.send(command)
 
-      log.info('File deleted successfully', { key })
+      log.info('File deleted successfully from RustFS', {
+        key,
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
+      })
 
       return {
         success: true
@@ -288,7 +332,9 @@ export class RustfsService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown delete error'
       log.error('Failed to delete file from RustFS', {
         key,
-        error: errorMessage
+        error: errorMessage,
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
       })
 
       return {
@@ -341,7 +387,8 @@ export class RustfsService {
     try {
       log.info('Testing RustFS connection', {
         endpoint: this.config.endpoint,
-        bucket: this.config.bucket
+        bucket: this.config.bucket,
+        region: this.config.region
       })
 
       // Try to list objects in the bucket (head bucket operation)
@@ -354,7 +401,10 @@ export class RustfsService {
       const command = new ListObjectsV2Command(input)
       await this.client.send(command)
 
-      log.info('RustFS connection test successful')
+      log.info('RustFS connection test successful', {
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
+      })
 
       return {
         success: true,
@@ -363,7 +413,9 @@ export class RustfsService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown connection error'
       log.error('RustFS connection test failed', {
-        error: errorMessage
+        error: errorMessage,
+        endpoint: this.config.endpoint,
+        bucket: this.config.bucket
       })
 
       return {

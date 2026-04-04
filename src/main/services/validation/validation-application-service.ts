@@ -1,7 +1,7 @@
 import { DiscreteMaterialPlanDAO } from '../database/discrete-material-plan-dao'
 import { MaterialsToBeDeletedDAO } from '../database/materials-to-be-deleted-dao'
 import { SqlServerService } from '../database/sql-server'
-import { createLogger } from '../logger'
+import { createLogger, withRequestContext, trackDuration, getRequestId } from '../logger'
 import type {
   MaterialRecordSummary,
   ValidationRequest,
@@ -30,109 +30,202 @@ export class ValidationApplicationService {
     userInfo: UserInfo,
     senderId: number
   ): Promise<ValidationResponse> {
-    let dbService: ValidationDatabaseService | null = null
+    return withRequestContext(
+      async () => {
+        const requestId = getRequestId()
+        let dbService: ValidationDatabaseService | null = null
 
-    try {
-      const isAdmin = userInfo.userType === 'Admin'
-      const username = userInfo.username
+        try {
+          const isAdmin = userInfo.userType === 'Admin'
+          const username = userInfo.username
 
-      log.info('Starting validation', { mode: request.mode, user: username, isAdmin })
+          log.info('Starting validation workflow', {
+            mode: request.mode,
+            useSharedProductionIds: request.useSharedProductionIds,
+            userId: userInfo.id,
+            username,
+            isAdmin,
+            requestId
+          })
 
-      dbService = await createValidationDatabaseService()
+          // Track data query duration
+          const dataQueryResult = await trackDuration(
+            async () => {
+              dbService = await createValidationDatabaseService()
 
-      let sourceNumbers: string[] | null = null
+              let sourceNumbers: string[] | null = null
 
-      if (request.mode === 'database_filtered') {
-        if (request.useSharedProductionIds) {
-          const sharedIds = sharedProductionIdsStore.get(senderId)
-          log.info(`Using ${sharedIds.length} shared Production IDs`)
+              if (request.mode === 'database_filtered') {
+                if (request.useSharedProductionIds) {
+                  const sharedIds = sharedProductionIdsStore.get(senderId)
+                  log.info(`Using ${sharedIds.length} shared Production IDs`, {
+                    userId: userInfo.id,
+                    mode: request.mode,
+                    useSharedProductionIds: true
+                  })
 
-          if (sharedIds.length === 0) {
-            return this.emptyFailure(
-              '没有可用的共享 Production ID。请在数据提取页面输入 Production ID。'
-            )
+                  if (sharedIds.length === 0) {
+                    return {
+                      sourceNumbers: null,
+                      failure: this.emptyFailure(
+                        '没有可用的共享 Production ID。请在数据提取页面输入 Production ID。'
+                      )
+                    }
+                  }
+
+                  sourceNumbers = await getSourceNumbersFromInputs(sharedIds, dbService)
+                  log.info(
+                    `Got ${sourceNumbers.length} source numbers from shared Production IDs`,
+                    {
+                      userId: userInfo.id,
+                      sourceCount: sourceNumbers.length
+                    }
+                  )
+
+                  if (sourceNumbers.length === 0) {
+                    return {
+                      sourceNumbers: null,
+                      failure: this.emptyFailure(
+                        '共享的 Production ID 没有找到对应的订单数据。请确保在数据提取页面输入了有效的 Production ID 并成功获取了订单数据。'
+                      )
+                    }
+                  }
+                } else if (request.productionIdFile) {
+                  const inputs = readProductionIds(request.productionIdFile)
+                  log.info(`Read ${inputs.length} inputs from file`, {
+                    userId: userInfo.id,
+                    fileMode: !request.useSharedProductionIds
+                  })
+
+                  sourceNumbers = await getSourceNumbersFromInputs(inputs, dbService)
+                  log.info(`Got ${sourceNumbers.length} source numbers`, {
+                    userId: userInfo.id,
+                    sourceCount: sourceNumbers.length
+                  })
+
+                  if (sourceNumbers.length === 0) {
+                    return {
+                      sourceNumbers: null,
+                      failure: this.emptyFailure(
+                        '文件中的 Production ID 没有找到对应的订单数据。请检查 Production ID 是否正确，或确保数据库中有对应的订单数据。'
+                      )
+                    }
+                  }
+                }
+              }
+
+              const materialDao = new DiscreteMaterialPlanDAO()
+              let materialRecords: any[] = []
+
+              if (request.mode === 'database_full') {
+                materialRecords = await materialDao.queryAllDistinctByMaterialCode()
+              } else if (sourceNumbers && sourceNumbers.length > 0) {
+                materialRecords = await materialDao.queryBySourceNumbersDistinct(sourceNumbers)
+              }
+
+              if (materialRecords.length === 0) {
+                return {
+                  sourceNumbers: null,
+                  failure: this.emptyFailure(
+                    '未找到物料记录。请检查数据库中是否有对应订单的物料数据。'
+                  )
+                }
+              }
+
+              return { sourceNumbers, materialRecords, failure: null }
+            },
+            {
+              operationName: 'data-query',
+              message: 'Data query phase',
+              context: { mode: request.mode, userId: userInfo.id }
+            }
+          )
+
+          // Check for failure
+          if (dataQueryResult.result.failure) {
+            return dataQueryResult.result.failure
           }
 
-          sourceNumbers = await getSourceNumbersFromInputs(sharedIds, dbService)
-          log.info(`Got ${sourceNumbers.length} source numbers from shared Production IDs`)
+          // Track validation duration
+          const validationResult = await trackDuration(
+            async () => {
+              const typeKeywords = await this.loadTypeKeywords(dbService!)
+              const markedCodes = await this.loadMarkedCodes(dbService!)
+              const results = this.buildValidationResults(
+                (dataQueryResult.result as any).materialRecords,
+                typeKeywords,
+                markedCodes,
+                { isAdmin, username }
+              )
 
-          if (sourceNumbers.length === 0) {
-            return this.emptyFailure(
-              '共享的 Production ID 没有找到对应的订单数据。请确保在数据提取页面输入了有效的 Production ID 并成功获取了订单数据。'
-            )
+              const markedCount = results.filter((result) => result.isMarkedForDeletion).length
+              const matchedCount = results.filter((result) => result.managerName).length
+
+              log.info('Validation completed', {
+                totalRecords: results.length,
+                matchedCount,
+                markedCount,
+                userId: userInfo.id,
+                mode: request.mode
+              })
+
+              return {
+                success: true,
+                results,
+                stats: {
+                  totalRecords: results.length,
+                  matchedCount,
+                  markedCount
+                }
+              }
+            },
+            {
+              operationName: 'validation-processing',
+              message: 'Validation processing phase',
+              context: { mode: request.mode, userId: userInfo.id }
+            }
+          )
+
+          return validationResult.result
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error'
+          log.error('Validation workflow failed', {
+            error: message,
+            mode: request.mode,
+            useSharedProductionIds: request.useSharedProductionIds,
+            userId: userInfo.id,
+            username: userInfo.username,
+            requestId
+          })
+          return {
+            success: false,
+            error: `Validation failed: ${message}`
           }
-        } else if (request.productionIdFile) {
-          const inputs = readProductionIds(request.productionIdFile)
-          log.info(`Read ${inputs.length} inputs from file`)
-
-          sourceNumbers = await getSourceNumbersFromInputs(inputs, dbService)
-          log.info(`Got ${sourceNumbers.length} source numbers`)
-
-          if (sourceNumbers.length === 0) {
-            return this.emptyFailure(
-              '文件中的 Production ID 没有找到对应的订单数据。请检查 Production ID 是否正确，或确保数据库中有对应的订单数据。'
-            )
+        } finally {
+          if (dbService) {
+            await this.disconnectQuietly(dbService)
           }
         }
-      }
-
-      const materialDao = new DiscreteMaterialPlanDAO()
-      let materialRecords: any[] = []
-
-      if (request.mode === 'database_full') {
-        materialRecords = await materialDao.queryAllDistinctByMaterialCode()
-      } else if (sourceNumbers && sourceNumbers.length > 0) {
-        materialRecords = await materialDao.queryBySourceNumbersDistinct(sourceNumbers)
-      }
-
-      if (materialRecords.length === 0) {
-        return this.emptyFailure('未找到物料记录。请检查数据库中是否有对应订单的物料数据。')
-      }
-
-      const typeKeywords = await this.loadTypeKeywords(dbService)
-      const markedCodes = await this.loadMarkedCodes(dbService)
-      const results = this.buildValidationResults(materialRecords, typeKeywords, markedCodes, {
-        isAdmin,
-        username
-      })
-
-      const markedCount = results.filter((result) => result.isMarkedForDeletion).length
-      const matchedCount = results.filter((result) => result.managerName).length
-
-      return {
-        success: true,
-        results,
-        stats: {
-          totalRecords: results.length,
-          matchedCount,
-          markedCount
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      log.error('Validation error', { error: message })
-      return {
-        success: false,
-        error: `Validation failed: ${message}`
-      }
-    } finally {
-      if (dbService) {
-        await this.disconnectQuietly(dbService)
-      }
-    }
+      },
+      { userId: userInfo.id.toString(), operation: 'validate' }
+    )
   }
 
   async getMaterialsByManager(managerName: string): Promise<MaterialRecordSummary[]> {
+    log.info(`Getting materials by manager: ${managerName}`)
     const dao = new MaterialsToBeDeletedDAO()
     const materials = await dao.getMaterialsByManager(managerName)
     const markedCodes = await dao.getAllMaterialCodes()
+    log.info(`Found ${materials.length} materials for manager: ${managerName}`)
     return this.enrichMaterials(materials, markedCodes)
   }
 
   async getAllMaterials(): Promise<MaterialRecordSummary[]> {
+    log.info('Getting all materials')
     const dao = new MaterialsToBeDeletedDAO()
     const materials = await dao.getAllRecords()
     const markedCodes = await dao.getAllMaterialCodes()
+    log.info(`Found ${materials.length} total materials`)
     return this.enrichMaterials(materials, markedCodes)
   }
 
@@ -145,43 +238,70 @@ export class ValidationApplicationService {
     materialCodes?: string[]
     error?: string
   }> {
-    let dbService: ValidationDatabaseService | null = null
+    return withRequestContext(
+      async () => {
+        const requestId = getRequestId()
+        let dbService: ValidationDatabaseService | null = null
 
-    try {
-      const isAdmin = userInfo.userType === 'Admin'
-      const username = userInfo.username
-      log.info(`User: ${username}, isAdmin: ${isAdmin}`)
+        try {
+          const isAdmin = userInfo.userType === 'Admin'
+          const username = userInfo.username
+          log.info('Getting cleaner data', {
+            userId: userInfo.id,
+            username,
+            isAdmin,
+            requestId
+          })
 
-      dbService = await createValidationDatabaseService()
+          dbService = await createValidationDatabaseService()
 
-      const sharedIds = sharedProductionIdsStore.get(senderId)
-      let orderNumbers: string[] = []
+          const sharedIds = sharedProductionIdsStore.get(senderId)
+          let orderNumbers: string[] = []
 
-      if (sharedIds.length > 0) {
-        log.info(`Using ${sharedIds.length} shared Production IDs`)
-        orderNumbers = await getSourceNumbersFromInputs(sharedIds, dbService)
-        log.info(`Got ${orderNumbers.length} order numbers`)
-      }
+          if (sharedIds.length > 0) {
+            log.info(`Using ${sharedIds.length} shared Production IDs`, {
+              userId: userInfo.id,
+              sharedCount: sharedIds.length
+            })
+            orderNumbers = await getSourceNumbersFromInputs(sharedIds, dbService)
+            log.info(`Got ${orderNumbers.length} order numbers`, {
+              userId: userInfo.id,
+              orderCount: orderNumbers.length
+            })
+          }
 
-      const materialCodes = await this.loadMaterialCodesForCleaner(dbService, username, isAdmin)
+          const materialCodes = await this.loadMaterialCodesForCleaner(dbService, username, isAdmin)
+          log.info('Cleaner data retrieved', {
+            userId: userInfo.id,
+            orderCount: orderNumbers.length,
+            materialCodeCount: materialCodes.length
+          })
 
-      return {
-        success: true,
-        orderNumbers,
-        materialCodes
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      log.error('CleanerData error', { error: message })
-      return {
-        success: false,
-        error: `获取清理数据失败：${message}`
-      }
-    } finally {
-      if (dbService) {
-        await this.disconnectQuietly(dbService)
-      }
-    }
+          return {
+            success: true,
+            orderNumbers,
+            materialCodes
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error'
+          log.error('CleanerData error', {
+            error: message,
+            userId: userInfo.id,
+            username: userInfo.username,
+            requestId
+          })
+          return {
+            success: false,
+            error: `获取清理数据失败：${message}`
+          }
+        } finally {
+          if (dbService) {
+            await this.disconnectQuietly(dbService)
+          }
+        }
+      },
+      { userId: userInfo.id.toString(), operation: 'getCleanerData' }
+    )
   }
 
   private emptyFailure(error: string): ValidationResponse {
@@ -291,6 +411,8 @@ export class ValidationApplicationService {
       const detailTableName = getValidationTableName('dbo_DiscreteMaterialPlanData')
       const enrichedMaterials: MaterialRecordSummary[] = []
 
+      log.info(`Enriching ${materials.length} materials with details`)
+
       for (const material of materials) {
         const detailResult = await this.queryMaterialDetail(
           dbService,
@@ -308,6 +430,11 @@ export class ValidationApplicationService {
           isMarked: markedCodes.has(material.materialCode)
         })
       }
+
+      log.info(`Material enrichment completed`, {
+        totalMaterials: materials.length,
+        enrichedCount: enrichedMaterials.length
+      })
 
       return enrichedMaterials
     } finally {
@@ -363,7 +490,11 @@ export class ValidationApplicationService {
         `
       )
       const materialCodes = result.rows.map((row) => row.MaterialCode as string).filter(Boolean)
-      log.info(`Admin user: got ${materialCodes.length} materials`)
+      log.info(`Admin user: got ${materialCodes.length} materials`, {
+        userId: username,
+        isAdmin: true,
+        materialCount: materialCodes.length
+      })
       return materialCodes
     }
 
@@ -382,7 +513,11 @@ export class ValidationApplicationService {
       const materialCodes = result.rows
         .map((row: Record<string, unknown>) => row.MaterialCode as string)
         .filter(Boolean)
-      log.info(`Regular user: got ${materialCodes.length} materials`)
+      log.info(`Regular user: got ${materialCodes.length} materials`, {
+        userId: username,
+        isAdmin: false,
+        materialCount: materialCodes.length
+      })
       return materialCodes
     }
 
@@ -395,7 +530,11 @@ export class ValidationApplicationService {
       [username]
     )
     const materialCodes = result.rows.map((row) => row.MaterialCode as string).filter(Boolean)
-    log.info(`Regular user: got ${materialCodes.length} materials`)
+    log.info(`Regular user: got ${materialCodes.length} materials`, {
+      userId: username,
+      isAdmin: false,
+      materialCount: materialCodes.length
+    })
     return materialCodes
   }
 

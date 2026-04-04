@@ -9,7 +9,7 @@
  */
 
 import { create, type IDatabaseService } from './index'
-import { createLogger } from '../logger'
+import { createLogger, run, getRequestId, trackDuration } from '../logger'
 
 const log = createLogger('DiscreteMaterialPlanDAO')
 
@@ -138,11 +138,17 @@ export class DiscreteMaterialPlanDAO {
       const tableName = this.getTableName()
 
       const sqlString = `SELECT * FROM ${tableName}`
-      const result = await dbService.query(sqlString)
+      const result = await trackDuration(async () => await dbService.query(sqlString), {
+        operationName: 'DiscreteMaterialPlanDAO.queryAll',
+        context: { tableName, operationType: 'SELECT' }
+      })
 
-      return result.rows
+      return result.result.rows
     } catch (error) {
       log.error('Query all error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return []
@@ -182,10 +188,16 @@ export class DiscreteMaterialPlanDAO {
         WHERE rn = 1
       `
 
-      const result = await dbService.query(sqlString)
-      return result.rows
+      const result = await trackDuration(async () => await dbService.query(sqlString), {
+        operationName: 'DiscreteMaterialPlanDAO.queryAllDistinctByMaterialCode',
+        context: { tableName: this.getTableName(), operationType: 'SELECT' }
+      })
+      return result.result.rows
     } catch (error) {
       log.error('Query all distinct by material code error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return []
@@ -221,13 +233,25 @@ export class DiscreteMaterialPlanDAO {
           WHERE SourceNumber IN (${placeholders})
         `
 
-        const result = await dbService.query(sqlString, batch)
-        allResults.push(...result.rows)
+        const result = await trackDuration(async () => await dbService.query(sqlString, batch), {
+          operationName: 'DiscreteMaterialPlanDAO.queryBySourceNumbers',
+          context: {
+            tableName,
+            operationType: 'SELECT',
+            batchNumber: Math.floor(i / batchSize) + 1,
+            batchSize: batch.length
+          }
+        })
+        allResults.push(...result.result.rows)
       }
 
       return allResults
     } catch (error) {
       log.error('Query by source numbers error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
+        recordCount: sourceNumbers.length,
         error: error instanceof Error ? error.message : String(error)
       })
       return []
@@ -280,13 +304,25 @@ export class DiscreteMaterialPlanDAO {
           WHERE rn = 1
         `
 
-        const result = await dbService.query(sqlString, batch)
-        allResults.push(...result.rows)
+        const result = await trackDuration(async () => await dbService.query(sqlString, batch), {
+          operationName: 'DiscreteMaterialPlanDAO.queryBySourceNumbersDistinct',
+          context: {
+            tableName,
+            operationType: 'SELECT',
+            batchNumber: Math.floor(i / batchSize) + 1,
+            batchSize: batch.length
+          }
+        })
+        allResults.push(...result.result.rows)
       }
 
       return allResults
     } catch (error) {
       log.error('Query by source numbers distinct error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
+        recordCount: sourceNumbers.length,
         error: error instanceof Error ? error.message : String(error)
       })
       return []
@@ -311,10 +347,19 @@ export class DiscreteMaterialPlanDAO {
         WHERE SourceNumber = ${placeholder}
       `
 
-      const result = await dbService.query(sqlString, [sourceNumber])
-      return result.rows
+      const result = await trackDuration(
+        async () => await dbService.query(sqlString, [sourceNumber]),
+        {
+          operationName: 'DiscreteMaterialPlanDAO.queryBySourceNumber',
+          context: { tableName, operationType: 'SELECT' }
+        }
+      )
+      return result.result.rows
     } catch (error) {
       log.error('Query by source number error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return []
@@ -341,10 +386,19 @@ export class DiscreteMaterialPlanDAO {
         WHERE PlanNumber = ${placeholder}
       `
 
-      const result = await dbService.query(sqlString, [planNumber])
-      return result.rows
+      const result = await trackDuration(
+        async () => await dbService.query(sqlString, [planNumber]),
+        {
+          operationName: 'DiscreteMaterialPlanDAO.queryByPlanNumber',
+          context: { tableName, operationType: 'SELECT' }
+        }
+      )
+      return result.result.rows
     } catch (error) {
       log.error('Query by plan number error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return []
@@ -378,13 +432,25 @@ export class DiscreteMaterialPlanDAO {
           WHERE PlanNumber IN (${placeholders})
         `
 
-        const result = await dbService.query(sqlString, batch)
-        allResults.push(...result.rows)
+        const result = await trackDuration(async () => await dbService.query(sqlString, batch), {
+          operationName: 'DiscreteMaterialPlanDAO.queryByPlanNumbers',
+          context: {
+            tableName,
+            operationType: 'SELECT',
+            batchNumber: Math.floor(i / batchSize) + 1,
+            batchSize: batch.length
+          }
+        })
+        allResults.push(...result.result.rows)
       }
 
       return allResults
     } catch (error) {
       log.error('Query by plan numbers error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
+        recordCount: planNumbers.length,
         error: error instanceof Error ? error.message : String(error)
       })
       return []
@@ -404,18 +470,31 @@ export class DiscreteMaterialPlanDAO {
       return 0
     }
 
+    const batchId = getRequestId() || `delete-${Date.now()}`
+    let totalDeleted = 0
+
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
       const isSqlServer = dbService.type === 'sqlserver'
       const batchSize = 2000
-      let totalDeleted = 0
 
       // Get unique source numbers
       const uniqueSourceNumbers = [...new Set(sourceNumbers.filter(Boolean))]
+      const totalBatches = Math.ceil(uniqueSourceNumbers.length / batchSize)
+
+      log.info('Starting batch delete operation', {
+        tableName: this.getTableName(),
+        operationType: 'DELETE',
+        requestId: batchId,
+        totalRecords: uniqueSourceNumbers.length,
+        batchSize,
+        totalBatches
+      })
 
       for (let i = 0; i < uniqueSourceNumbers.length; i += batchSize) {
         const batch = uniqueSourceNumbers.slice(i, i + batchSize)
+        const batchNumber = Math.floor(i / batchSize) + 1
         const placeholders = this.buildPlaceholders(batch.length, isSqlServer)
 
         const sqlString = `
@@ -423,16 +502,32 @@ export class DiscreteMaterialPlanDAO {
           WHERE SourceNumber IN (${placeholders})
         `
 
-        const result = await dbService.query(sqlString, batch)
-        totalDeleted += result.rowCount || 0
+        const result = await trackDuration(async () => await dbService.query(sqlString, batch), {
+          operationName: 'DiscreteMaterialPlanDAO.deleteBySourceNumbers',
+          context: {
+            tableName,
+            operationType: 'DELETE',
+            batchId,
+            batchNumber,
+            totalBatches,
+            batchSize: batch.length
+          }
+        })
+        const deletedCount = result.result.rowCount || 0
+        totalDeleted += deletedCount
 
         log.debug('Deleted batch', {
-          batch: i / batchSize + 1,
-          count: result.rowCount
+          batch: batchNumber,
+          totalBatches,
+          count: deletedCount,
+          batchId
         })
       }
 
       log.info('Deleted records by source numbers', {
+        tableName: this.getTableName(),
+        operationType: 'DELETE',
+        requestId: batchId,
         totalDeleted,
         sourceNumberCount: uniqueSourceNumbers.length
       })
@@ -440,6 +535,11 @@ export class DiscreteMaterialPlanDAO {
       return totalDeleted
     } catch (error) {
       log.error('Delete by source numbers error', {
+        tableName: this.getTableName(),
+        operationType: 'DELETE',
+        requestId: batchId,
+        totalDeleted,
+        recordCount: sourceNumbers.length,
         error: error instanceof Error ? error.message : String(error)
       })
       throw error
@@ -459,11 +559,13 @@ export class DiscreteMaterialPlanDAO {
       return 0
     }
 
+    const batchId = getRequestId() || `insert-${Date.now()}`
+    let totalInserted = 0
+
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
       const isSqlServer = dbService.type === 'sqlserver'
-      let totalInserted = 0
 
       // SQL Server has a limit of 2100 parameters per query
       // Each record has 28 columns, so max rows per batch = 2100 / 28 = 75
@@ -473,35 +575,61 @@ export class DiscreteMaterialPlanDAO {
       const effectiveBatchSize = isSqlServer
         ? Math.min(batchSize, Math.floor(sqlServerMaxParams / columnsPerRow))
         : batchSize
+      const totalBatches = Math.ceil(records.length / effectiveBatchSize)
 
-      log.info('Batch insert parameters', {
+      log.info('Batch insert started', {
+        tableName,
+        operationType: 'INSERT',
+        requestId: batchId,
         isSqlServer,
         dbType: dbService.type,
         columnsPerRow,
         effectiveBatchSize,
-        totalRecords: records.length
+        totalRecords: records.length,
+        totalBatches
       })
 
       // Process in batches
       for (let i = 0; i < records.length; i += effectiveBatchSize) {
         const batch = records.slice(i, i + effectiveBatchSize)
-        const inserted = await this.insertBatch(dbService, tableName, batch, isSqlServer)
+        const batchNumber = Math.floor(i / effectiveBatchSize) + 1
+
+        const inserted = await this.insertBatchWithTracking(
+          dbService,
+          tableName,
+          batch,
+          isSqlServer,
+          batchId,
+          batchNumber,
+          totalBatches
+        )
         totalInserted += inserted
 
         log.debug('Inserted batch', {
-          batch: Math.floor(i / effectiveBatchSize) + 1,
-          count: inserted
+          batch: batchNumber,
+          totalBatches,
+          count: inserted,
+          batchId
         })
       }
 
       log.info('Batch insert completed', {
+        tableName,
+        operationType: 'INSERT',
+        requestId: batchId,
         totalInserted,
-        batchSize: effectiveBatchSize
+        batchSize: effectiveBatchSize,
+        totalBatches
       })
 
       return totalInserted
     } catch (error) {
       log.error('Batch insert error', {
+        tableName: this.getTableName(),
+        operationType: 'INSERT',
+        requestId: batchId,
+        totalInserted,
+        recordCount: records.length,
         error: error instanceof Error ? error.message : String(error)
       })
       throw error
@@ -509,13 +637,16 @@ export class DiscreteMaterialPlanDAO {
   }
 
   /**
-   * Insert a single batch of records
+   * Insert a single batch of records with tracking
    */
-  private async insertBatch(
+  private async insertBatchWithTracking(
     dbService: IDatabaseService,
     tableName: string,
     records: MaterialPlanRecord[],
-    isSqlServer: boolean
+    isSqlServer: boolean,
+    batchId: string,
+    batchNumber: number,
+    totalBatches: number
   ): Promise<number> {
     if (records.length === 0) {
       return 0
@@ -567,8 +698,30 @@ export class DiscreteMaterialPlanDAO {
       VALUES ${rowPlaceholders.join(', ')}
     `
 
-    const result = await dbService.query(sqlString, values)
-    return result.rowCount || records.length
+    const result = await trackDuration(async () => await dbService.query(sqlString, values), {
+      operationName: 'DiscreteMaterialPlanDAO.insertBatch',
+      context: {
+        tableName,
+        operationType: 'INSERT',
+        batchId,
+        batchNumber,
+        totalBatches,
+        recordCount: records.length
+      }
+    })
+    return result.result.rowCount || records.length
+  }
+
+  /**
+   * Insert a single batch of records (legacy method - kept for compatibility)
+   */
+  private async insertBatch(
+    dbService: IDatabaseService,
+    tableName: string,
+    records: MaterialPlanRecord[],
+    isSqlServer: boolean
+  ): Promise<number> {
+    return this.insertBatchWithTracking(dbService, tableName, records, isSqlServer, 'unknown', 1, 1)
   }
 
   /**
@@ -660,11 +813,17 @@ export class DiscreteMaterialPlanDAO {
       const tableName = this.getTableName()
 
       const sqlString = `SELECT COUNT(*) as count FROM ${tableName}`
-      const result = await dbService.query(sqlString)
+      const result = await trackDuration(async () => await dbService.query(sqlString), {
+        operationName: 'DiscreteMaterialPlanDAO.countAll',
+        context: { tableName, operationType: 'SELECT' }
+      })
 
-      return result.rows.length > 0 ? (result.rows[0].count as number) : 0
+      return result.result.rows.length > 0 ? (result.result.rows[0].count as number) : 0
     } catch (error) {
       log.error('Count all error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return 0
@@ -689,10 +848,19 @@ export class DiscreteMaterialPlanDAO {
         WHERE PlanNumber = ${placeholder}
       `
 
-      const result = await dbService.query(sqlString, [planNumber])
-      return result.rows.length > 0 ? (result.rows[0].count as number) : 0
+      const result = await trackDuration(
+        async () => await dbService.query(sqlString, [planNumber]),
+        {
+          operationName: 'DiscreteMaterialPlanDAO.countByPlanNumber',
+          context: { tableName, operationType: 'SELECT' }
+        }
+      )
+      return result.result.rows.length > 0 ? (result.result.rows[0].count as number) : 0
     } catch (error) {
       log.error('Count by plan number error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return 0
@@ -725,8 +893,18 @@ export class DiscreteMaterialPlanDAO {
               AND MaterialName IS NOT NULL
           `
 
-          const result = await dbService.query(sqlString, batch)
-          allNames.push(...result.rows.map((row) => row.MaterialName as string).filter(Boolean))
+          const result = await trackDuration(async () => await dbService.query(sqlString, batch), {
+            operationName: 'DiscreteMaterialPlanDAO.getUniqueMaterialNames',
+            context: {
+              tableName,
+              operationType: 'SELECT',
+              batchNumber: Math.floor(i / batchSize) + 1,
+              batchSize: batch.length
+            }
+          })
+          allNames.push(
+            ...result.result.rows.map((row) => row.MaterialName as string).filter(Boolean)
+          )
         }
 
         return allNames
@@ -737,11 +915,18 @@ export class DiscreteMaterialPlanDAO {
           WHERE MaterialName IS NOT NULL
         `
 
-        const result = await dbService.query(sqlString)
-        return result.rows.map((row) => row.MaterialName as string).filter(Boolean)
+        const result = await trackDuration(async () => await dbService.query(sqlString), {
+          operationName: 'DiscreteMaterialPlanDAO.getUniqueMaterialNames',
+          context: { tableName, operationType: 'SELECT' }
+        })
+        return result.result.rows.map((row) => row.MaterialName as string).filter(Boolean)
       }
     } catch (error) {
       log.error('Get unique material names error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
+        recordCount: sourceNumbers?.length || 0,
         error: error instanceof Error ? error.message : String(error)
       })
       return []
@@ -767,10 +952,16 @@ export class DiscreteMaterialPlanDAO {
         FROM ${tableName}
       `
 
-      const result = await dbService.query(sqlString)
-      return result.rows.length > 0 ? result.rows[0] : {}
+      const result = await trackDuration(async () => await dbService.query(sqlString), {
+        operationName: 'DiscreteMaterialPlanDAO.getStatistics',
+        context: { tableName, operationType: 'SELECT' }
+      })
+      return result.result.rows.length > 0 ? result.result.rows[0] : {}
     } catch (error) {
       log.error('Get statistics error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return {}

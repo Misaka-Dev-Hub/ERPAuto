@@ -10,7 +10,7 @@
  */
 
 import { create, type IDatabaseService } from './index'
-import { createLogger } from '../logger'
+import { createLogger, run, getRequestId, trackDuration } from '../logger'
 import type {
   OperationHistoryRecord,
   BatchStats,
@@ -106,14 +106,30 @@ export class ExtractorOperationHistoryDAO {
     records: InsertBatchRecordInput[]
   ): Promise<boolean> {
     if (!records || records.length === 0) {
-      log.warn('No records to insert')
+      log.warn('No records to insert', {
+        batchId,
+        tableName: this.getTableName(),
+        requestId: getRequestId()
+      })
       return false
     }
+
+    const requestId = getRequestId() || `insert-${Date.now()}`
 
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
       const isSqlServer = dbService.type === 'sqlserver'
+
+      log.info('Batch records insertion started', {
+        tableName,
+        operationType: 'INSERT',
+        requestId,
+        batchId,
+        userId,
+        username,
+        recordCount: records.length
+      })
 
       for (const record of records) {
         try {
@@ -124,13 +140,20 @@ export class ExtractorOperationHistoryDAO {
               VALUES
                 (@p0, @p1, @p2, @p3, @p4, GETDATE(), 'pending')
             `
-            await dbService.query(sqlString, [
-              batchId,
-              userId,
-              username,
-              record.productionId || null,
-              record.orderNumber
-            ])
+            await trackDuration(
+              async () =>
+                await dbService.query(sqlString, [
+                  batchId,
+                  userId,
+                  username,
+                  record.productionId || null,
+                  record.orderNumber
+                ]),
+              {
+                operationName: 'ExtractorOperationHistoryDAO.insertBatchRecords',
+                context: { tableName, operationType: 'INSERT', batchId }
+              }
+            )
           } else {
             const sqlString = `
               INSERT INTO ${tableName}
@@ -138,16 +161,26 @@ export class ExtractorOperationHistoryDAO {
               VALUES
                 (?, ?, ?, ?, ?, NOW(), 'pending')
             `
-            await dbService.query(sqlString, [
-              batchId,
-              userId,
-              username,
-              record.productionId || null,
-              record.orderNumber
-            ])
+            await trackDuration(
+              async () =>
+                await dbService.query(sqlString, [
+                  batchId,
+                  userId,
+                  username,
+                  record.productionId || null,
+                  record.orderNumber
+                ]),
+              {
+                operationName: 'ExtractorOperationHistoryDAO.insertBatchRecords',
+                context: { tableName, operationType: 'INSERT', batchId }
+              }
+            )
           }
         } catch (error) {
           log.error('Error inserting individual record', {
+            tableName,
+            operationType: 'INSERT',
+            requestId,
             batchId,
             orderNumber: record.orderNumber,
             error: error instanceof Error ? error.message : String(error)
@@ -155,10 +188,21 @@ export class ExtractorOperationHistoryDAO {
         }
       }
 
-      log.info('Batch records inserted', { batchId, count: records.length })
+      log.info('Batch records inserted', {
+        tableName,
+        operationType: 'INSERT',
+        requestId,
+        batchId,
+        count: records.length
+      })
       return true
     } catch (error) {
       log.error('Insert batch records error', {
+        tableName: this.getTableName(),
+        operationType: 'INSERT',
+        requestId,
+        batchId,
+        recordCount: records.length,
         error: error instanceof Error ? error.message : String(error)
       })
       return false
@@ -186,12 +230,24 @@ export class ExtractorOperationHistoryDAO {
       `
       const params = [status, batchId]
 
-      await dbService.query(sqlString, params)
+      const result = await trackDuration(async () => await dbService.query(sqlString, params), {
+        operationName: 'ExtractorOperationHistoryDAO.updateBatchStatus',
+        context: { tableName, operationType: 'UPDATE', batchId }
+      })
 
-      log.info('Batch status updated', { batchId, status })
+      log.info('Batch status updated', {
+        tableName,
+        operationType: 'UPDATE',
+        requestId: getRequestId(),
+        batchId,
+        status
+      })
       return { success: true, updatedCount: 1 }
     } catch (error) {
       log.error('Update batch status error', {
+        tableName: this.getTableName(),
+        operationType: 'UPDATE',
+        requestId: getRequestId(),
         batchId,
         error: error instanceof Error ? error.message : String(error)
       })
@@ -244,11 +300,17 @@ export class ExtractorOperationHistoryDAO {
         params = [status, errorMessage || null, batchId, orderNumber]
       }
 
-      await dbService.query(sqlString, params)
+      await trackDuration(async () => await dbService.query(sqlString, params), {
+        operationName: 'ExtractorOperationHistoryDAO.updateRecordStatus',
+        context: { tableName, operationType: 'UPDATE', batchId }
+      })
 
       return true
     } catch (error) {
       log.error('Update record status error', {
+        tableName: this.getTableName(),
+        operationType: 'UPDATE',
+        requestId: getRequestId(),
         batchId,
         orderNumber,
         error: error instanceof Error ? error.message : String(error)
@@ -291,7 +353,6 @@ export class ExtractorOperationHistoryDAO {
         sqlString += isSqlServer ? ` WHERE UserId = @p0 ` : ` WHERE UserId = ? `
         params.push(userId)
       } else if (options?.usernames && options.usernames.length > 0) {
-        // Admin user filtering by multiple usernames using IN clause
         const placeholders = this.buildPlaceholders(options.usernames.length, isSqlServer)
         sqlString += ` WHERE Username IN (${placeholders}) `
         params.push(...options.usernames)
@@ -307,7 +368,6 @@ export class ExtractorOperationHistoryDAO {
         const safeOffset = options.offset !== undefined ? Math.floor(options.offset) : undefined
 
         if (isSqlServer) {
-          // SQL Server: use parameterized OFFSET/FETCH
           const offsetIndex = params.length
           if (safeOffset !== undefined) {
             params.push(safeOffset)
@@ -320,9 +380,6 @@ export class ExtractorOperationHistoryDAO {
             sqlString += ` OFFSET 0 ROWS FETCH NEXT @p${offsetIndex} ROWS ONLY`
           }
         } else {
-          // MySQL: embed validated integer values directly.
-          // connection.execute() uses binary protocol prepared statements,
-          // which do not reliably support ? placeholders in LIMIT/OFFSET clauses.
           if (safeOffset !== undefined) {
             sqlString += ` LIMIT ${safeLimit} OFFSET ${safeOffset}`
           } else {
@@ -331,9 +388,12 @@ export class ExtractorOperationHistoryDAO {
         }
       }
 
-      const result = await dbService.query(sqlString, params)
+      const result = await trackDuration(async () => await dbService.query(sqlString, params), {
+        operationName: 'ExtractorOperationHistoryDAO.getBatches',
+        context: { tableName, operationType: 'SELECT', userId }
+      })
 
-      return result.rows.map((row) => ({
+      return result.result.rows.map((row) => ({
         batchId: row.BatchId as string,
         userId: row.UserId as number,
         username: row.Username as string,
@@ -346,6 +406,10 @@ export class ExtractorOperationHistoryDAO {
       }))
     } catch (error) {
       log.error('Get batches error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
+        userId,
         error: error instanceof Error ? error.message : String(error)
       })
       return []
@@ -381,9 +445,12 @@ export class ExtractorOperationHistoryDAO {
         ORDER BY ID
       `
 
-      const result = await dbService.query(sqlString, [batchId])
+      const result = await trackDuration(async () => await dbService.query(sqlString, [batchId]), {
+        operationName: 'ExtractorOperationHistoryDAO.getBatchDetails',
+        context: { tableName, operationType: 'SELECT', batchId }
+      })
 
-      return result.rows.map((row) => ({
+      return result.result.rows.map((row) => ({
         id: row.ID as number,
         batchId: row.BatchId as string,
         userId: row.UserId as number,
@@ -397,6 +464,9 @@ export class ExtractorOperationHistoryDAO {
       }))
     } catch (error) {
       log.error('Get batch details error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         batchId,
         error: error instanceof Error ? error.message : String(error)
       })
@@ -432,13 +502,16 @@ export class ExtractorOperationHistoryDAO {
         GROUP BY BatchId, UserId, Username
       `
 
-      const result = await dbService.query(sqlString, [batchId])
+      const result = await trackDuration(async () => await dbService.query(sqlString, [batchId]), {
+        operationName: 'ExtractorOperationHistoryDAO.getBatchStats',
+        context: { tableName, operationType: 'SELECT', batchId }
+      })
 
-      if (result.rows.length === 0) {
+      if (result.result.rows.length === 0) {
         return null
       }
 
-      const row = result.rows[0]
+      const row = result.result.rows[0]
       return {
         batchId: row.BatchId as string,
         userId: row.UserId as number,
@@ -452,6 +525,9 @@ export class ExtractorOperationHistoryDAO {
       }
     } catch (error) {
       log.error('Get batch stats error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         batchId,
         error: error instanceof Error ? error.message : String(error)
       })
@@ -473,6 +549,8 @@ export class ExtractorOperationHistoryDAO {
     requestingUserId: number,
     isAdmin: boolean
   ): Promise<{ success: boolean; error?: string }> {
+    const requestId = getRequestId() || `delete-${Date.now()}`
+
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
@@ -497,12 +575,24 @@ export class ExtractorOperationHistoryDAO {
         WHERE BatchId = ${placeholder}
       `
 
-      const result = await dbService.query(sqlString, [batchId])
+      const result = await trackDuration(async () => await dbService.query(sqlString, [batchId]), {
+        operationName: 'ExtractorOperationHistoryDAO.deleteBatch',
+        context: { tableName, operationType: 'DELETE', batchId, requestingUserId }
+      })
 
-      log.info('Batch deleted', { batchId, rowCount: result.rowCount })
+      log.info('Batch deleted', {
+        tableName,
+        operationType: 'DELETE',
+        requestId,
+        batchId,
+        rowCount: result.result.rowCount
+      })
       return { success: true }
     } catch (error) {
       log.error('Delete batch error', {
+        tableName: this.getTableName(),
+        operationType: 'DELETE',
+        requestId,
         batchId,
         error: error instanceof Error ? error.message : String(error)
       })
@@ -530,10 +620,16 @@ export class ExtractorOperationHistoryDAO {
         WHERE UserId = ${placeholder}
       `
 
-      const result = await dbService.query(sqlString, [userId])
-      return result.rowCount
+      const result = await trackDuration(async () => await dbService.query(sqlString, [userId]), {
+        operationName: 'ExtractorOperationHistoryDAO.deleteByUser',
+        context: { tableName, operationType: 'DELETE', userId }
+      })
+      return result.result.rowCount
     } catch (error) {
       log.error('Delete by user error', {
+        tableName: this.getTableName(),
+        operationType: 'DELETE',
+        requestId: getRequestId(),
         userId,
         error: error instanceof Error ? error.message : String(error)
       })
@@ -561,10 +657,16 @@ export class ExtractorOperationHistoryDAO {
         WHERE BatchId = ${placeholder}
       `
 
-      const result = await dbService.query(sqlString, [batchId])
-      return result.rows.length > 0 && (result.rows[0].count as number) > 0
+      const result = await trackDuration(async () => await dbService.query(sqlString, [batchId]), {
+        operationName: 'ExtractorOperationHistoryDAO.batchExists',
+        context: { tableName, operationType: 'SELECT', batchId }
+      })
+      return result.result.rows.length > 0 && (result.result.rows[0].count as number) > 0
     } catch (error) {
       log.error('Batch exists error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         batchId,
         error: error instanceof Error ? error.message : String(error)
       })
@@ -595,16 +697,21 @@ export class ExtractorOperationHistoryDAO {
         sqlString += isSqlServer ? ` WHERE UserId = @p0 ` : ` WHERE UserId = ? `
         params.push(userId)
       } else if (usernames && usernames.length > 0) {
-        // Admin user filtering by multiple usernames using IN clause
         const placeholders = this.buildPlaceholders(usernames.length, isSqlServer)
         sqlString += ` WHERE Username IN (${placeholders}) `
         params.push(...usernames)
       }
 
-      const result = await dbService.query(sqlString, params)
-      return result.rows.length > 0 ? (result.rows[0].count as number) : 0
+      const result = await trackDuration(async () => await dbService.query(sqlString, params), {
+        operationName: 'ExtractorOperationHistoryDAO.countBatches',
+        context: { tableName, operationType: 'SELECT', userId }
+      })
+      return result.result.rows.length > 0 ? (result.result.rows[0].count as number) : 0
     } catch (error) {
       log.error('Count batches error', {
+        tableName: this.getTableName(),
+        operationType: 'SELECT',
+        requestId: getRequestId(),
         error: error instanceof Error ? error.message : String(error)
       })
       return 0

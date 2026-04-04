@@ -1,6 +1,6 @@
 import * as fs from 'fs'
 import { ConfigManager } from '../config/config-manager'
-import { createLogger } from '../logger'
+import { createLogger, run, trackDuration } from '../logger'
 import type { UpdateConfig } from '../../types/config.schema'
 import type { UserType } from '../../types/user.types'
 import type {
@@ -67,7 +67,10 @@ export class UpdateService {
       enabled,
       supported: supportState.supported,
       currentVersion: this.status.currentVersion,
-      currentChannel: this.status.currentChannel
+      currentChannel: this.status.currentChannel,
+      endpoint: this.config?.endpoint,
+      bucket: this.config?.bucket,
+      checkIntervalMinutes: this.config?.checkIntervalMinutes
     })
 
     this.initialized = true
@@ -88,17 +91,35 @@ export class UpdateService {
   public async getChangelog(release: DownloadReleaseRequest): Promise<string> {
     this.ensureInitialized()
     if (!this.status.enabled || !this.storageClient) {
+      log.warn('Changelog request rejected - auto update disabled', {
+        version: release.version,
+        channel: release.channel
+      })
       throw new Error('自动更新不可用')
     }
 
     const cacheKey = `${release.channel}:${release.version}`
     const cached = this.changelogCache.get(cacheKey)
     if (cached) {
+      log.debug('Changelog returned from cache', {
+        version: release.version,
+        channel: release.channel
+      })
       return cached
     }
 
+    log.info('Fetching changelog from storage', {
+      version: release.version,
+      channel: release.channel,
+      changelogKey: release.changelogKey
+    })
     const markdown = await this.storageClient.readText(release.changelogKey)
     this.changelogCache.set(cacheKey, markdown)
+    log.info('Changelog fetched successfully', {
+      version: release.version,
+      channel: release.channel,
+      cacheSize: this.changelogCache.size
+    })
     return markdown
   }
 
@@ -107,6 +128,10 @@ export class UpdateService {
     this.status.currentUserType = userType
 
     if (!this.status.enabled || !userType) {
+      log.info('Update service context cleared', {
+        userType,
+        reason: this.status.enabled ? 'user logged out' : 'auto-update disabled'
+      })
       this.clearPolling()
       this.catalog = { stable: [], preview: [] }
       this.publishStatus({
@@ -124,10 +149,18 @@ export class UpdateService {
       return
     }
 
+    log.info('Update service user context set', {
+      userType,
+      enabled: this.status.enabled,
+      currentVersion: this.status.currentVersion
+    })
+
     // 启动异步更新检查，不阻塞登录流程
     void this.checkForUpdates().catch((error) => {
+      const message = error instanceof Error ? error.message : String(error)
       log.warn('Async update check failed', {
-        error: error instanceof Error ? error.message : String(error)
+        userType,
+        error: message
       })
     })
     this.startPolling()
@@ -136,6 +169,11 @@ export class UpdateService {
   public async checkForUpdates(): Promise<UpdateStatus> {
     this.ensureInitialized()
     if (!this.status.enabled || !this.storageClient || !this.catalogService) {
+      log.debug('Update check skipped - service not enabled or not initialized', {
+        enabled: this.status.enabled,
+        hasStorageClient: !!this.storageClient,
+        hasCatalogService: !!this.catalogService
+      })
       return this.getStatus()
     }
 
@@ -147,6 +185,12 @@ export class UpdateService {
 
     try {
       const currentUserType = this.status.currentUserType
+      log.info('Checking for updates', {
+        userType: currentUserType,
+        currentVersion: this.status.currentVersion,
+        currentChannel: this.status.currentChannel
+      })
+
       this.catalog = await this.catalogService.loadCatalog(currentUserType)
 
       if (currentUserType === 'User') {
@@ -154,10 +198,19 @@ export class UpdateService {
         this.publishStatus(nextStatus)
 
         if (nextStatus.phase === 'available' && nextStatus.recommendedRelease) {
+          const release = nextStatus.recommendedRelease
+          log.info('Update available for user', {
+            version: release.version,
+            channel: release.channel
+          })
           // 异步下载，不阻塞更新检查流程
-          void this.downloadRelease(nextStatus.recommendedRelease).catch((error) => {
+          void this.downloadRelease(release).catch((error) => {
             const message = error instanceof Error ? error.message : '下载更新失败'
-            log.warn('Async update download failed', { error: message })
+            log.warn('Async update download failed', {
+              version: release.version,
+              channel: release.channel,
+              error: message
+            })
             this.publishStatus({
               phase: 'error',
               error: message,
@@ -166,6 +219,10 @@ export class UpdateService {
           })
         }
       } else if (currentUserType === 'Admin') {
+        log.info('Update check completed for admin', {
+          stableReleases: this.catalog.stable.length,
+          previewReleases: this.catalog.preview.length
+        })
         this.publishStatus(this.catalogService.resolveAdminStatus(this.status, this.catalog))
       } else {
         this.publishStatus({
@@ -176,7 +233,10 @@ export class UpdateService {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : '检查更新失败'
-      log.error('Failed to check for updates', { error: message })
+      log.error('Failed to check for updates', {
+        userType: this.status.currentUserType,
+        error: message
+      })
       this.publishStatus({
         phase: 'error',
         error: message,
@@ -190,8 +250,18 @@ export class UpdateService {
   public async downloadRelease(request: DownloadReleaseRequest): Promise<UpdateStatus> {
     this.ensureInitialized()
     if (!this.status.enabled || !this.storageClient) {
+      log.warn('Download request rejected - auto update disabled', {
+        version: request.version,
+        channel: request.channel
+      })
       throw new Error('自动更新不可用')
     }
+
+    log.info('Starting update download', {
+      version: request.version,
+      channel: request.channel,
+      artifactKey: request.artifactKey
+    })
 
     this.publishStatus({
       phase: 'downloading',
@@ -208,9 +278,21 @@ export class UpdateService {
     const hash = await this.installer.calculateSha256(downloadPath)
 
     if (hash.toLowerCase() !== request.sha256.toLowerCase()) {
+      log.error('Update package hash mismatch', {
+        version: request.version,
+        channel: request.channel,
+        expectedHash: request.sha256,
+        actualHash: hash
+      })
       await fs.promises.rm(downloadPath, { force: true })
       throw new Error('更新包校验失败，文件哈希不匹配')
     }
+
+    log.info('Update download completed and verified', {
+      version: request.version,
+      channel: request.channel,
+      downloadPath
+    })
 
     this.publishStatus({
       phase: 'downloaded',
@@ -233,8 +315,18 @@ export class UpdateService {
 
     const downloaded = this.status.downloadedRelease
     if (!this.status.enabled || !downloaded) {
+      log.warn('Install request rejected - no update package available', {
+        enabled: this.status.enabled,
+        hasDownloadedRelease: !!downloaded
+      })
       throw new Error('没有可安装的更新包')
     }
+
+    log.info('Installing update package', {
+      version: downloaded.version,
+      channel: downloaded.channel,
+      localPath: downloaded.localPath
+    })
 
     this.publishStatus({
       phase: 'installing',
@@ -245,6 +337,10 @@ export class UpdateService {
     })
 
     await this.installer.installDownloadedRelease(downloaded)
+    log.info('Update installation completed', {
+      version: downloaded.version,
+      channel: downloaded.channel
+    })
   }
 
   private ensureInitialized(): void {
@@ -264,14 +360,23 @@ export class UpdateService {
   private startPolling(): void {
     this.clearPolling()
     if (!this.config) {
+      log.warn('Polling not started - no update configuration')
       return
     }
+
+    log.info('Update polling started', {
+      intervalMinutes: this.config.checkIntervalMinutes,
+      endpoint: this.config.endpoint,
+      bucket: this.config.bucket
+    })
 
     this.intervalHandle = setInterval(
       () => {
         this.checkForUpdates().catch((error) => {
+          const message = error instanceof Error ? error.message : String(error)
           log.warn('Periodic update check failed', {
-            error: error instanceof Error ? error.message : String(error)
+            channel: this.status.currentChannel,
+            error: message
           })
         })
       },
