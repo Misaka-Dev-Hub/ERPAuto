@@ -14,26 +14,62 @@ interface WinstonCall {
 }
 const winstonCalls: WinstonCall[] = []
 
+// ============================================
+// Properly implemented winston format function
+// Supports chainable calls: format().combine().timestamp().printf()
+// AND direct calls: format(), format.printf()
+// ============================================
+function createFormatFn() {
+  // The format function itself - when called as format()
+  const formatFn = vi.fn((callback?: Function) => {
+    if (callback) {
+      return { transform: callback }
+    }
+    return formatFn
+  }) as any
+
+  // Add chainable methods
+  formatFn.combine = vi.fn((...formats: any[]) => formatFn)
+  formatFn.timestamp = vi.fn((options?: any) => formatFn)
+  formatFn.colorize = vi.fn(() => formatFn)
+  formatFn.printf = vi.fn((callback: Function) => ({ transform: callback }))
+  formatFn.json = vi.fn(() => formatFn)
+  formatFn.simple = vi.fn(() => formatFn)
+  formatFn.pretty = vi.fn(() => formatFn)
+  formatFn.label = vi.fn((options?: any) => formatFn)
+  formatFn.errors = vi.fn(() => formatFn)
+  formatFn.metadata = vi.fn(() => formatFn)
+  formatFn.cli = vi.fn(() => formatFn)
+
+  return formatFn
+}
+
+const format = createFormatFn()
+
 // Mock winston since we don't need actual file logging in tests
 vi.mock('winston', () => {
   const createLoggerInstance = {
     level: 'info',
     add: vi.fn(),
-    child: vi.fn(() => ({
-      level: 'info',
-      info: vi.fn((message, meta) => {
-        winstonCalls.push({ level: 'info', message, meta })
-      }),
-      error: vi.fn((message, meta) => {
-        winstonCalls.push({ level: 'error', message, meta })
-      }),
-      warn: vi.fn((message, meta) => {
-        winstonCalls.push({ level: 'warn', message, meta })
-      }),
-      debug: vi.fn((message, meta) => {
-        winstonCalls.push({ level: 'debug', message, meta })
-      })
-    })),
+    remove: vi.fn(),
+    clear: vi.fn(),
+    child: vi.fn(function (this: any, metadata: Record<string, unknown>) {
+      return {
+        ...this,
+        info: vi.fn((message: string, meta?: Record<string, unknown>) => {
+          winstonCalls.push({ level: 'info', message, meta: { ...metadata, ...meta } })
+        }),
+        error: vi.fn((message: string, meta?: Record<string, unknown>) => {
+          winstonCalls.push({ level: 'error', message, meta: { ...metadata, ...meta } })
+        }),
+        warn: vi.fn((message: string, meta?: Record<string, unknown>) => {
+          winstonCalls.push({ level: 'warn', message, meta: { ...metadata, ...meta } })
+        }),
+        debug: vi.fn((message: string, meta?: Record<string, unknown>) => {
+          winstonCalls.push({ level: 'debug', message, meta: { ...metadata, ...meta } })
+        })
+      }
+    }),
     info: vi.fn((message, meta) => {
       winstonCalls.push({ level: 'info', message, meta })
     }),
@@ -48,21 +84,21 @@ vi.mock('winston', () => {
     })
   }
 
-  const formatFn = vi.fn((fn: any) => fn && fn()) as any
-  formatFn.combine = vi.fn((...args) => args)
-  formatFn.timestamp = vi.fn(() => ({ type: 'timestamp' }))
-  formatFn.colorize = vi.fn(() => ({ type: 'colorize' }))
-  formatFn.printf = vi.fn((fn: any) => fn)
-  formatFn.json = vi.fn(() => ({ type: 'json' }))
-
   return {
     default: {
       createLogger: vi.fn(() => createLoggerInstance),
-      format: formatFn,
+      format,
       transports: {
-        Console: vi.fn() as any,
-        DailyRotateFile: vi.fn() as any
-      }
+        Console: vi.fn(function Console(this: any, options?: any) {
+          this.level = options?.level || 'info'
+        }),
+        DailyRotateFile: vi.fn(function DailyRotateFile(this: any, options?: any) {
+          this.options = options
+        }),
+        File: vi.fn(),
+        Http: vi.fn()
+      },
+      addColors: vi.fn()
     }
   }
 })
@@ -71,20 +107,8 @@ vi.mock('winston-daily-rotate-file', () => ({
   default: vi.fn() as any
 }))
 
-vi.mock(
-  'electron',
-  () =>
-    ({
-      BrowserWindow: {
-        getAllWindows: vi.fn(() => [])
-      },
-      app: {
-        isReady: vi.fn(() => false),
-        getPath: vi.fn(() => './logs'),
-        isPackaged: false
-      }
-    }) as any
-)
+// Note: electron mock is now in tests/setup.ts (global)
+// This local mock is removed to avoid conflicts
 
 describe('Logger', () => {
   beforeEach(() => {

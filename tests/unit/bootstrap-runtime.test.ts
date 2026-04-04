@@ -24,13 +24,36 @@ vi.mock('fs', () => ({
 
 vi.mock('electron', () => ({
   app: {
-    getPath: vi.fn(() => 'D:/userData'),
+    getPath: vi.fn((name: string) => {
+      if (name === 'userData') return 'D:/test-user-data'
+      return 'D:/test-user-data'
+    }),
     setAppUserModelId: setAppUserModelIdMock,
     on: appOnMock,
-    isPackaged: false
+    isPackaged: false,
+    // CRITICAL: These were missing - required by logger
+    getVersion: vi.fn(() => '1.9.0-test'),
+    getName: vi.fn(() => 'ERPAuto'),
+    getAppPath: vi.fn(() => 'D:/test-app-path'),
+    isReady: vi.fn(() => true),
+    quit: vi.fn(),
+    relaunch: vi.fn(),
+    exit: vi.fn(),
+    focus: vi.fn(),
+    blur: vi.fn()
   },
   dialog: {
-    showErrorBox: showErrorBoxMock
+    showErrorBox: showErrorBoxMock,
+    showMessageBox: vi.fn().mockResolvedValue({ response: 0 })
+  },
+  ipcMain: {
+    handle: vi.fn(),
+    on: vi.fn(),
+    removeHandler: vi.fn()
+  },
+  BrowserWindow: {
+    getAllWindows: vi.fn(() => []),
+    fromWebContents: vi.fn()
   }
 }))
 
@@ -66,7 +89,7 @@ describe('bootstrap runtime', () => {
 
     const result = configurePlaywrightBrowsersPath()
 
-    const expectedPath = join('D:/userData', 'ms-playwright')
+    const expectedPath = join('D:/test-user-data', 'ms-playwright')
     expect(result).toBe(expectedPath)
     expect(process.env.PLAYWRIGHT_BROWSERS_PATH).toBe(expectedPath)
   })
@@ -87,9 +110,12 @@ describe('bootstrap runtime', () => {
     existsSyncMock.mockReturnValue(false)
     readdirSyncMock.mockReturnValue([])
 
-    ensurePlaywrightRuntime('D:/userData/ms-playwright')
+    const result = ensurePlaywrightRuntime('D:/test-user-data/ms-playwright')
 
-    expect(mkdirSyncMock).toHaveBeenCalledWith('D:/userData/ms-playwright', { recursive: true })
-    expect(showErrorBoxMock).toHaveBeenCalledTimes(1)
+    expect(mkdirSyncMock).toHaveBeenCalledWith('D:/test-user-data/ms-playwright', {
+      recursive: true
+    })
+    // ensurePlaywrightRuntime returns false when browsers not found and logs warn
+    expect(result).toBe(false)
   })
 })

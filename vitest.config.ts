@@ -8,6 +8,9 @@ export default defineConfig({
     include: ['tests/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['node_modules', 'dist', 'out', 'tests/e2e'],
     setupFiles: ['tests/setup.ts'],
+    env: {
+      NODE_ENV: 'test'
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html']
