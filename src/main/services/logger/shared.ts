@@ -58,3 +58,35 @@ export const LOG_LEVEL_PRIORITY: Record<string, number> = {
 export function isLoggable(level: string, threshold: string): boolean {
   return (LOG_LEVEL_PRIORITY[level] ?? 0) >= (LOG_LEVEL_PRIORITY[threshold] ?? 2)
 }
+
+/**
+ * Delete screenshot files older than the given retention period.
+ * Scans <logDir>/screenshots/ and removes .png files whose mtime exceeds
+ * the retention window. Defensive: never throws.
+ *
+ * @param retentionDays - Number of days to keep screenshots
+ */
+export function cleanupOldScreenshots(retentionDays: number): void {
+  try {
+    const screenshotDir = path.join(getLogDir(), 'screenshots')
+    if (!fs.existsSync(screenshotDir)) return
+
+    const files = fs.readdirSync(screenshotDir)
+    const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000
+
+    for (const file of files) {
+      if (!file.endsWith('.png')) continue
+      const filePath = path.join(screenshotDir, file)
+      try {
+        const stat = fs.statSync(filePath)
+        if (stat.mtimeMs < cutoff) {
+          fs.unlinkSync(filePath)
+        }
+      } catch {
+        // individual file deletion failure should not stop the loop
+      }
+    }
+  } catch {
+    // entire cleanup is best-effort
+  }
+}

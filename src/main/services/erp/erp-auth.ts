@@ -2,6 +2,7 @@ import { chromium } from 'playwright'
 import type { ErpConfig, ErpSession } from '../../types/erp.types'
 import { createLogger } from '../logger'
 import { capturePageContext } from './erp-error-context'
+import { attachPageDiagnostics, attachContextDiagnostics } from './page-diagnostics'
 
 const log = createLogger('ErpAuthService')
 
@@ -55,6 +56,8 @@ export class ErpAuthService {
     })
 
     const page = await context.newPage()
+    attachPageDiagnostics(page)
+    attachContextDiagnostics(context)
 
     // Navigate to login page (use actual login URL from Python code)
     const loginUrl = `${this.config.url}/yonbip/resources/uap/rbac/login/main/index.html`

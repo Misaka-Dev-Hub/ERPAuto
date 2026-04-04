@@ -13,7 +13,7 @@ import DailyRotateFile from 'winston-daily-rotate-file'
 import path from 'path'
 import { BrowserWindow } from 'electron'
 import { serializeError, sanitizeError } from './error-utils'
-import { getLogDir, isProduction } from './shared'
+import { getLogDir, isProduction, cleanupOldScreenshots } from './shared'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 import { getContext, run } from './request-context'
 
@@ -212,6 +212,9 @@ export function applyLoggingConfig(config: { level: string; appRetention: number
       })
     )
   }
+
+  // Clean up old screenshot files beyond the retention window
+  cleanupOldScreenshots(config.appRetention)
 }
 
 /**
