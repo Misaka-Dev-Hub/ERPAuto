@@ -491,6 +491,57 @@ export interface MockBrowserWindow {
   }
 }
 
+/**
+ * Mock IPC Renderer interface - matches renderer-side IPC API
+ * Used for testing preload/renderer IPC communication
+ */
+export interface MockIpcRenderer {
+  /** Send message and wait for response */
+  invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
+
+  /** Send fire-and-forget message to main process */
+  send: (channel: string, ...args: unknown[]) => void
+
+  /** Subscribe to channel events */
+  on: (channel: string, listener: (event: unknown, ...args: unknown[]) => void) => MockIpcRenderer
+
+  /** Subscribe to single-use channel events */
+  once: (channel: string, listener: (event: unknown, ...args: unknown[]) => void) => MockIpcRenderer
+
+  /** Remove event listener */
+  removeListener: (
+    channel: string,
+    listener: (event: unknown, ...args: unknown[]) => void
+  ) => MockIpcRenderer
+
+  /** Remove all listeners for a channel */
+  removeAllListeners: (channel?: string) => MockIpcRenderer
+}
+
+/**
+ * Mock Electron API interface - combines app and IPC renderer for renderer tests
+ * Compatible with src/preload/api.ts return type
+ */
+export interface MockElectron {
+  /** Electron app module mock */
+  app?: MockElectronApp
+
+  /** IPC Main module mock (for main process tests) */
+  ipcMain?: MockIpcMain
+
+  /** IPC Renderer mock (for renderer process tests) */
+  ipcRenderer?: MockIpcRenderer
+
+  /** Dialog module mock */
+  dialog?: MockDialog
+
+  /** Shell module mock */
+  shell?: MockShell
+
+  /** BrowserWindow constructor mock */
+  BrowserWindow?: MockBrowserWindowConstructor
+}
+
 // ============================================================================
 // Factory Function Type Signatures
 // ============================================================================
@@ -521,6 +572,8 @@ export interface MockConfigManagerOptions {
 export interface MockErpAuthOptions {
   /** Whether the session should start as logged in */
   isLoggedIn?: boolean
+  /** Whether login() should throw an error (simulate login failure) */
+  loginFails?: boolean
   /** ERP config to use */
   config?: Partial<ErpConfig>
   /** Override specific methods */
@@ -547,3 +600,193 @@ export type MockConfigManagerFactory = (config?: Partial<FullConfig>) => MockCon
  * @returns Mock ERP auth service
  */
 export type MockErpAuthFactory = (options?: MockErpAuthOptions) => MockErpAuthService
+
+/**
+ * Create a mock Electron API instance
+ * @param options - Optional overrides for specific modules (app, ipcRenderer, etc.)
+ * @returns Mock Electron API matching src/preload/api structure
+ *
+ * @example
+ * ```typescript
+ * const electron = createMockElectron({
+ *   ipcRenderer: {
+ *     invoke: vi.fn().mockResolvedValue({ success: true })
+ *   }
+ * })
+ * ```
+ */
+export type MockElectronFactory = (options?: Partial<MockElectron>) => MockElectron
+
+/**
+ * Create a mock IPC Renderer instance
+ * @param options - Optional overrides for specific methods
+ * @returns Mock IPC Renderer matching Electron.IpcRenderer API
+ *
+ * @example
+ * ```typescript
+ * const ipcRenderer = createMockIpcRenderer({
+ *   invoke: vi.fn().mockResolvedValue({ success: true })
+ * })
+ * ```
+ */
+export type MockIpcRendererFactory = (options?: Partial<MockIpcRenderer>) => MockIpcRenderer
+
+// ============================================================================
+// TypeORM Mock Types
+// ============================================================================
+
+/**
+ * Mock TypeORM DataSource interface
+ * Used for testing repositories without actual database connections
+ */
+export interface MockDataSource {
+  /** Initialize the datasource */
+  initialize: () => Promise<void>
+
+  /** Destroy the datasource */
+  destroy: () => Promise<void>
+
+  /** Check if datasource is initialized */
+  isInitialized: boolean
+
+  /** Get repository for entity */
+  getRepository: (entity: any) => MockRepository
+
+  /** Create a new entity instance */
+  create: (entityClass: any, plainObject?: any) => any
+
+  /** Save entities */
+  save: (entity: any) => Promise<any>
+
+  /** Create a query builder */
+  createQueryBuilder: () => MockQueryBuilder
+}
+
+/**
+ * Mock TypeORM Repository interface
+ */
+export interface MockRepository {
+  /** Find entities matching criteria */
+  find: (options?: any) => Promise<any[]>
+
+  /** Find single entity */
+  findOne: (options: any) => Promise<any | null>
+
+  /** Create new entity instance */
+  create: (plainObject?: any) => any
+
+  /** Save entity */
+  save: (entity: any) => Promise<any>
+
+  /** Delete entities */
+  delete: (criteria: any) => Promise<{ affected?: number }>
+
+  /** Count entities */
+  count: (options?: any) => Promise<number>
+
+  /** Create query builder */
+  createQueryBuilder: () => MockQueryBuilder
+}
+
+/**
+ * Mock TypeORM QueryBuilder interface
+ */
+export interface MockQueryBuilder {
+  select: (selection?: string, alias?: string) => MockQueryBuilder
+  where: (where: string, parameters?: any) => MockQueryBuilder
+  andWhere: (where: string, parameters?: any) => MockQueryBuilder
+  orWhere: (where: string, parameters?: any) => MockQueryBuilder
+  orderBy: (orderBy: string, order?: 'ASC' | 'DESC') => MockQueryBuilder
+  addOrderBy: (orderBy: string, order?: 'ASC' | 'DESC') => MockQueryBuilder
+  getMany: () => Promise<any[]>
+  getOne: () => Promise<any | null>
+  getRawMany: () => Promise<any[]>
+  getRawOne: () => Promise<any | null>
+  delete: () => Promise<{ affected?: number }>
+  count: () => Promise<number>
+  setParameter: (key: string, value: any) => MockQueryBuilder
+  setParameters: (parameters: any) => MockQueryBuilder
+}
+
+// ============================================================================
+// DatabaseService Mock Types
+// ============================================================================
+
+/**
+ * Mock DatabaseService interface matching IDatabaseService
+ * Used for testing services that depend on database without actual connections
+ */
+export interface MockDatabaseService {
+  /** Database type identifier */
+  readonly type: DatabaseType
+
+  /** Connect to database */
+  connect: () => Promise<void>
+
+  /** Disconnect from database */
+  disconnect: () => Promise<void>
+
+  /** Check if connected */
+  isConnected: () => boolean
+
+  /** Execute query and return results */
+  query: (sql: string, params?: any[]) => Promise<QueryResult>
+
+  /** Execute multiple queries in transaction */
+  transaction: (queries: { sql: string; params?: any[] }[]) => Promise<void>
+}
+
+/**
+ * Query result type for mock database service
+ */
+export interface QueryResult {
+  rows: Record<string, unknown>[]
+  columns: string[]
+  rowCount: number
+}
+
+// ============================================================================
+// TypeORM/Database Factory Function Type Signatures
+// ============================================================================
+
+/**
+ * Options for creating a mock TypeORM DataSource
+ */
+export interface MockTypeormOptions {
+  /** Initial isInitialized state */
+  isInitialized?: boolean
+  /** Query results to return */
+  queryResult?: any[]
+  /** Override specific methods */
+  overrides?: Partial<MockDataSource>
+}
+
+/**
+ * Options for creating a mock DatabaseService
+ */
+export interface MockDatabaseServiceOptions {
+  /** Database type */
+  type?: DatabaseType
+  /** Whether database is connected */
+  isConnected?: boolean
+  /** Default query results to return */
+  queryResult?: any[]
+  /** Override specific methods */
+  overrides?: Partial<MockDatabaseService>
+}
+
+/**
+ * Create a mock TypeORM DataSource instance
+ * @param options - Options including initialization state and query results
+ * @returns Mock DataSource
+ */
+export type MockTypeormFactory = (options?: MockTypeormOptions) => MockDataSource
+
+/**
+ * Create a mock DatabaseService instance
+ * @param options - Options including connection state and query results
+ * @returns Mock DatabaseService
+ */
+export type MockDatabaseServiceFactory = (
+  options?: MockDatabaseServiceOptions
+) => MockDatabaseService
