@@ -1,6 +1,7 @@
 import { chromium } from 'playwright'
 import type { ErpConfig, ErpSession } from '../../types/erp.types'
 import { createLogger } from '../logger'
+import { capturePageContext } from './erp-error-context'
 
 const log = createLogger('ErpAuthService')
 
@@ -70,6 +71,9 @@ export class ErpAuthService {
     const contentFrame = await frameLocator.contentFrame()
 
     if (!contentFrame) {
+      log.error('Failed to access forwardFrame content frame', {
+        ...(await capturePageContext(page))
+      })
       throw new Error('Failed to access forwardFrame content frame')
     }
 
@@ -80,6 +84,9 @@ export class ErpAuthService {
     try {
       await contentFrame.getByRole('textbox', { name: '用户名' }).fill(this.config.username)
     } catch (e) {
+      log.error('Failed to find username input', {
+        error: e instanceof Error ? e.message : String(e)
+      })
       throw new Error(`Failed to find username input: ${e}`)
     }
 
@@ -87,6 +94,9 @@ export class ErpAuthService {
     try {
       await contentFrame.getByRole('textbox', { name: '密码' }).fill(this.config.password)
     } catch (e) {
+      log.error('Failed to find password input', {
+        error: e instanceof Error ? e.message : String(e)
+      })
       throw new Error(`Failed to find password input: ${e}`)
     }
 
@@ -94,6 +104,9 @@ export class ErpAuthService {
     try {
       await contentFrame.getByRole('button', { name: '登录' }).click()
     } catch (e) {
+      log.error('Failed to click login button', {
+        error: e instanceof Error ? e.message : String(e)
+      })
       throw new Error(`Failed to click login button: ${e}`)
     }
 
@@ -138,6 +151,7 @@ export class ErpAuthService {
 
       const hasError = await errorLocator.isVisible()
       if (hasError) {
+        log.error('ERP login failed: incorrect username or password')
         throw new Error('ERP 登录失败：名称或密码错误')
       }
 
@@ -149,6 +163,7 @@ export class ErpAuthService {
 
       const hasError = await errorLocator.isVisible().catch(() => false)
       if (hasError) {
+        log.error('ERP login failed: incorrect username or password (retry check)')
         throw new Error('ERP 登录失败：名称或密码错误')
       }
 
@@ -172,6 +187,7 @@ export class ErpAuthService {
    */
   getSession(): ErpSession {
     if (!this.session?.isLoggedIn) {
+      log.error('getSession called without active session')
       throw new Error('Not logged in. Call login() first.')
     }
     return this.session

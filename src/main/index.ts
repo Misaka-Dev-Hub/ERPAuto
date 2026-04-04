@@ -7,17 +7,20 @@ import {
   setupElectronRuntime
 } from './bootstrap/runtime'
 import { setupProcessGuards } from './bootstrap/process-guards'
+import { createLogger } from './services/logger'
+
+const log = createLogger('App')
 
 app.whenReady().then(async () => {
   setupProcessGuards()
   registerMainWindowLifecycle()
   const playwrightBrowsersPath = configurePlaywrightBrowsersPath()
   const browsersExist = ensurePlaywrightRuntime(playwrightBrowsersPath)
-  console.log('Playwright browsers exist:', browsersExist)
+  log.info('Playwright browsers check', { browsersExist })
   await initializeMainProcessServices()
   setupElectronRuntime()
 
-  ipcMain.on('ping', () => console.log('pong'))
+  ipcMain.on('ping', () => log.debug('pong'))
 
   createMainWindow()
 })

@@ -17,6 +17,9 @@ import { dirname } from 'path'
 import { ConfigManager } from '../../config/config-manager'
 import { MySqlService } from '../../database/mysql'
 import { SqlServerService } from '../../database/sql-server'
+import { createLogger } from '../../logger'
+
+const log = createLogger('Migration')
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -136,7 +139,9 @@ async function runMySQLMigration(configManager: ConfigManager): Promise<void> {
 
     await mysqlService.disconnect()
   } catch (error) {
-    console.error('✗ MySQL Migration failed:', error instanceof Error ? error.message : error)
+    log.error('MySQL Migration failed', {
+      error: error instanceof Error ? error.message : String(error)
+    })
     if (mysqlService.isConnected()) {
       await mysqlService.disconnect()
     }
@@ -192,7 +197,9 @@ async function runSqlServerMigration(configManager: ConfigManager): Promise<void
 
     await sqlServerService.disconnect()
   } catch (error) {
-    console.error('✗ SQL Server Migration failed:', error instanceof Error ? error.message : error)
+    log.error('SQL Server Migration failed', {
+      error: error instanceof Error ? error.message : String(error)
+    })
     if (sqlServerService.isConnected()) {
       await sqlServerService.disconnect()
     }
@@ -223,7 +230,7 @@ async function main(): Promise<void> {
 
     console.log('\n✅ Migration completed successfully!\n')
   } catch (error) {
-    console.error('\n❌ Migration failed:', error instanceof Error ? error.message : error)
+    log.error('Migration failed', { error: error instanceof Error ? error.message : String(error) })
     process.exit(1)
   }
 }

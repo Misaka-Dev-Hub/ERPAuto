@@ -9,6 +9,9 @@
  */
 
 import type { UserInfo } from '../../types/user.types'
+import { createLogger } from '../logger'
+
+const log = createLogger('SessionManager')
 
 /**
  * Session Manager Class
@@ -59,12 +62,12 @@ export class SessionManager {
       }
       return false
     } catch (error) {
-      console.error('[SessionManager] Login error:', error)
+      log.error('Login error', { error })
       return false
     } finally {
       if (dao) {
         await dao.disconnect().catch((error) => {
-          console.error('[SessionManager] Login disconnect error:', error)
+          log.error('Login disconnect error', { error })
         })
       }
     }
@@ -93,12 +96,12 @@ export class SessionManager {
       }
       return false
     } catch (error) {
-      console.error('[SessionManager] Silent login error:', error)
+      log.error('Silent login error', { error })
       return false
     } finally {
       if (dao) {
         await dao.disconnect().catch((error) => {
-          console.error('[SessionManager] Silent login disconnect error:', error)
+          log.error('Silent login disconnect error', { error })
         })
       }
     }
@@ -187,12 +190,12 @@ export class SessionManager {
       dao = new BIPUsersDAO()
       return await dao.getAllUsers()
     } catch (error) {
-      console.error('[SessionManager] Get all users error:', error)
+      log.error('Get all users error', { error })
       return []
     } finally {
       if (dao) {
         await dao.disconnect().catch((error) => {
-          console.error('[SessionManager] Get all users disconnect error:', error)
+          log.error('Get all users disconnect error', { error })
         })
       }
     }

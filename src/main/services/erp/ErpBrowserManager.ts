@@ -195,6 +195,10 @@ export class ErpBrowserManager {
   async navigate(url: string, options?: { timeout?: number }): Promise<void> {
     const page = this.session?.page
     if (!page) {
+      log.error('No page available for navigation', {
+        url,
+        hasSession: !!this.session
+      })
       throw new Error('No page available. Call initialize() first.')
     }
 

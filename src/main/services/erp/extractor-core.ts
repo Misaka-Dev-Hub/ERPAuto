@@ -6,6 +6,10 @@ import type {
   ExtractorCoreResult,
   ExtractionProgress
 } from '../../types/extractor.types'
+import { createLogger } from '../logger'
+import { capturePageContext } from './erp-error-context'
+
+const log = createLogger('ExtractorCore')
 
 /**
  * ExtractorCore - Handles all web page operations for data extraction
@@ -97,6 +101,9 @@ export class ExtractorCore {
     const fFrame = await forwardFrameLocator.contentFrame()
 
     if (!fFrame) {
+      log.error('Failed to access popup forward frame', {
+        ...(await capturePageContext(popupPage))
+      })
       throw new Error('Failed to access popup forward frame')
     }
 
@@ -105,6 +112,7 @@ export class ExtractorCore {
     const workFrame = await innerFrameLocator.contentFrame()
 
     if (!workFrame) {
+      log.error('Failed to access inner work frame')
       throw new Error('Failed to access inner work frame')
     }
 

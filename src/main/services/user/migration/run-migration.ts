@@ -13,6 +13,9 @@ import * as fs from 'fs'
 import * as path from 'path'
 import yaml from 'js-yaml'
 import { z } from 'zod'
+import { createLogger } from '../../logger'
+
+const log = createLogger('MigrationRunner')
 
 /**
  * MySQL configuration schema
@@ -105,8 +108,10 @@ async function runMigration(): Promise<void> {
   try {
     dbConfig = loadConfig(configPath)
   } catch (error) {
-    console.error('Failed to load config.yaml:', error instanceof Error ? error.message : error)
-    console.error('Please ensure config.yaml exists and contains valid MySQL configuration.')
+    log.error('Failed to load config', {
+      error: error instanceof Error ? error.message : String(error),
+      configPath
+    })
     process.exit(1)
   }
 
@@ -171,8 +176,7 @@ async function runMigration(): Promise<void> {
     console.log(`       ERP_Password = 'your_password'`)
     console.log(`   WHERE ERP_URL IS NULL;\n`)
   } catch (error) {
-    console.error('\n❌ Migration failed with error:')
-    console.error(error)
+    log.error('Migration failed', { error })
     console.error('\nTroubleshooting:')
     console.error('1. Check if MySQL server is running')
     console.error('2. Verify database credentials in config.yaml file')
@@ -194,6 +198,6 @@ async function runMigration(): Promise<void> {
 
 // Run migration
 runMigration().catch((error) => {
-  console.error('Unexpected error:', error)
+  log.error('Unexpected error', { error })
   process.exit(1)
 })

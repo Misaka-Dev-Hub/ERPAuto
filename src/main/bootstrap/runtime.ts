@@ -3,6 +3,9 @@ import fs from 'fs'
 import { join } from 'path'
 import { ConfigManager } from '../services/config/config-manager'
 import { UpdateService } from '../services/update/update-service'
+import { createLogger } from '../services/logger'
+
+const log = createLogger('Bootstrap')
 
 export function configurePlaywrightBrowsersPath(): string {
   const browsersPath = join(app.getPath('userData'), 'ms-playwright')
@@ -39,7 +42,7 @@ export function ensurePlaywrightRuntime(browsersPath: string): boolean {
   try {
     fs.mkdirSync(browsersPath, { recursive: true })
   } catch (error) {
-    console.error('Failed to create browsers directory:', error)
+    log.error('Failed to create browsers directory', { error })
   }
 
   const newChromiumPath = join(browsersPath, 'chromium-1208', 'chrome-win64', 'chrome.exe')
@@ -57,7 +60,7 @@ export function ensurePlaywrightRuntime(browsersPath: string): boolean {
       if (entry.startsWith('chromium-') && !entry.includes('headless')) {
         const revisionPath = join(browsersPath, entry, 'chrome-win64', 'chrome.exe')
         if (fs.existsSync(revisionPath)) {
-          console.log('Found Chromium revision:', entry)
+          log.info('Found Chromium revision', { revision: entry })
           foundRevision = true
           break
         }
@@ -71,10 +74,10 @@ export function ensurePlaywrightRuntime(browsersPath: string): boolean {
     return true
   }
 
-  console.warn(
-    'Playwright browser not found. Available:',
-    fs.existsSync(browsersPath) ? fs.readdirSync(browsersPath) : 'none'
-  )
+  log.warn('Playwright browser not found', {
+    available: fs.existsSync(browsersPath) ? fs.readdirSync(browsersPath) : 'none',
+    browsersPath
+  })
   return false
 }
 
@@ -84,7 +87,7 @@ export async function initializeMainProcessServices(): Promise<void> {
     await configManager.initialize()
     UpdateService.getInstance().initialize()
   } catch (error) {
-    console.error('Failed to initialize ConfigManager:', error)
+    log.error('Failed to initialize ConfigManager', { error })
   }
 
   const { registerIpcHandlers } = await import('../ipc')

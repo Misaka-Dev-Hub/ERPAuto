@@ -4,6 +4,7 @@ import type { CleanerInput, CleanerResult, OrderCleanDetail } from '../../types/
 import type { ErpSession } from '../../types/erp.types'
 import type { FrameLocator, Locator, Page } from 'playwright'
 import { createLogger, run, trackDuration } from '../logger'
+import { capturePageContext } from './erp-error-context'
 
 const log = createLogger('CleanerService')
 
@@ -505,7 +506,10 @@ export class CleanerService {
       }
     }
 
-    throw new Error('无法定位“备料计划”菜单项（可能菜单结构已变化）')
+    log.error('Failed to locate material plan menu item', {
+      attemptedSelectors: candidates.length
+    })
+    throw new Error('无法定位”备料计划”菜单项（可能菜单结构已变化）')
   }
 
   private async processDetailPage(params: {
@@ -527,6 +531,9 @@ export class CleanerService {
       const dFrame = await detailMainFrame.contentFrame()
 
       if (!dFrame) {
+        log.error('Failed to access detail page forward frame', {
+          ...(await capturePageContext(detailPage))
+        })
         throw new Error('Failed to access detail page forward frame')
       }
 
@@ -535,6 +542,7 @@ export class CleanerService {
       const detailInnerFrame = await detailInnerLocator.contentFrame()
 
       if (!detailInnerFrame) {
+        log.error('Failed to access detail inner frame')
         throw new Error('Failed to access detail inner frame')
       }
 
@@ -852,6 +860,7 @@ export class CleanerService {
               const rows = workFrame.locator('tbody tr')
               const rowCount = await rows.count()
               if (rowCount === 0) {
+                log.error('Retry query returned no results', { orderNumber, rowCount })
                 throw new Error('订单重试查询无结果')
               }
 
