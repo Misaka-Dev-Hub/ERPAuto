@@ -4,7 +4,14 @@
  * Factory class for generating test data with consistent structure.
  */
 
-import type { TestUser, Order, Material } from './types'
+import type { TestUser, Order, Material, TestErpConfig, TestDatabaseConfig } from './types'
+import type { ExtractorResult, ImportResult } from '../../src/main/types/extractor.types'
+import type { CleanerResult, OrderCleanDetail } from '../../src/main/types/cleaner.types'
+import type { AuditEntry } from '../../src/main/types/audit.types'
+import { AuditAction, AuditStatus } from '../../src/main/types/audit.types'
+import type { UpdateRelease } from '../../src/main/types/update.types'
+import type { ValidationResult } from '../../src/main/types/validation.types'
+import { ValidationError, VALIDATION_ERROR_CODES } from '../../src/main/types/errors'
 
 /**
  * User Factory - generates test user data
@@ -213,5 +220,328 @@ export class MaterialFactory {
       material.index = index + 1
       return material
     })
+  }
+}
+
+/**
+ * Config Factory
+ *
+ * Creates ERP configuration fixtures for testing.
+ */
+export class ConfigFactory {
+  /**
+   * Create an ERP configuration fixture
+   *
+   * @param overrides - Optional overrides to customize the configuration
+   * @returns A new TestErpConfig instance
+   *
+   * @example
+   * // Basic config with default values
+   * const config = ConfigFactory.createErpConfig()
+   *
+   * @example
+   * // Config with custom URL
+   * const config = ConfigFactory.createErpConfig({ url: 'https://custom-erp.example.com' })
+   *
+   * @example
+   * // Config with custom credentials
+   * const config = ConfigFactory.createErpConfig({ username: 'admin', password: 'secret' })
+   */
+  static createErpConfig(overrides?: Partial<TestErpConfig>): TestErpConfig {
+    return {
+      url: 'https://test-erp.example.com',
+      username: 'test_user',
+      password: 'test_password',
+      ...overrides
+    }
+  }
+}
+
+/**
+ * Database Factory
+ *
+ * Creates database configuration fixtures for testing.
+ */
+export class DatabaseFactory {
+  /**
+   * Create a database configuration fixture
+   *
+   * @param type - Database type ('mysql' or 'sqlserver'), defaults to 'mysql'
+   * @param overrides - Optional overrides to customize the configuration
+   * @returns A new TestDatabaseConfig instance
+   *
+   * @example
+   * // MySQL config with default values
+   * const config = DatabaseFactory.createDatabaseConfig()
+   *
+   * @example
+   * // SQL Server config
+   * const config = DatabaseFactory.createDatabaseConfig('sqlserver')
+   *
+   * @example
+   * // MySQL config with custom host
+   * const config = DatabaseFactory.createDatabaseConfig('mysql', { host: '192.168.1.100' })
+   */
+  static createDatabaseConfig(
+    type: 'mysql' | 'sqlserver' = 'mysql',
+    overrides?: Partial<TestDatabaseConfig>
+  ): TestDatabaseConfig {
+    return {
+      type,
+      host: 'localhost',
+      port: type === 'mysql' ? 3306 : 1433,
+      database: 'test_db',
+      username: 'test_user',
+      password: 'test_password',
+      ...overrides
+    }
+  }
+}
+
+/**
+ * Extract Result Factory
+ *
+ * Creates ExtractorResult fixtures for testing data extraction.
+ */
+export class ExtractResultFactory {
+  /**
+   * Create an extract result fixture
+   *
+   * @param overrides - Optional overrides to customize the result
+   * @returns A new ExtractorResult instance
+   *
+   * @example
+   * // Basic extract result
+   * const result = ExtractResultFactory.createExtractResult()
+   *
+   * @example
+   * // Result with errors
+   * const result = ExtractResultFactory.createExtractResult({ errors: ['Network timeout'] })
+   */
+  static createExtractResult(overrides?: Partial<ExtractorResult>): ExtractorResult {
+    const timestamp = Date.now()
+    return {
+      downloadedFiles: [`download_${timestamp}.xlsx`],
+      mergedFile: `merged_${timestamp}.xlsx`,
+      recordCount: 100,
+      errors: [],
+      orderRecordCounts: [{ orderNumber: `SC${timestamp}`, recordCount: 100 }],
+      ...overrides
+    }
+  }
+
+  /**
+   * Create an import result fixture
+   *
+   * @param overrides - Optional overrides
+   * @returns A new ImportResult instance
+   */
+  static createImportResult(overrides?: Partial<ImportResult>): ImportResult {
+    return {
+      success: true,
+      recordsRead: 100,
+      recordsDeleted: 5,
+      recordsImported: 95,
+      uniqueSourceNumbers: 10,
+      errors: [],
+      ...overrides
+    }
+  }
+}
+
+/**
+ * Cleaner Result Factory
+ *
+ * Creates CleanerResult fixtures for testing material cleanup.
+ */
+export class CleanerResultFactory {
+  /**
+   * Create a cleaner result fixture
+   *
+   * @param overrides - Optional overrides to customize the result
+   * @returns A new CleanerResult instance
+   *
+   * @example
+   * // Basic cleaner result
+   * const result = CleanerResultFactory.createCleanerResult()
+   *
+   * @example
+   * // Result with retries
+   * const result = CleanerResultFactory.createCleanerResult({ retriedOrders: 2, successfulRetries: 1 })
+   */
+  static createCleanerResult(overrides?: Partial<CleanerResult>): CleanerResult {
+    return {
+      ordersProcessed: 5,
+      materialsDeleted: 20,
+      materialsSkipped: 2,
+      errors: [],
+      details: [],
+      retriedOrders: 0,
+      successfulRetries: 0,
+      ...overrides
+    }
+  }
+
+  /**
+   * Create an order clean detail fixture
+   *
+   * @param overrides - Optional overrides
+   * @returns A new OrderCleanDetail instance
+   */
+  static createOrderCleanDetail(overrides?: Partial<OrderCleanDetail>): OrderCleanDetail {
+    return {
+      orderNumber: `SC${Date.now()}`,
+      materialsDeleted: 5,
+      materialsSkipped: 0,
+      errors: [],
+      skippedMaterials: [],
+      retryCount: 0,
+      ...overrides
+    }
+  }
+}
+
+/**
+ * Audit Log Factory
+ *
+ * Creates AuditEntry fixtures for testing audit logging.
+ */
+export class AuditLogFactory {
+  /**
+   * Create an audit log entry fixture
+   *
+   * @param action - Audit action type
+   * @param status - Audit status
+   * @param overrides - Optional overrides
+   * @returns A new AuditEntry instance
+   *
+   * @example
+   * // Successful login audit
+   * const entry = AuditLogFactory.createAuditLog('LOGIN', 'SUCCESS')
+   *
+   * @example
+   * // Failed extract audit
+   * const entry = AuditLogFactory.createAuditLog('EXTRACT', 'FAILURE', { resource: 'Order SC123' })
+   */
+  static createAuditLog(
+    action: AuditAction = AuditAction.LOGIN,
+    status: AuditStatus = AuditStatus.SUCCESS,
+    overrides?: Partial<AuditEntry>
+  ): AuditEntry {
+    return {
+      timestamp: new Date(),
+      action,
+      userId: 'USR-001',
+      username: 'test_user',
+      computerName: 'TEST-PC',
+      appVersion: '1.0.0',
+      status,
+      ...overrides
+    }
+  }
+}
+
+/**
+ * Update Release Factory
+ *
+ * Creates UpdateRelease fixtures for testing update mechanisms.
+ */
+export class UpdateReleaseFactory {
+  /**
+   * Create an update release fixture
+   *
+   * @param channel - Release channel ('stable' or 'preview')
+   * @param overrides - Optional overrides
+   * @returns A new UpdateRelease instance
+   *
+   * @example
+   * // Stable release
+   * const release = UpdateReleaseFactory.createUpdateRelease('stable')
+   *
+   * @example
+   * // Preview release with custom version
+   * const release = UpdateReleaseFactory.createUpdateRelease('preview', { version: '2.0.0-beta.1' })
+   */
+  static createUpdateRelease(
+    channel: 'stable' | 'preview' = 'stable',
+    overrides?: Partial<UpdateRelease>
+  ): UpdateRelease {
+    return {
+      version: '1.0.0',
+      channel,
+      artifactKey: `erputo-${channel}-v1.0.0.exe`,
+      sha256: 'abc123def456',
+      size: 52428800,
+      publishedAt: new Date().toISOString(),
+      changelogKey: 'CHANGELOG.md',
+      ...overrides
+    }
+  }
+}
+
+/**
+ * Production Input Factory
+ *
+ * Creates ValidationResult fixtures for testing validation.
+ */
+export class ProductionInputFactory {
+  /**
+   * Create a validation result fixture
+   *
+   * @param overrides - Optional overrides
+   * @returns A new ValidationResult instance
+   *
+   * @example
+   * // Basic validation result
+   * const result = ProductionInputFactory.createValidationResult()
+   *
+   * @example
+   * // Marked for deletion
+   * const result = ProductionInputFactory.createValidationResult({ isMarkedForDeletion: true })
+   */
+  static createValidationResult(overrides?: Partial<ValidationResult>): ValidationResult {
+    return {
+      materialName: 'Test Material',
+      materialCode: `MAT-${Date.now()}`,
+      specification: 'Standard Spec',
+      model: 'Model-A',
+      managerName: 'Test Manager',
+      isMarkedForDeletion: false,
+      ...overrides
+    }
+  }
+}
+
+/**
+ * Validation Error Factory
+ *
+ * Creates ValidationError fixtures for testing error handling.
+ */
+export class ValidationErrorFactory {
+  /**
+   * Create a validation error fixture
+   *
+   * @param message - Error message
+   * @param code - Error code
+   * @param overrides - Optional overrides
+   * @returns A new ValidationError instance
+   *
+   * @example
+   * // Basic validation error
+   * const error = ValidationErrorFactory.createValidationError('Invalid input')
+   *
+   * @example
+   * // Error with specific code
+   * const error = ValidationErrorFactory.createValidationError(
+   *   'Missing required field',
+   *   'VAL_MISSING_REQUIRED'
+   * )
+   */
+  static createValidationError(
+    message: string = 'Validation failed',
+    code: (typeof VALIDATION_ERROR_CODES)[keyof typeof VALIDATION_ERROR_CODES] = VALIDATION_ERROR_CODES.INVALID_INPUT,
+    cause?: Error
+  ): ValidationError {
+    return new ValidationError(message, code, cause)
   }
 }
