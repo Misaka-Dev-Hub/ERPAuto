@@ -11,6 +11,11 @@ export default defineConfig({
     env: {
       NODE_ENV: 'test'
     },
+    // 性能优化配置
+    isolate: false, // 禁用隔离（提升 30-50% 速度）
+    pool: 'threads', // 使用线程池
+    maxWorkers: 4,
+    bail: process.env.CI ? 1 : undefined,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html']
