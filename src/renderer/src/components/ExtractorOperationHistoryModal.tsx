@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Modal } from './ui/Modal'
+import { useLogger } from '../hooks/useLogger'
 import {
   RefreshCw,
   Trash2,
@@ -82,6 +83,7 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
   const [deleting, setDeleting] = useState<Set<string>>(new Set())
   const [allUsers, setAllUsers] = useState<string[]>([])
   const [selectedUsers, setSelectedUsers] = useState<string[]>([])
+  const logger = useLogger('OperationHistory')
 
   const isAdmin = user?.userType === 'Admin'
 
@@ -116,9 +118,11 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
         setAllUsers(usernames)
       }
     } catch (err) {
-      console.error('Failed to fetch users:', err)
+      logger.error('Failed to fetch users list', {
+        error: err instanceof Error ? err.message : String(err)
+      })
     }
-  }, [])
+  }, [logger])
 
   const fetchBatchDetails = useCallback(
     async (batchId: string) => {
@@ -133,10 +137,13 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
           setBatchDetails((prev) => new Map(prev).set(batchId, result.data!))
         }
       } catch (err) {
-        console.error('Failed to fetch batch details:', err)
+        logger.error('Failed to fetch batch details', {
+          error: err instanceof Error ? err.message : String(err),
+          batchId
+        })
       }
     },
-    [batchDetails]
+    [batchDetails, logger]
   )
 
   // Fetch batches when modal opens

@@ -9,6 +9,7 @@
 
 import React, { useState, useRef } from 'react'
 import { Modal } from './ui/Modal'
+import { useLogger } from '../hooks/useLogger'
 
 interface LoginDialogProps {
   isOpen: boolean
@@ -31,6 +32,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
   const [errorMessage, setErrorMessage] = useState('')
   const usernameInputRef = useRef<HTMLInputElement>(null)
   const errorRef = useRef<HTMLDivElement>(null)
+  const logger = useLogger('LoginDialog')
 
   // Display error message with aria-live
   const showError = (message: string): void => {
@@ -42,12 +44,14 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
     setErrorMessage('')
 
     if (!username.trim()) {
+      logger.warn('Login validation: empty username')
       showError('请输入用户名')
       usernameInputRef.current?.focus()
       return
     }
 
     if (!password.trim()) {
+      logger.warn('Login validation: empty password')
       showError('请输入密码')
       return
     }
@@ -57,8 +61,8 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
     setIsLoggingIn(false)
 
     if (!success) {
+      logger.error('Login failed: invalid credentials', { username: username.trim(), computerName })
       showError('用户名或密码错误')
-      setPassword('')
     }
   }
 

@@ -12,6 +12,7 @@ import { Modal } from './ui/Modal'
 import { showSuccess, showError, showInfo } from '../stores/useAppStore'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { useConfirmDialog } from './ui/useConfirmDialog'
+import { useLogger } from '../hooks/useLogger'
 
 interface MaterialTypeRecord {
   id?: number
@@ -48,6 +49,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; field: string } | null>(null)
   const [editValue, setEditValue] = useState('')
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null)
+  const logger = useLogger('MaterialType')
 
   const tableRef = useRef<HTMLTableElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -96,11 +98,15 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
       )
       setSelectedRowIndex(null)
     } catch (error) {
-      console.error('Failed to load material types:', error)
+      logger.error('Failed to load material types', {
+        error: error instanceof Error ? error.message : String(error),
+        isAdmin,
+        currentUsername
+      })
     } finally {
       setLoading(false)
     }
-  }, [currentUsername, isAdmin])
+  }, [currentUsername, isAdmin, logger])
 
   // Load data when dialog opens
   useEffect(() => {
@@ -286,6 +292,12 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
       }
     } catch (error) {
       showError(`保存失败：${error instanceof Error ? error.message : '未知错误'}`)
+      logger.error('Failed to save material types', {
+        error: error instanceof Error ? error.message : String(error),
+        inserts: toInsert.length,
+        updates: toUpdate.length,
+        deletes: toDelete.length
+      })
     } finally {
       setSaving(false)
     }

@@ -1,12 +1,15 @@
 import { useEffect } from 'react'
 import type { LogLevel } from '../stores/extractorStore'
 import { useExtractorStore } from '../stores/extractorStore'
+import { useLogger } from './useLogger'
 
 function isLogLevel(value: string): value is LogLevel {
   return ['info', 'success', 'warning', 'error', 'system'].includes(value)
 }
 
 export function useExtractor() {
+  const logger = useLogger('Extractor')
+
   const {
     isRunning,
     isComplete,
@@ -73,6 +76,11 @@ export function useExtractor() {
           'success',
           `提取完成：下载 ${data.downloadedFiles.length} 个文件，共 ${data.recordCount} 条记录`
         )
+        logger.info('Extraction completed', {
+          downloadedFiles: data.downloadedFiles.length,
+          recordCount: data.recordCount,
+          errorCount: data.errors.length
+        })
         if (data.errors.length > 0) {
           addLog('warning', `存在 ${data.errors.length} 个错误`)
           // Log each error detail for debugging
@@ -83,11 +91,13 @@ export function useExtractor() {
       } else {
         setError(response.error || '提取失败')
         addLog('error', response.error || '提取失败')
+        logger.error('Extraction failed', { error: response.error })
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : '发生未知错误'
       setError(errMsg)
       addLog('error', errMsg)
+      logger.error('Extraction exception', { error: errMsg })
     } finally {
       setRunning(false)
       setProgress(null)

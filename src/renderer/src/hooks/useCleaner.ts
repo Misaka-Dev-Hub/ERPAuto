@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { showSuccess, showError, showWarning, formatListMessage } from '../stores/useAppStore'
+import { useLogger } from './useLogger'
 import { ConfirmDialogProps } from '../components/ui/ConfirmDialog'
 import {
   buildDeletionPlan,
@@ -20,6 +21,8 @@ import {
 import type { CleanerProgress, CleanerReportData, ValidationResult } from './cleaner/types'
 
 export function useCleaner() {
+  const logger = useLogger('Cleaner')
+
   // Authentication & permissions
   const [isAdmin, setIsAdmin] = useState(false)
   const [currentUsername, setCurrentUsername] = useState<string>('')
@@ -108,11 +111,13 @@ export function useCleaner() {
           setSelectedManagers(new Set([result.currentUsername]))
         }
       } catch (err) {
-        console.error('Initialization failed:', err)
+        logger.error('Cleaner page initialization failed', {
+          error: err instanceof Error ? err.message : String(err)
+        })
       }
     }
     initializePage()
-  }, [])
+  }, [logger])
 
   // Subscribe to cleaner progress events
   useEffect(() => {
@@ -135,11 +140,13 @@ export function useCleaner() {
           setProcessConcurrency(result.processConcurrency)
         }
       } catch (err) {
-        console.error('Failed to load cleaner config:', err)
+        logger.error('Failed to load cleaner config', {
+          error: err instanceof Error ? err.message : String(err)
+        })
       }
     }
     loadCleanerConfig()
-  }, [])
+  }, [logger])
 
   useEffect(() => {
     sessionStorage.setItem('cleaner_dryRun', dryRun.toString())
@@ -155,7 +162,10 @@ export function useCleaner() {
     try {
       await window.electron.config.updateCleaner({ processConcurrency: clamped })
     } catch (err) {
-      console.error('Failed to update cleaner config:', err)
+      logger.error('Failed to update process concurrency', {
+        error: err instanceof Error ? err.message : String(err),
+        value: clamped
+      })
     }
   }
 
