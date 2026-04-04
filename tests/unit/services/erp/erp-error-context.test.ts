@@ -19,7 +19,12 @@ vi.mock('fs', () => ({
     existsSync: vi.fn(() => true),
     readdirSync: vi.fn(() => []),
     statSync: vi.fn()
-  }
+  },
+  mkdirSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  existsSync: vi.fn(() => true),
+  readdirSync: vi.fn(() => []),
+  statSync: vi.fn()
 }))
 
 import { capturePageContext } from '../../../../src/main/services/erp/erp-error-context'
