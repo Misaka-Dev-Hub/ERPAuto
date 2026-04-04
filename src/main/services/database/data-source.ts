@@ -11,6 +11,9 @@
 import 'reflect-metadata'
 import { DataSource, DataSourceOptions } from 'typeorm'
 import { ConfigManager } from '../config/config-manager'
+import { createLogger } from '../logger'
+
+const log = createLogger('DataSource')
 
 /**
  * Get database type from config manager
@@ -26,6 +29,7 @@ function getDatabaseType(): 'mysql' | 'mssql' {
  */
 function buildDataSourceOptions(): DataSourceOptions {
   const type = getDatabaseType()
+  log.debug('Building DataSource options', { type })
   const configManager = ConfigManager.getInstance()
   const config = configManager.getConfig()
 
@@ -74,7 +78,11 @@ let dataSource: DataSource | null = null
  */
 export function getDataSource(): DataSource {
   if (!dataSource) {
+    const type = getDatabaseType()
+    log.info('Creating new TypeORM DataSource', { type })
     dataSource = new DataSource(buildDataSourceOptions())
+  } else {
+    log.debug('Reusing existing DataSource')
   }
   return dataSource
 }
@@ -85,7 +93,14 @@ export function getDataSource(): DataSource {
 export async function initializeDataSource(): Promise<DataSource> {
   const ds = getDataSource()
   if (!ds.isInitialized) {
-    await ds.initialize()
+    try {
+      await ds.initialize()
+      const type = getDatabaseType()
+      log.info('TypeORM DataSource initialized', { type })
+    } catch (error) {
+      log.error('Failed to initialize DataSource', { error })
+      throw error
+    }
   }
   return ds
 }
@@ -95,8 +110,13 @@ export async function initializeDataSource(): Promise<DataSource> {
  */
 export async function destroyDataSource(): Promise<void> {
   if (dataSource && dataSource.isInitialized) {
-    await dataSource.destroy()
-    dataSource = null
+    try {
+      await dataSource.destroy()
+      dataSource = null
+      log.info('TypeORM DataSource destroyed')
+    } catch (error) {
+      log.error('Failed to destroy DataSource', { error })
+    }
   }
 }
 

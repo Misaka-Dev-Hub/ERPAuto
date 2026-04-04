@@ -5,6 +5,9 @@ import type {
   QueryResult,
   SqlServerConfig
 } from '../../types/database.types'
+import { createLogger, trackDuration } from '../logger'
+
+const log = createLogger('SqlServerService')
 
 export type { SqlServerConfig } from '../../types/database.types'
 
@@ -24,6 +27,7 @@ export class SqlServerService implements IDatabaseService {
    */
   async connect(): Promise<void> {
     if (this.pool) {
+      log.warn('Already connected to SQL Server')
       throw new Error('Already connected to SQL Server')
     }
 
@@ -42,7 +46,18 @@ export class SqlServerService implements IDatabaseService {
 
       this.pool = new sql.ConnectionPool(poolConfig)
       await this.pool.connect()
+      log.info('Connected to SQL Server', {
+        server: this.config.server,
+        port: this.config.port,
+        database: this.config.database
+      })
     } catch (error) {
+      log.error('Failed to connect to SQL Server', {
+        server: this.config.server,
+        port: this.config.port,
+        database: this.config.database,
+        error
+      })
       throw new Error(`Failed to connect to SQL Server: ${(error as Error).message}`)
     }
   }
@@ -58,7 +73,9 @@ export class SqlServerService implements IDatabaseService {
     try {
       await this.pool.close()
       this.pool = null
+      log.info('Disconnected from SQL Server')
     } catch (error) {
+      log.error('Failed to disconnect from SQL Server', { error })
       throw new Error(`Failed to disconnect from SQL Server: ${(error as Error).message}`)
     }
   }
@@ -80,29 +97,41 @@ export class SqlServerService implements IDatabaseService {
       throw new Error('Not connected to SQL Server. Call connect() first.')
     }
 
+    const sqlPreview = sqlString.substring(0, 100)
+    const paramCount = params?.length ?? 0
+
     try {
-      const request = this.pool.request()
+      const { result: queryResult } = await trackDuration(
+        async () => {
+          const request = this.pool!.request()
 
-      // Add parameters if provided - convert array to @p0, @p1, ... format
-      if (params && params.length > 0) {
-        params.forEach((value, index) => {
-          request.input(`p${index}`, value)
-        })
-      }
+          // Add parameters if provided - convert array to @p0, @p1, ... format
+          if (params && params.length > 0) {
+            params.forEach((value, index) => {
+              request.input(`p${index}`, value)
+            })
+          }
 
-      const result = await request.query(sqlString)
+          const result = await request.query(sqlString)
 
-      // Convert recordset to array of objects (may be undefined for DELETE/INSERT/UPDATE)
-      const rows = (result.recordset as Record<string, unknown>[]) || []
-      // Extract column names from the first row if available
-      const columns = rows.length > 0 ? Object.keys(rows[0]) : []
+          // Convert recordset to array of objects (may be undefined for DELETE/INSERT/UPDATE)
+          const rows = (result.recordset as Record<string, unknown>[]) || []
+          // Extract column names from the first row if available
+          const columns = rows.length > 0 ? Object.keys(rows[0]) : []
 
-      return {
-        rows,
-        columns,
-        rowCount: result.rowsAffected?.[0] || rows.length
-      }
+          return {
+            rows,
+            columns,
+            rowCount: result.rowsAffected?.[0] || rows.length
+          }
+        },
+        { operationName: 'SqlServerService.query' }
+      )
+
+      log.debug('Query executed', { sqlPreview, rowCount: queryResult.rowCount, paramCount })
+      return queryResult
     } catch (error) {
+      log.error('SQL Server query failed', { sqlPreview, paramCount, error })
       throw new Error(`SQL Server query failed: ${(error as Error).message}`)
     }
   }
@@ -126,31 +155,47 @@ export class SqlServerService implements IDatabaseService {
       throw new Error('Not connected to SQL Server. Call connect() first.')
     }
 
+    const sqlPreview = sqlString.substring(0, 100)
+    const paramNames = Object.keys(params)
+
     try {
-      const request = this.pool.request()
+      const { result: queryResult } = await trackDuration(
+        async () => {
+          const request = this.pool!.request()
 
-      // Add parameters with explicit types
-      for (const [key, { value, type }] of Object.entries(params)) {
-        if (type) {
-          request.input(key, type, value)
-        } else {
-          request.input(key, value)
-        }
-      }
+          // Add parameters with explicit types
+          for (const [key, { value, type }] of Object.entries(params)) {
+            if (type) {
+              request.input(key, type, value)
+            } else {
+              request.input(key, value)
+            }
+          }
 
-      const result = await request.query(sqlString)
+          const result = await request.query(sqlString)
 
-      // Convert recordset to array of objects
-      const rows = result.recordset as Record<string, unknown>[]
-      // Extract column names from the first row if available
-      const columns = rows.length > 0 ? Object.keys(rows[0]) : []
+          // Convert recordset to array of objects
+          const rows = result.recordset as Record<string, unknown>[]
+          // Extract column names from the first row if available
+          const columns = rows.length > 0 ? Object.keys(rows[0]) : []
 
-      return {
-        rows,
-        columns,
-        rowCount: result.rowsAffected?.[0] || rows.length
-      }
+          return {
+            rows,
+            columns,
+            rowCount: result.rowsAffected?.[0] || rows.length
+          }
+        },
+        { operationName: 'SqlServerService.queryWithParams' }
+      )
+
+      log.debug('Query with params executed', {
+        sqlPreview,
+        rowCount: queryResult.rowCount,
+        paramNames
+      })
+      return queryResult
     } catch (error) {
+      log.error('SQL Server query with params failed', { sqlPreview, paramNames, error })
       throw new Error(`SQL Server query failed: ${(error as Error).message}`)
     }
   }
@@ -164,12 +209,15 @@ export class SqlServerService implements IDatabaseService {
       throw new Error('Not connected to SQL Server. Call connect() first.')
     }
 
+    const queryCount = queries.length
     const transaction = new sql.Transaction(this.pool)
+    log.info('Transaction started', { queryCount })
 
     try {
       await transaction.begin()
 
-      for (const { sql: sqlString, params } of queries) {
+      for (let i = 0; i < queries.length; i++) {
+        const { sql: sqlString, params } = queries[i]
         const request = new sql.Request(transaction)
 
         // Add parameters if provided - convert array to @p0, @p1, ... format
@@ -180,11 +228,17 @@ export class SqlServerService implements IDatabaseService {
         }
 
         await request.query(sqlString)
+        log.debug('Transaction query executed', {
+          index: i,
+          sqlPreview: sqlString.substring(0, 100)
+        })
       }
 
       await transaction.commit()
+      log.info('Transaction committed', { queryCount })
     } catch (error) {
       await transaction.rollback()
+      log.warn('Transaction rolled back', { queryCount, error })
       throw new Error(`SQL Server transaction failed: ${(error as Error).message}`)
     }
   }
