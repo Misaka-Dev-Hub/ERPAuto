@@ -15,7 +15,7 @@ import {
   type GetObjectCommandInput,
   type DeleteObjectCommandInput
 } from '@aws-sdk/client-s3'
-import { createLogger, run, trackDuration } from '../logger'
+import { createLogger, run, trackDuration, PerformanceTracker } from '../logger'
 import type { RustfsConfig } from '../../types/config.schema'
 import * as fs from 'fs'
 import * as path from 'path'
