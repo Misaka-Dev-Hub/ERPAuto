@@ -1,7 +1,8 @@
 /**
- * Logger Unit Tests - Enhanced for Configuration Loading
+ * Logger Unit Tests
  *
- * Tests logger creation, configuration, and integration with ConfigManager
+ * Tests logger creation, log output content, level filtering,
+ * and setLogLevel behavior.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -17,15 +18,9 @@ const winstonCalls: WinstonCall[] = []
 // ============================================
 // Winston Format Mock - Callable Object Pattern
 // ============================================
-// Supports: format(), format.combine(), format.printf(),
-//           AND IIFE pattern: format((info) => info)()
-// ============================================
 function createFormatFn() {
-  // The format FUNCTION itself - callable with ()
   const formatCallable = vi.fn((callback?: Function) => {
     if (callback) {
-      // Return a new callable format when callback is provided
-      // This simulates: format((info) => { ... })() where () calls the returned function
       const transform = vi.fn() as any
       transform.combine = vi.fn(() => formatCallable)
       transform.timestamp = vi.fn(() => formatCallable)
@@ -37,10 +32,7 @@ function createFormatFn() {
       transform.errors = vi.fn(() => formatCallable)
       transform.metadata = vi.fn(() => formatCallable)
       transform.cli = vi.fn(() => formatCallable)
-      // When called as transform(info), pass through the callback
-      // Handle undefined/null info gracefully
       transform.mockImplementation((info: any) => {
-        // During initialization, logger may call with undefined - skip in that case
         if (!info || typeof info !== 'object') {
           info = { level: 'info', message: '', timestamp: new Date().toISOString() }
         }
@@ -48,11 +40,9 @@ function createFormatFn() {
       })
       return transform
     }
-    // Called without callback - return formatCallable for chaining
     return formatCallable
   }) as any
 
-  // Add top-level chainable methods
   formatCallable.combine = vi.fn(() => formatCallable)
   formatCallable.timestamp = vi.fn(() => formatCallable)
   formatCallable.colorize = vi.fn(() => formatCallable)
@@ -70,7 +60,7 @@ function createFormatFn() {
 
 const format = createFormatFn()
 
-// Mock winston since we don't need actual file logging in tests
+// Mock winston
 vi.mock('winston', () => {
   const createLoggerInstance = {
     level: 'info',
@@ -131,9 +121,6 @@ vi.mock('winston-daily-rotate-file', () => ({
   default: vi.fn() as any
 }))
 
-// Note: electron mock is now in tests/setup.ts (global)
-// This local mock is removed to avoid conflicts
-
 describe('Logger', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -144,63 +131,55 @@ describe('Logger', () => {
     vi.resetModules()
   })
 
-  it('should create a logger with context', async () => {
+  it('should create a child logger that logs with context metadata', async () => {
     const { createLogger } = await import('../../src/main/services/logger')
     const logger = createLogger('TestContext')
 
-    expect(logger).toBeDefined()
-    // Logger should have logging methods
-    expect(logger.info || logger.debug || logger.warn || logger.error).toBeDefined()
+    logger.info('Hello world', { extraKey: 'extraValue' })
+
+    expect(winstonCalls).toHaveLength(1)
+    expect(winstonCalls[0].level).toBe('info')
+    expect(winstonCalls[0].message).toBe('Hello world')
+    expect(winstonCalls[0].meta?.context).toBe('TestContext')
+    expect(winstonCalls[0].meta?.extraKey).toBe('extraValue')
   })
 
-  it('should have all log methods', async () => {
+  it('should log at all severity levels with correct content', async () => {
     const { createLogger } = await import('../../src/main/services/logger')
-    const logger = createLogger('TestContext')
+    const logger = createLogger('LevelTest')
 
-    expect(typeof logger.info).toBe('function')
-    expect(typeof logger.error).toBe('function')
-    expect(typeof logger.warn).toBe('function')
-    expect(typeof logger.debug).toBe('function')
+    logger.debug('debug msg', { key: 'd' })
+    logger.info('info msg', { key: 'i' })
+    logger.warn('warn msg', { key: 'w' })
+    logger.error('error msg', { key: 'e' })
+
+    expect(winstonCalls).toHaveLength(4)
+    const levels = winstonCalls.map((c) => c.level)
+    expect(levels).toEqual(['debug', 'info', 'warn', 'error'])
+
+    expect(winstonCalls[0].message).toBe('debug msg')
+    expect(winstonCalls[1].message).toBe('info msg')
+    expect(winstonCalls[2].message).toBe('warn msg')
+    expect(winstonCalls[3].message).toBe('error msg')
   })
 
-  it('should export default logger', async () => {
-    const logger = await import('../../src/main/services/logger')
-    expect(logger.default).toBeDefined()
-  })
-
-  it('should export setLogLevel function', async () => {
-    const { setLogLevel } = await import('../../src/main/services/logger')
-    expect(setLogLevel).toBeDefined()
-    expect(typeof setLogLevel).toBe('function')
-  })
-
-  it('should create child logger with context metadata', async () => {
+  it('should produce separate child loggers with independent context', async () => {
     const { createLogger } = await import('../../src/main/services/logger')
-    const logger = createLogger('MyModule')
+    const loggerA = createLogger('ModuleA')
+    const loggerB = createLogger('ModuleB')
 
-    logger.info('Test message')
+    loggerA.info('from A')
+    loggerB.warn('from B')
 
-    // Verify logger was created and called
-    expect(logger.info).toHaveBeenCalled()
-  })
-
-  it('should log at different levels with metadata', async () => {
-    const { createLogger } = await import('../../src/main/services/logger')
-    const logger = createLogger('TestContext')
-
-    logger.debug('Debug message', { debugKey: 'debugValue' })
-    logger.info('Info message', { infoKey: 'infoValue' })
-    logger.warn('Warning message', { warnKey: 'warnValue' })
-    logger.error('Error message', { errorKey: 'errorValue' })
-
-    expect(logger.debug).toHaveBeenCalled()
-    expect(logger.info).toHaveBeenCalled()
-    expect(logger.warn).toHaveBeenCalled()
-    expect(logger.error).toHaveBeenCalled()
+    expect(winstonCalls).toHaveLength(2)
+    expect(winstonCalls[0].meta?.context).toBe('ModuleA')
+    expect(winstonCalls[0].message).toBe('from A')
+    expect(winstonCalls[1].meta?.context).toBe('ModuleB')
+    expect(winstonCalls[1].message).toBe('from B')
   })
 })
 
-describe('Logger Configuration Loading', () => {
+describe('setLogLevel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     winstonCalls.length = 0
@@ -210,89 +189,21 @@ describe('Logger Configuration Loading', () => {
     vi.resetModules()
   })
 
-  it('should load ConfigManager class', async () => {
-    const { ConfigManager } = await import('../../src/main/services/config/config-manager')
-    expect(ConfigManager).toBeDefined()
-    expect(typeof ConfigManager.getInstance).toBe('function')
-  })
+  it('should change the root logger level', async () => {
+    const loggerModule = await import('../../src/main/services/logger')
 
-  it('should have logging configuration methods', async () => {
-    const { ConfigManager } = await import('../../src/main/services/config/config-manager')
+    // Default export is the root winston logger
+    const rootLogger = loggerModule.default
 
-    const manager = ConfigManager.getInstance()
+    // Default level is 'info'
+    expect(rootLogger.level).toBe('info')
 
-    expect(manager.getLoggingConfig).toBeDefined()
-    expect(typeof manager.getLoggingConfig).toBe('function')
-    expect(manager.getDefaultConfig).toBeDefined()
-    expect(typeof manager.getDefaultConfig).toBe('function')
-  })
+    // Change to debug
+    loggerModule.setLogLevel('debug')
+    expect(rootLogger.level).toBe('debug')
 
-  it('should return default logging config structure', async () => {
-    const { ConfigManager } = await import('../../src/main/services/config/config-manager')
-
-    const manager = ConfigManager.getInstance()
-    const defaultConfig = manager.getDefaultConfig()
-
-    expect(defaultConfig.logging).toBeDefined()
-    expect(defaultConfig.logging.level).toBeDefined()
-    expect(defaultConfig.logging.auditRetention).toBeDefined()
-    expect(defaultConfig.logging.appRetention).toBeDefined()
-  })
-
-  it('should validate logging level enum values', async () => {
-    const { loggingConfigSchema } = await import('../../src/main/types/config.schema')
-
-    // Test all valid log levels
-    const validLevels = ['error', 'warn', 'info', 'debug', 'verbose']
-
-    for (const level of validLevels) {
-      const result = loggingConfigSchema.safeParse({ level })
-      expect(result.success).toBe(true)
-    }
-  })
-
-  it('should reject invalid logging level', async () => {
-    const { loggingConfigSchema } = await import('../../src/main/types/config.schema')
-
-    const result = loggingConfigSchema.safeParse({ level: 'invalid_level' })
-    expect(result.success).toBe(false)
-  })
-
-  it('should validate audit retention range (1-365)', async () => {
-    const { loggingConfigSchema } = await import('../../src/main/types/config.schema')
-
-    // Valid values
-    expect(loggingConfigSchema.safeParse({ auditRetention: 1 }).success).toBe(true)
-    expect(loggingConfigSchema.safeParse({ auditRetention: 365 }).success).toBe(true)
-    expect(loggingConfigSchema.safeParse({ auditRetention: 30 }).success).toBe(true)
-
-    // Invalid values
-    expect(loggingConfigSchema.safeParse({ auditRetention: 0 }).success).toBe(false)
-    expect(loggingConfigSchema.safeParse({ auditRetention: 366 }).success).toBe(false)
-  })
-
-  it('should validate app retention range (1-365)', async () => {
-    const { loggingConfigSchema } = await import('../../src/main/types/config.schema')
-
-    // Valid values
-    expect(loggingConfigSchema.safeParse({ appRetention: 1 }).success).toBe(true)
-    expect(loggingConfigSchema.safeParse({ appRetention: 365 }).success).toBe(true)
-    expect(loggingConfigSchema.safeParse({ appRetention: 14 }).success).toBe(true)
-
-    // Invalid values
-    expect(loggingConfigSchema.safeParse({ appRetention: 0 }).success).toBe(false)
-    expect(loggingConfigSchema.safeParse({ appRetention: 366 }).success).toBe(false)
-  })
-
-  it('should use default values when logging config is partial', async () => {
-    const { loggingConfigSchema } = await import('../../src/main/types/config.schema')
-
-    // Only provide level, should default others
-    const result = loggingConfigSchema.safeParse({ level: 'warn' })
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.auditRetention).toBe(30) // default
-      expect(result.data.appRetention).toBe(14) // default
-    }
+    // Change to error
+    loggerModule.setLogLevel('error')
+    expect(rootLogger.level).toBe('error')
   })
 })

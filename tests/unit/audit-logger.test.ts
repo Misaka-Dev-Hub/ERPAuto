@@ -1,129 +1,65 @@
 /**
- * Audit Logger Unit Tests - Real File Write Integration Tests
+ * Audit Logger Unit Tests
  *
- * Tests audit logger with real file writes to isolated test directory
- * Verifies JSONL format, entry structure, and cleanup behavior
+ * Tests audit logger behavior: verifies JSONL entry content,
+ * status handling, metadata processing, and special characters.
+ * Uses spy on the module's audit logger instance instead of mocking winston,
+ * to avoid cross-contamination with logger.test.ts under isolate:false.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import fs from 'fs'
-import path from 'path'
-import { app } from 'electron'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// Isolated test log directory
-const TEST_LOG_DIR = path.join(process.cwd(), 'test-logs')
-
-/**
- * Create a test audit entry with all required fields
- */
-function createTestEntry(overrides?: Partial<Record<string, unknown>>): Record<string, unknown> {
-  return {
-    timestamp: new Date().toISOString(),
-    action: 'LOGIN',
-    userId: 'test-user-123',
-    username: 'test.user',
-    computerName: 'TEST-PC-001',
-    resource: 'ERP_SYSTEM',
-    status: 'success',
-    metadata: { sessionId: 'test-session-abc' },
-    ...overrides
-  }
-}
-
-describe('Audit Logger - Real File Integration', () => {
-  // Track original files in test directory
-  const originalFiles = new Set<string>()
+describe('Audit Logger', () => {
+  let auditLoggerModule: typeof import('../../src/main/services/logger/audit-logger')
+  let infoSpy: ReturnType<typeof vi.fn>
 
   beforeEach(async () => {
-    // Create test log directory
-    if (!fs.existsSync(TEST_LOG_DIR)) {
-      fs.mkdirSync(TEST_LOG_DIR, { recursive: true })
-    }
-
-    // Track existing files for cleanup
-    const files = fs.readdirSync(TEST_LOG_DIR)
-    files.forEach((f) => originalFiles.add(f))
-
-    // Clear mocks
     vi.clearAllMocks()
+    auditLoggerModule = await import('../../src/main/services/logger/audit-logger')
+
+    // Spy on the audit logger's info method
+    const auditLogger = auditLoggerModule.default
+    infoSpy = vi.fn()
+    auditLogger.info = infoSpy
   })
 
-  afterEach(async () => {
-    // Cleanup: Remove all files created during test
-    if (fs.existsSync(TEST_LOG_DIR)) {
-      const files = fs.readdirSync(TEST_LOG_DIR)
-      files.forEach((file) => {
-        if (!originalFiles.has(file)) {
-          const filePath = path.join(TEST_LOG_DIR, file)
-          try {
-            fs.unlinkSync(filePath)
-          } catch {
-            // Ignore cleanup errors
-          }
-        }
-      })
-
-      // Try to remove empty directory
-      try {
-        fs.rmdirSync(TEST_LOG_DIR)
-      } catch {
-        // Directory may not be empty, that's ok
-      }
-    }
-
+  afterEach(() => {
+    vi.restoreAllMocks()
     vi.resetModules()
   })
 
-  it('should export logAudit function', async () => {
-    const { logAudit } = await import('../../src/main/services/logger/audit-logger')
-    expect(logAudit).toBeDefined()
-    expect(typeof logAudit).toBe('function')
-  })
+  it('should produce a valid JSONL entry with all required fields', async () => {
+    const { logAudit, applyAuditConfig } = auditLoggerModule
 
-  it('should export closeAuditLogger function', async () => {
-    const { closeAuditLogger } = await import('../../src/main/services/logger/audit-logger')
-    expect(closeAuditLogger).toBeDefined()
-    expect(typeof closeAuditLogger).toBe('function')
-  })
-
-  it('should log audit entry with all required fields', async () => {
-    const { logAudit, closeAuditLogger } =
-      await import('../../src/main/services/logger/audit-logger')
-
-    const entry = createTestEntry()
-
-    logAudit(entry.action as string, entry.userId as string, {
-      username: entry.username as string,
-      computerName: entry.computerName as string,
-      resource: entry.resource as string,
-      status: entry.status as 'success' | 'failure' | 'partial',
-      metadata: entry.metadata as Record<string, unknown>
+    applyAuditConfig(30)
+    logAudit('LOGIN', 'user-001', {
+      username: 'alice',
+      computerName: 'PC-001',
+      resource: 'ERP_SYSTEM',
+      status: 'success',
+      metadata: { sessionId: 'abc' }
     })
 
-    // Close logger to flush writes
-    closeAuditLogger()
+    expect(infoSpy).toHaveBeenCalledTimes(1)
+    const entry = JSON.parse(infoSpy.mock.calls[0][0])
 
-    // Find the audit log file (should be today's file)
-    const today = new Date().toISOString().split('T')[0]
-    const auditFile = path.join(TEST_LOG_DIR, `audit-${today}.jsonl`)
-
-    // Check if file exists (it may be in a different location due to electron mock)
-    // The actual file location depends on how electron's app.getPath('logs') is mocked
     expect(entry.action).toBe('LOGIN')
-    expect(entry.userId).toBe('test-user-123')
-    expect(entry.username).toBe('test.user')
-    expect(entry.computerName).toBe('TEST-PC-001')
+    expect(entry.userId).toBe('user-001')
+    expect(entry.username).toBe('alice')
+    expect(entry.computerName).toBe('PC-001')
+    expect(entry.appVersion).toBe('1.9.0-test')
     expect(entry.resource).toBe('ERP_SYSTEM')
     expect(entry.status).toBe('success')
+    expect(entry.metadata).toEqual({ sessionId: 'abc' })
+    // Timestamp should be a valid ISO 8601 string
+    expect(new Date(entry.timestamp).toISOString()).toBe(entry.timestamp)
   })
 
-  it('should handle all status values (success, failure, partial)', async () => {
-    const { logAudit, closeAuditLogger, applyAuditConfig } =
-      await import('../../src/main/services/logger/audit-logger')
+  it('should accept all status values: success, failure, partial', async () => {
+    const { logAudit, applyAuditConfig } = auditLoggerModule
 
     applyAuditConfig(30)
 
-    // Test success status
     logAudit('EXTRACT', 'user1', {
       username: 'extractor',
       computerName: 'PC-001',
@@ -131,7 +67,6 @@ describe('Audit Logger - Real File Integration', () => {
       status: 'success'
     })
 
-    // Test failure status
     logAudit('DELETE', 'user2', {
       username: 'cleaner',
       computerName: 'PC-002',
@@ -140,7 +75,6 @@ describe('Audit Logger - Real File Integration', () => {
       metadata: { error: 'Permission denied' }
     })
 
-    // Test partial status
     logAudit('UPDATE', 'user3', {
       username: 'updater',
       computerName: 'PC-003',
@@ -149,72 +83,31 @@ describe('Audit Logger - Real File Integration', () => {
       metadata: { updated: 5, failed: 2 }
     })
 
-    closeAuditLogger()
-
-    // Verify logAudit executed for each entry (each call invokes app.getVersion)
-    expect(app.getVersion).toHaveBeenCalledTimes(3)
+    expect(infoSpy).toHaveBeenCalledTimes(3)
+    const entries = infoSpy.mock.calls.map((call: any[]) => JSON.parse(call[0]))
+    expect(entries[0].status).toBe('success')
+    expect(entries[1].status).toBe('failure')
+    expect(entries[2].status).toBe('partial')
   })
 
-  it('should handle metadata correctly (with and without)', async () => {
-    const { logAudit, closeAuditLogger, applyAuditConfig } =
-      await import('../../src/main/services/logger/audit-logger')
+  it('should default to empty metadata when not provided', async () => {
+    const { logAudit, applyAuditConfig } = auditLoggerModule
 
     applyAuditConfig(30)
 
-    // Without metadata
-    logAudit('LOGIN', 'user-no-meta', {
-      username: 'no.meta',
+    logAudit('PING', 'user-no-meta', {
+      username: 'tester',
       computerName: 'PC-001',
       resource: 'ERP',
       status: 'success'
     })
 
-    // With metadata
-    logAudit('LOGOUT', 'user-with-meta', {
-      username: 'with.meta',
-      computerName: 'PC-002',
-      resource: 'ERP',
-      status: 'success',
-      metadata: { sessionDuration: 3600, actionsPerformed: 15 }
-    })
-
-    closeAuditLogger()
-
-    // Both entries processed (each call invokes app.getVersion)
-    expect(app.getVersion).toHaveBeenCalledTimes(2)
+    const entry = JSON.parse(infoSpy.mock.calls[0][0])
+    expect(entry.metadata).toEqual({})
   })
 
-  it('should generate ISO 8601 timestamp', async () => {
-    const { logAudit, closeAuditLogger } =
-      await import('../../src/main/services/logger/audit-logger')
-
-    const beforeLog = Date.now()
-
-    logAudit('TEST', 'timestamp-user', {
-      username: 'timestamp.test',
-      computerName: 'PC-TS',
-      resource: 'test_resource',
-      status: 'success'
-    })
-
-    closeAuditLogger()
-
-    const afterLog = Date.now()
-
-    // Timestamp should be generated within the test execution window
-    expect(beforeLog).toBeLessThanOrEqual(afterLog)
-  })
-
-  it('should close audit logger without errors', async () => {
-    const { closeAuditLogger } = await import('../../src/main/services/logger/audit-logger')
-
-    // Should complete without throwing
-    expect(() => closeAuditLogger()).not.toThrow()
-  })
-
-  it('should handle special characters in fields', async () => {
-    const { logAudit, closeAuditLogger, applyAuditConfig } =
-      await import('../../src/main/services/logger/audit-logger')
+  it('should handle special characters in fields without error', async () => {
+    const { logAudit, applyAuditConfig } = auditLoggerModule
 
     applyAuditConfig(30)
 
@@ -226,29 +119,17 @@ describe('Audit Logger - Real File Integration', () => {
       metadata: { reason: '密码错误', attempt: 3 }
     })
 
-    closeAuditLogger()
-
-    // Verify special characters were processed without error
-    expect(app.getVersion).toHaveBeenCalledTimes(1)
+    expect(infoSpy).toHaveBeenCalledTimes(1)
+    const entry = JSON.parse(infoSpy.mock.calls[0][0])
+    expect(entry.username).toBe('user.name+test@example.com')
+    expect(entry.computerName).toBe('DESKTOP-特殊字符-001')
+    expect(entry.resource).toBe('ERP/子系统')
+    expect(entry.metadata.reason).toBe('密码错误')
   })
 
-  it('should handle empty metadata gracefully', async () => {
-    const { logAudit, closeAuditLogger, applyAuditConfig } =
-      await import('../../src/main/services/logger/audit-logger')
+  it('should close audit logger without errors', async () => {
+    const { closeAuditLogger } = auditLoggerModule
 
-    applyAuditConfig(30)
-
-    logAudit('PING', 'ping-user', {
-      username: 'pinger',
-      computerName: 'PC-PING',
-      resource: 'health_check',
-      status: 'success',
-      metadata: {}
-    })
-
-    closeAuditLogger()
-
-    // Verify empty metadata was processed without error
-    expect(app.getVersion).toHaveBeenCalledTimes(1)
+    expect(() => closeAuditLogger()).not.toThrow()
   })
 })

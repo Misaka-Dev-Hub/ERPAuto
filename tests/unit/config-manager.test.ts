@@ -1,7 +1,8 @@
 /**
  * ConfigManager Unit Tests
  *
- * Tests for ConfigManager service configuration and validation functionality.
+ * Tests for ConfigManager default configuration values, schema validation,
+ * and singleton behavior.
  * Logger is mocked to isolate ConfigManager testing.
  */
 
@@ -33,36 +34,7 @@ describe('ConfigManager', () => {
     vi.resetModules()
   })
 
-  it('should load ConfigManager class', async () => {
-    const { ConfigManager } = await import('../../src/main/services/config/config-manager')
-    expect(ConfigManager).toBeDefined()
-    expect(typeof ConfigManager.getInstance).toBe('function')
-  })
-
-  it('should have logging configuration methods', async () => {
-    const { ConfigManager } = await import('../../src/main/services/config/config-manager')
-
-    const manager = ConfigManager.getInstance()
-
-    expect(manager.getLoggingConfig).toBeDefined()
-    expect(typeof manager.getLoggingConfig).toBe('function')
-    expect(manager.getDefaultConfig).toBeDefined()
-    expect(typeof manager.getDefaultConfig).toBe('function')
-  })
-
-  it('should return default logging config structure', async () => {
-    const { ConfigManager } = await import('../../src/main/services/config/config-manager')
-
-    const manager = ConfigManager.getInstance()
-    const defaultConfig = manager.getDefaultConfig()
-
-    expect(defaultConfig.logging).toBeDefined()
-    expect(defaultConfig.logging.level).toBe('info')
-    expect(defaultConfig.logging.auditRetention).toBe(30)
-    expect(defaultConfig.logging.appRetention).toBe(14)
-  })
-
-  it('should get default logging config values', async () => {
+  it('should return default config with correct logging values', async () => {
     const { ConfigManager } = await import('../../src/main/services/config/config-manager')
 
     const manager = ConfigManager.getInstance()
@@ -73,14 +45,52 @@ describe('ConfigManager', () => {
     expect(defaultConfig.logging.appRetention).toBe(14)
   })
 
-  it('should export fullConfigSchema for validation', async () => {
-    const { fullConfigSchema } = await import('../../src/main/types/config.schema')
+  it('should return default config with correct database defaults', async () => {
+    const { ConfigManager } = await import('../../src/main/services/config/config-manager')
 
-    expect(fullConfigSchema).toBeDefined()
-    expect(typeof fullConfigSchema.parse).toBe('function')
-    expect(typeof fullConfigSchema.safeParse).toBe('function')
+    const manager = ConfigManager.getInstance()
+    const defaultConfig = manager.getDefaultConfig()
+
+    expect(defaultConfig.database.activeType).toBe('mysql')
+    expect(defaultConfig.database.mysql.host).toBe('localhost')
+    expect(defaultConfig.database.mysql.port).toBe(3306)
+    expect(defaultConfig.database.mysql.database).toBe('erp_db')
   })
 
+  it('should return default config with correct extraction defaults', async () => {
+    const { ConfigManager } = await import('../../src/main/services/config/config-manager')
+
+    const manager = ConfigManager.getInstance()
+    const defaultConfig = manager.getDefaultConfig()
+
+    expect(defaultConfig.extraction.batchSize).toBe(100)
+    expect(defaultConfig.extraction.headless).toBe(true)
+    expect(defaultConfig.extraction.autoConvert).toBe(true)
+  })
+
+  it('should throw when getConfig() is called before initialize()', async () => {
+    const { ConfigManager } = await import('../../src/main/services/config/config-manager')
+
+    // Reset singleton to get a fresh uninitialized instance
+    const FreshConfigManager = ConfigManager as any
+    FreshConfigManager.instance = null
+
+    const manager = ConfigManager.getInstance()
+
+    expect(() => manager.getConfig()).toThrow('Configuration not initialized')
+  })
+
+  it('should return the same singleton instance', async () => {
+    const { ConfigManager } = await import('../../src/main/services/config/config-manager')
+
+    const a = ConfigManager.getInstance()
+    const b = ConfigManager.getInstance()
+
+    expect(a).toBe(b)
+  })
+})
+
+describe('Config Schema Validation', () => {
   it('should validate complete logging configuration', async () => {
     const { loggingConfigSchema } = await import('../../src/main/types/config.schema')
 
@@ -97,6 +107,53 @@ describe('ConfigManager', () => {
       expect(result.data.level).toBe('debug')
       expect(result.data.auditRetention).toBe(60)
       expect(result.data.appRetention).toBe(21)
+    }
+  })
+
+  it('should validate logging level enum values', async () => {
+    const { loggingConfigSchema } = await import('../../src/main/types/config.schema')
+
+    const validLevels = ['error', 'warn', 'info', 'debug', 'verbose']
+
+    for (const level of validLevels) {
+      const result = loggingConfigSchema.safeParse({ level })
+      expect(result.success).toBe(true)
+    }
+  })
+
+  it('should reject invalid logging level', async () => {
+    const { loggingConfigSchema } = await import('../../src/main/types/config.schema')
+
+    const result = loggingConfigSchema.safeParse({ level: 'invalid_level' })
+    expect(result.success).toBe(false)
+  })
+
+  it('should validate audit retention range (1-365)', async () => {
+    const { loggingConfigSchema } = await import('../../src/main/types/config.schema')
+
+    expect(loggingConfigSchema.safeParse({ auditRetention: 1 }).success).toBe(true)
+    expect(loggingConfigSchema.safeParse({ auditRetention: 365 }).success).toBe(true)
+    expect(loggingConfigSchema.safeParse({ auditRetention: 0 }).success).toBe(false)
+    expect(loggingConfigSchema.safeParse({ auditRetention: 366 }).success).toBe(false)
+  })
+
+  it('should validate app retention range (1-365)', async () => {
+    const { loggingConfigSchema } = await import('../../src/main/types/config.schema')
+
+    expect(loggingConfigSchema.safeParse({ appRetention: 1 }).success).toBe(true)
+    expect(loggingConfigSchema.safeParse({ appRetention: 365 }).success).toBe(true)
+    expect(loggingConfigSchema.safeParse({ appRetention: 0 }).success).toBe(false)
+    expect(loggingConfigSchema.safeParse({ appRetention: 366 }).success).toBe(false)
+  })
+
+  it('should use default values when logging config is partial', async () => {
+    const { loggingConfigSchema } = await import('../../src/main/types/config.schema')
+
+    const result = loggingConfigSchema.safeParse({ level: 'warn' })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.auditRetention).toBe(30)
+      expect(result.data.appRetention).toBe(14)
     }
   })
 })

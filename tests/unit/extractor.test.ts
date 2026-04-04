@@ -17,60 +17,19 @@ describe('Extractor Service (Unit)', () => {
     extractor = new ExtractorService(authService, './test-downloads')
   })
 
-  describe('Batch Creation', () => {
-    it('should create single batch for small order list', () => {
-      // This tests the createBatches method indirectly through extract
-      // We'll need to add a public method or test through the class
-      const orders = ['ORDER1', 'ORDER2', 'ORDER3']
-      const batchSize = 10
-
-      // Expected: 1 batch with 3 orders
-      const expectedBatches = 1
-      expect(Math.ceil(orders.length / batchSize)).toBe(expectedBatches)
-    })
-
-    it('should create multiple batches for large order list', () => {
-      const orders = Array.from({ length: 250 }, (_, i) => `ORDER${i}`)
-      const batchSize = 100
-
-      // Expected: 3 batches (100, 100, 50)
-      const expectedBatches = 3
-      expect(Math.ceil(orders.length / batchSize)).toBe(expectedBatches)
-    })
-
-    it('should handle exact batch size', () => {
-      const orders = Array.from({ length: 200 }, (_, i) => `ORDER${i}`)
-      const batchSize = 100
-
-      // Expected: 2 batches exactly
-      const expectedBatches = 2
-      expect(Math.ceil(orders.length / batchSize)).toBe(expectedBatches)
-    })
-
-    it('should handle empty order list', () => {
-      const orders: string[] = []
-      const batchSize = 100
-
-      // Expected: 0 batches
-      const expectedBatches = 0
-      expect(Math.ceil(orders.length / batchSize)).toBe(expectedBatches)
-    })
-  })
-
   describe('Service Initialization', () => {
-    it('should create service instance', () => {
-      expect(extractor).toBeDefined()
+    it('should create service instance as ExtractorService', () => {
       expect(extractor).toBeInstanceOf(ExtractorService)
     })
 
-    it('should use default download directory', () => {
+    it('should create service with default download directory', () => {
       const defaultExtractor = new ExtractorService(authService)
-      expect(defaultExtractor).toBeDefined()
+      expect(defaultExtractor).toBeInstanceOf(ExtractorService)
     })
 
-    it('should use custom download directory', () => {
+    it('should create service with custom download directory', () => {
       const customExtractor = new ExtractorService(authService, './custom-downloads')
-      expect(customExtractor).toBeDefined()
+      expect(customExtractor).toBeInstanceOf(ExtractorService)
     })
   })
 
@@ -82,6 +41,30 @@ describe('Extractor Service (Unit)', () => {
 
       expect(result.errors.length).toBeGreaterThan(0)
       expect(result.downloadedFiles).toHaveLength(0)
+    })
+
+    it('should include error message when session is missing', async () => {
+      const result = await extractor.extract({
+        orderNumbers: ['ORD-001', 'ORD-002']
+      })
+
+      expect(result.errors).toEqual(
+        expect.arrayContaining([expect.stringContaining('Not logged in')])
+      )
+    })
+
+    it('should return empty result structure even on failure', async () => {
+      const result = await extractor.extract({
+        orderNumbers: ['ORDER1']
+      })
+
+      expect(result).toHaveProperty('downloadedFiles')
+      expect(result).toHaveProperty('mergedFile')
+      expect(result).toHaveProperty('recordCount')
+      expect(result).toHaveProperty('errors')
+      expect(result).toHaveProperty('orderRecordCounts')
+      expect(result.mergedFile).toBeNull()
+      expect(result.recordCount).toBe(0)
     })
   })
 })

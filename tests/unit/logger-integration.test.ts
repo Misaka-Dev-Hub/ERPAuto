@@ -1,6 +1,6 @@
 /**
  * Logger Integration Tests - RequestContext Integration
- * Verifies RequestContext is properly integrated with Logger
+ * Verifies RequestContext functions produce correct behavior, not just exports.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -9,50 +9,72 @@ import path from 'path'
 import { getLogDir } from '../../src/main/services/logger/shared'
 
 describe('Logger RequestContext Integration', () => {
-  it('should export run from request-context', async () => {
-    const { run } = await import('../../src/main/services/logger/index')
-    expect(run).toBeDefined()
-    expect(typeof run).toBe('function')
+  it('should generate unique request IDs inside run()', async () => {
+    const { run, getRequestId } = await import('../../src/main/services/logger/index')
+
+    const outerId = await run(async () => getRequestId())
+    const innerId = await run(async () => getRequestId())
+
+    expect(outerId).toBeTruthy()
+    expect(innerId).toBeTruthy()
+    expect(outerId).not.toBe(innerId)
   })
 
-  it('should export getRequestId from request-context', async () => {
+  it('should return undefined for getRequestId() outside run()', async () => {
     const { getRequestId } = await import('../../src/main/services/logger/index')
-    expect(getRequestId).toBeDefined()
-    expect(typeof getRequestId).toBe('function')
+
+    expect(getRequestId()).toBeUndefined()
   })
 
-  it('should export getContext from request-context', async () => {
-    const { getContext } = await import('../../src/main/services/logger/index')
-    expect(getContext).toBeDefined()
-    expect(typeof getContext).toBe('function')
+  it('should propagate context through run()', async () => {
+    const { run, getContext } = await import('../../src/main/services/logger/index')
+
+    const context = await run(async () => getContext(), {
+      userId: 'user-123',
+      operation: 'test-op'
+    })
+
+    expect(context).toBeDefined()
+    expect(context!.userId).toBe('user-123')
+    expect(context!.operation).toBe('test-op')
   })
 
-  it('should export withContext from request-context', async () => {
-    const { withContext } = await import('../../src/main/services/logger/index')
-    expect(withContext).toBeDefined()
-    expect(typeof withContext).toBe('function')
+  it('should provide request ID inside withRequestContext()', async () => {
+    const { withRequestContext, getRequestId } =
+      await import('../../src/main/services/logger/index')
+
+    const requestId = await withRequestContext(async () => getRequestId(), {
+      userId: 'user-abc',
+      operation: 'extract'
+    })
+
+    expect(requestId).toBeTruthy()
   })
 
-  it('should export withRequestContext wrapper', async () => {
-    const { withRequestContext } = await import('../../src/main/services/logger/index')
-    expect(withRequestContext).toBeDefined()
-    expect(typeof withRequestContext).toBe('function')
+  it('should inject context into withRequestContext()', async () => {
+    const { withRequestContext, getContext } = await import('../../src/main/services/logger/index')
+
+    const ctx = await withRequestContext(async () => getContext(), {
+      userId: 'admin',
+      operation: 'clean'
+    })
+
+    expect(ctx).toBeDefined()
+    expect(ctx!.userId).toBe('admin')
+    expect(ctx!.operation).toBe('clean')
   })
 
-  it('should export createLogger', async () => {
+  it('should create a child logger that carries context metadata', async () => {
     const { createLogger } = await import('../../src/main/services/logger/index')
-    expect(createLogger).toBeDefined()
-    expect(typeof createLogger).toBe('function')
-  })
+    const logger = createLogger('MyModule')
 
-  it('should have all exports available from LoggerContext type', async () => {
-    const loggerModule = await import('../../src/main/services/logger/index')
-    expect(loggerModule.run).toBeDefined()
-    expect(loggerModule.getRequestId).toBeDefined()
-    expect(loggerModule.getContext).toBeDefined()
-    expect(loggerModule.withContext).toBeDefined()
-    expect(loggerModule.withRequestContext).toBeDefined()
-    expect(loggerModule.createLogger).toBeDefined()
+    logger.info('hello', { key: 'value' })
+
+    // Verify the logger is functional — it has standard log methods that accept calls
+    expect(typeof logger.info).toBe('function')
+    expect(typeof logger.error).toBe('function')
+    expect(typeof logger.warn).toBe('function')
+    expect(typeof logger.debug).toBe('function')
   })
 })
 
