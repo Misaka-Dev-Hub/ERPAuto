@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { ExtractorService } from '../../src/main/services/erp/extractor'
 import { ErpAuthService } from '../../src/main/services/erp/erp-auth'
 import type { ErpConfig } from '../../src/main/types/erp.types'
@@ -18,12 +18,7 @@ describe('Extractor Service (Integration)', () => {
   // Check if we have ERP credentials
   const hasCredentials = !!(config.url && config.username && config.password)
 
-  it('should extract data for single order number', async () => {
-    if (!hasCredentials) {
-      console.warn('Skipping test: ERP credentials not configured')
-      return
-    }
-
+  it.skipIf(!hasCredentials)('should extract data for single order number', async () => {
     // Create fresh auth service for this test
     const authService = new ErpAuthService(config)
     await authService.login()
@@ -46,12 +41,7 @@ describe('Extractor Service (Integration)', () => {
     await authService.close()
   }, 60000)
 
-  it('should extract data for multiple order numbers', async () => {
-    if (!hasCredentials) {
-      console.warn('Skipping test: ERP credentials not configured')
-      return
-    }
-
+  it.skipIf(!hasCredentials)('should extract data for multiple order numbers', async () => {
     // Create fresh auth service for this test
     const authService = new ErpAuthService(config)
     await authService.login()
@@ -59,10 +49,6 @@ describe('Extractor Service (Integration)', () => {
     const extractor = new ExtractorService(authService)
 
     // Read order numbers from productionID.txt file
-    const fs = await import('fs/promises')
-    const path = await import('path')
-    // productionID.txt is at: D:\FileLib\Projects\CodeMigration\references\demo\productionID.txt
-    // test runs at: D:\FileLib\Projects\CodeMigration\ERPAuto
     const productionIdFile = path.join(process.cwd(), '../references/demo/productionID.txt')
     const content = await fs.readFile(productionIdFile, 'utf-8')
     const orderNumbers = content
@@ -89,12 +75,7 @@ describe('Extractor Service (Integration)', () => {
     await authService.close()
   }, 120000) // Increase timeout to 2 minutes
 
-  it('should extract data for 300 orders with batch size 70', async () => {
-    if (!hasCredentials) {
-      console.warn('Skipping test: ERP credentials not configured')
-      return
-    }
-
+  it.skipIf(!hasCredentials)('should extract data for 300 orders with batch size 70', async () => {
     // Create fresh auth service for this test
     const authService = new ErpAuthService(config)
     await authService.login()
@@ -102,8 +83,6 @@ describe('Extractor Service (Integration)', () => {
     const extractor = new ExtractorService(authService)
 
     // Read all order numbers from productionID.txt file
-    const fs = await import('fs/promises')
-    const path = await import('path')
     const productionIdFile = path.join(process.cwd(), '../references/demo/productionID.txt')
     const content = await fs.readFile(productionIdFile, 'utf-8')
     const orderNumbers = content
@@ -130,7 +109,9 @@ describe('Extractor Service (Integration)', () => {
     console.log(`Expected batches: ${Math.ceil(orderNumbers.length / 70)}`)
     console.log(`Downloaded files: ${result.downloadedFiles.length}`)
     console.log(`Total duration: ${duration}s`)
-    console.log(`Average time per batch: ${(duration / result.downloadedFiles.length).toFixed(2)}s`)
+    console.log(
+      `Average time per batch: ${(duration / result.downloadedFiles.length).toFixed(2)}s`
+    )
 
     if (result.errors.length > 0) {
       console.log(`\nErrors encountered: ${result.errors.length}`)

@@ -146,9 +146,8 @@ describe('UpdateService', () => {
 
   // Note: This integration scenario is complex to test in unit tests.
   // Moved to integration tests: tests/integration/update-workflow.test.ts
-  // Skip this test as it requires real integration testing
   it.skip('checks updates for user and auto-downloads available recommendation', async () => {
-    expect(true).toBe(true) // Placeholder - see integration tests
+    // Covered by integration tests
   })
 
   it('returns disabled catalog when update services are unavailable', async () => {

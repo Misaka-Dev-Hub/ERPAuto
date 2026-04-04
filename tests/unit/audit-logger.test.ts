@@ -118,8 +118,10 @@ describe('Audit Logger - Real File Integration', () => {
   })
 
   it('should handle all status values (success, failure, partial)', async () => {
-    const { logAudit, closeAuditLogger } =
+    const { logAudit, closeAuditLogger, applyAuditConfig } =
       await import('../../src/main/services/logger/audit-logger')
+
+    applyAuditConfig(30)
 
     // Test success status
     logAudit('EXTRACT', 'user1', {
@@ -149,13 +151,15 @@ describe('Audit Logger - Real File Integration', () => {
 
     closeAuditLogger()
 
-    // Verify all entries were processed
-    expect(true).toBe(true) // Logger accepted all status types without error
+    // Verify logAudit executed for each entry (each call invokes app.getVersion)
+    expect(app.getVersion).toHaveBeenCalledTimes(3)
   })
 
   it('should handle metadata correctly (with and without)', async () => {
-    const { logAudit, closeAuditLogger } =
+    const { logAudit, closeAuditLogger, applyAuditConfig } =
       await import('../../src/main/services/logger/audit-logger')
+
+    applyAuditConfig(30)
 
     // Without metadata
     logAudit('LOGIN', 'user-no-meta', {
@@ -176,8 +180,8 @@ describe('Audit Logger - Real File Integration', () => {
 
     closeAuditLogger()
 
-    // Both entries should be processed successfully
-    expect(true).toBe(true)
+    // Both entries processed (each call invokes app.getVersion)
+    expect(app.getVersion).toHaveBeenCalledTimes(2)
   })
 
   it('should generate ISO 8601 timestamp', async () => {
@@ -209,8 +213,10 @@ describe('Audit Logger - Real File Integration', () => {
   })
 
   it('should handle special characters in fields', async () => {
-    const { logAudit, closeAuditLogger } =
+    const { logAudit, closeAuditLogger, applyAuditConfig } =
       await import('../../src/main/services/logger/audit-logger')
+
+    applyAuditConfig(30)
 
     logAudit('LOGIN_ATTEMPT', 'user-special', {
       username: 'user.name+test@example.com',
@@ -222,13 +228,15 @@ describe('Audit Logger - Real File Integration', () => {
 
     closeAuditLogger()
 
-    // Should handle without errors
-    expect(true).toBe(true)
+    // Verify special characters were processed without error
+    expect(app.getVersion).toHaveBeenCalledTimes(1)
   })
 
   it('should handle empty metadata gracefully', async () => {
-    const { logAudit, closeAuditLogger } =
+    const { logAudit, closeAuditLogger, applyAuditConfig } =
       await import('../../src/main/services/logger/audit-logger')
+
+    applyAuditConfig(30)
 
     logAudit('PING', 'ping-user', {
       username: 'pinger',
@@ -240,7 +248,7 @@ describe('Audit Logger - Real File Integration', () => {
 
     closeAuditLogger()
 
-    // Should handle empty metadata
-    expect(true).toBe(true)
+    // Verify empty metadata was processed without error
+    expect(app.getVersion).toHaveBeenCalledTimes(1)
   })
 })

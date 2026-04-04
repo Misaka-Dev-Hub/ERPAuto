@@ -15,19 +15,11 @@ describe('ERP Authentication Service (Integration)', () => {
   const hasCredentials = !!(config.url && config.username && config.password)
 
   beforeAll(() => {
-    if (!hasCredentials) {
-      console.warn('Skipping ERP auth tests: credentials not configured')
-      return
-    }
+    if (!hasCredentials) return
     authService = new ErpAuthService(config)
   })
 
-  it('should login successfully', async () => {
-    if (!hasCredentials) {
-      console.warn('Skipping test: ERP credentials not configured')
-      return
-    }
-
+  it.skipIf(!hasCredentials)('should login successfully', async () => {
     const session = await authService.login()
 
     expect(session).toBeDefined()
@@ -37,12 +29,7 @@ describe('ERP Authentication Service (Integration)', () => {
     expect(session.isLoggedIn).toBe(true)
   }, 30000)
 
-  it('should navigate to main page after login', async () => {
-    if (!hasCredentials) {
-      console.warn('Skipping test: ERP credentials not configured')
-      return
-    }
-
+  it.skipIf(!hasCredentials)('should navigate to main page after login', async () => {
     const session = await authService.login()
 
     const url = session.page.url()

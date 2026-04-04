@@ -21,12 +21,7 @@ describe('Cleaner Service (Integration)', () => {
   const hasCredentials = !!(config.url && config.username && config.password)
 
   describe('Dry-run mode', () => {
-    it('should initialize with dry-run mode', async () => {
-      if (!hasCredentials) {
-        console.warn('Skipping test: ERP credentials not configured')
-        return
-      }
-
+    it.skipIf(!hasCredentials)('should initialize with dry-run mode', async () => {
       const authService = new ErpAuthService(config)
       await authService.login()
 
@@ -37,64 +32,58 @@ describe('Cleaner Service (Integration)', () => {
       await authService.close()
     }, 30000)
 
-    it('should track materials to delete without actually deleting (dry-run)', async () => {
-      if (!hasCredentials) {
-        console.warn('Skipping test: ERP credentials not configured')
-        return
-      }
+    it.skipIf(!hasCredentials)(
+      'should track materials to delete without actually deleting (dry-run)',
+      async () => {
+        const authService = new ErpAuthService(config)
+        await authService.login()
 
-      const authService = new ErpAuthService(config)
-      await authService.login()
+        // Read test data
+        const orderContent = await fs.readFile(productionIdFile, 'utf-8')
+        const orderNumbers = orderContent
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+          .slice(0, 2) // Test first 2 orders
 
-      // Read test data
-      const orderContent = await fs.readFile(productionIdFile, 'utf-8')
-      const orderNumbers = orderContent
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-        .slice(0, 2) // Test first 2 orders
+        const materialContent = await fs.readFile(materialCodeFile, 'utf-8')
+        const materialCodes = materialContent
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
 
-      const materialContent = await fs.readFile(materialCodeFile, 'utf-8')
-      const materialCodes = materialContent
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
+        console.log(
+          `Testing dry-run with ${orderNumbers.length} orders and ${materialCodes.length} material codes`
+        )
 
-      console.log(
-        `Testing dry-run with ${orderNumbers.length} orders and ${materialCodes.length} material codes`
-      )
+        const cleaner = new CleanerService(authService, { dryRun: true })
 
-      const cleaner = new CleanerService(authService, { dryRun: true })
+        const result = await cleaner.clean({
+          orderNumbers,
+          materialCodes,
+          dryRun: true
+        })
 
-      const result = await cleaner.clean({
-        orderNumbers,
-        materialCodes,
-        dryRun: true
-      })
+        // In dry-run mode, materialsDeleted should be tracked but not actually deleted
+        console.log(`Dry-run result:`, {
+          ordersProcessed: result.ordersProcessed,
+          materialsDeleted: result.materialsDeleted,
+          materialsSkipped: result.materialsSkipped,
+          errors: result.errors.length
+        })
 
-      // In dry-run mode, materialsDeleted should be tracked but not actually deleted
-      console.log(`Dry-run result:`, {
-        ordersProcessed: result.ordersProcessed,
-        materialsDeleted: result.materialsDeleted,
-        materialsSkipped: result.materialsSkipped,
-        errors: result.errors.length
-      })
+        expect(result.ordersProcessed).toBeGreaterThan(0)
+        // In dry-run, no actual deletions should happen
+        expect(result.errors).toHaveLength(0)
 
-      expect(result.ordersProcessed).toBeGreaterThan(0)
-      // In dry-run, no actual deletions should happen
-      expect(result.errors).toHaveLength(0)
-
-      await authService.close()
-    }, 120000)
+        await authService.close()
+      },
+      120000
+    )
   })
 
   describe('Order processing', () => {
-    it('should process single order and return details', async () => {
-      if (!hasCredentials) {
-        console.warn('Skipping test: ERP credentials not configured')
-        return
-      }
-
+    it.skipIf(!hasCredentials)('should process single order and return details', async () => {
       const authService = new ErpAuthService(config)
       await authService.login()
 
@@ -120,12 +109,7 @@ describe('Cleaner Service (Integration)', () => {
       await authService.close()
     }, 60000)
 
-    it('should handle order with "审批通过" status', async () => {
-      if (!hasCredentials) {
-        console.warn('Skipping test: ERP credentials not configured')
-        return
-      }
-
+    it.skipIf(!hasCredentials)('should handle order with "审批通过" status', async () => {
       const authService = new ErpAuthService(config)
       await authService.login()
 
@@ -155,12 +139,7 @@ describe('Cleaner Service (Integration)', () => {
       await authService.close()
     }, 60000)
 
-    it('should handle multiple orders with progress callback', async () => {
-      if (!hasCredentials) {
-        console.warn('Skipping test: ERP credentials not configured')
-        return
-      }
-
+    it.skipIf(!hasCredentials)('should handle multiple orders with progress callback', async () => {
       const authService = new ErpAuthService(config)
       await authService.login()
 
@@ -194,12 +173,7 @@ describe('Cleaner Service (Integration)', () => {
   })
 
   describe('Error handling', () => {
-    it('should continue processing after order error', async () => {
-      if (!hasCredentials) {
-        console.warn('Skipping test: ERP credentials not configured')
-        return
-      }
-
+    it.skipIf(!hasCredentials)('should continue processing after order error', async () => {
       const authService = new ErpAuthService(config)
       await authService.login()
 
@@ -221,27 +195,26 @@ describe('Cleaner Service (Integration)', () => {
   })
 
   describe('Navigation', () => {
-    it('should navigate to discrete production order maintenance page', async () => {
-      if (!hasCredentials) {
-        console.warn('Skipping test: ERP credentials not configured')
-        return
-      }
+    it.skipIf(!hasCredentials)(
+      'should navigate to discrete production order maintenance page',
+      async () => {
+        const authService = new ErpAuthService(config)
+        await authService.login()
 
-      const authService = new ErpAuthService(config)
-      await authService.login()
+        const cleaner = new CleanerService(authService, { dryRun: true })
 
-      const cleaner = new CleanerService(authService, { dryRun: true })
+        // This tests the internal navigation method
+        const session = authService.getSession()
+        const { popupPage, workFrame } = await cleaner.navigateToCleanerPage(session)
 
-      // This tests the internal navigation method
-      const session = authService.getSession()
-      const { popupPage, workFrame } = await cleaner.navigateToCleanerPage(session)
+        expect(popupPage).toBeDefined()
+        expect(workFrame).toBeDefined()
 
-      expect(popupPage).toBeDefined()
-      expect(workFrame).toBeDefined()
-
-      // Cleanup
-      await popupPage.close()
-      await authService.close()
-    }, 60000)
+        // Cleanup
+        await popupPage.close()
+        await authService.close()
+      },
+      60000
+    )
   })
 })
