@@ -48,34 +48,43 @@ vi.mock('winston', () => {
     })
   }
 
+  const formatFn = vi.fn((fn: any) => fn && fn()) as any
+  formatFn.combine = vi.fn((...args) => args)
+  formatFn.timestamp = vi.fn(() => ({ type: 'timestamp' }))
+  formatFn.colorize = vi.fn(() => ({ type: 'colorize' }))
+  formatFn.printf = vi.fn((fn: any) => fn)
+  formatFn.json = vi.fn(() => ({ type: 'json' }))
+
   return {
     default: {
       createLogger: vi.fn(() => createLoggerInstance),
-      format: {
-        combine: vi.fn((...args) => args),
-        timestamp: vi.fn(() => ({ type: 'timestamp' })),
-        colorize: vi.fn(() => ({ type: 'colorize' })),
-        printf: vi.fn((fn) => fn),
-        json: vi.fn(() => ({ type: 'json' }))
-      },
+      format: formatFn,
       transports: {
-        Console: vi.fn()
+        Console: vi.fn() as any,
+        DailyRotateFile: vi.fn() as any
       }
     }
   }
 })
 
 vi.mock('winston-daily-rotate-file', () => ({
-  default: vi.fn()
+  default: vi.fn() as any
 }))
 
-vi.mock('electron', () => ({
-  app: {
-    isReady: vi.fn(() => false),
-    getPath: vi.fn(() => './logs'),
-    isPackaged: false
-  }
-}))
+vi.mock(
+  'electron',
+  () =>
+    ({
+      BrowserWindow: {
+        getAllWindows: vi.fn(() => [])
+      },
+      app: {
+        isReady: vi.fn(() => false),
+        getPath: vi.fn(() => './logs'),
+        isPackaged: false
+      }
+    }) as any
+)
 
 describe('Logger', () => {
   beforeEach(() => {

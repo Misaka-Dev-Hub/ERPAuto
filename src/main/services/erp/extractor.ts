@@ -10,7 +10,8 @@ import type {
   LogLevel
 } from '../../types/extractor.types'
 import { DataImportService } from '../database/data-importer'
-import { createLogger } from '../logger'
+import { createLogger, withRequestContext, getRequestId } from '../logger'
+import { trackDuration } from '../logger/performance-monitor'
 
 const log = createLogger('ExtractorService')
 
@@ -50,70 +51,105 @@ export class ExtractorService {
       orderRecordCounts: []
     }
 
-    try {
-      const session = this.authService.getSession()
-
-      // Call ExtractorCore to execute web page operations
-      const core = new ExtractorCore()
-      const coreResult = await core.downloadAllBatches({
-        session,
-        orderNumbers: input.orderNumbers,
-        downloadDir: this.downloadDir,
-        batchSize: input.batchSize || 100,
-        onProgress: input.onProgress
-      })
-
-      result.downloadedFiles = coreResult.downloadedFiles
-      result.errors = coreResult.errors
-
-      // Merge downloaded files (original logic preserved)
-      if (result.downloadedFiles.length > 0) {
-        const totalBatches = result.downloadedFiles.length
-        const totalPoints = 1 + totalBatches + 2
-        const progressPerPoint = 100 / totalPoints
-        const mergeProgress = (1 + totalBatches) * progressPerPoint
-
-        input.onProgress?.('正在合并文件...', mergeProgress, {
-          phase: 'merging',
-          totalBatches
+    // Wrap entire extraction in request context for unified logging
+    return withRequestContext(
+      async () => {
+        const requestId = getRequestId()
+        log.info('Starting extraction', {
+          orderCount: input.orderNumbers.length,
+          batchSize: input.batchSize || 100,
+          downloadDir: this.downloadDir,
+          requestId
         })
-        const mergeResult = await this.mergeFiles(result.downloadedFiles)
-        result.mergedFile = mergeResult.mergedFile
-        result.recordCount = mergeResult.recordCount
-        result.orderRecordCounts = mergeResult.orderRecordCounts
 
-        // Add merge error to result if any
-        if (mergeResult.error) {
-          result.errors.push(mergeResult.error)
-        }
+        try {
+          const session = this.authService.getSession()
 
-        // Always clean up temporary files regardless of merge success
-        await this.cleanupTempFiles(result.downloadedFiles)
-
-        // Auto-import to database if merge was successful
-        if (result.mergedFile) {
-          const importProgress = (1 + totalBatches + 1) * progressPerPoint
-          input.onProgress?.('正在写入数据库...', importProgress, {
-            phase: 'importing',
-            totalBatches
-          })
-          const importResult = await this.importToDatabaseWithLogging(
-            result.mergedFile,
-            input.onLog
+          // Call ExtractorCore to execute web page operations with timing
+          const core = new ExtractorCore()
+          const coreResult = await trackDuration(
+            async () =>
+              core.downloadAllBatches({
+                session,
+                orderNumbers: input.orderNumbers,
+                downloadDir: this.downloadDir,
+                batchSize: input.batchSize || 100,
+                onProgress: input.onProgress
+              }),
+            {
+              operationName: 'Batch Download',
+              context: {
+                orderCount: input.orderNumbers.length,
+                batchSize: input.batchSize || 100
+              }
+            }
           )
-          result.importResult = importResult
 
-          if (!importResult.success && importResult.errors.length > 0) {
-            result.errors.push(...importResult.errors)
+          result.downloadedFiles = coreResult.result.downloadedFiles
+          result.errors = coreResult.result.errors
+
+          // Merge downloaded files (original logic preserved)
+          if (result.downloadedFiles.length > 0) {
+            const totalBatches = result.downloadedFiles.length
+            const totalPoints = 1 + totalBatches + 2
+            const progressPerPoint = 100 / totalPoints
+            const mergeProgress = (1 + totalBatches) * progressPerPoint
+
+            input.onProgress?.('正在合并文件...', mergeProgress, {
+              phase: 'merging',
+              totalBatches
+            })
+            const mergeResult = await this.mergeFiles(result.downloadedFiles, input.orderNumbers)
+            result.mergedFile = mergeResult.mergedFile
+            result.recordCount = mergeResult.recordCount
+            result.orderRecordCounts = mergeResult.orderRecordCounts
+
+            // Add merge error to result if any
+            if (mergeResult.error) {
+              result.errors.push(mergeResult.error)
+            }
+
+            // Always clean up temporary files regardless of merge success
+            await this.cleanupTempFiles(result.downloadedFiles, input.orderNumbers)
+
+            // Auto-import to database if merge was successful
+            if (result.mergedFile) {
+              const importProgress = (1 + totalBatches + 1) * progressPerPoint
+              input.onProgress?.('正在写入数据库...', importProgress, {
+                phase: 'importing',
+                totalBatches
+              })
+              const importResult = await this.importToDatabaseWithLogging(
+                result.mergedFile,
+                input.onLog
+              )
+              result.importResult = importResult
+
+              if (!importResult.success && importResult.errors.length > 0) {
+                result.errors.push(...importResult.errors)
+              }
+            }
           }
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      result.errors.push(`Extraction failed: ${message}`)
-    }
 
-    return result
+          log.info('Extraction completed successfully', {
+            recordCount: result.recordCount,
+            fileCount: result.downloadedFiles.length
+          })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error'
+          log.error('Extraction failed', {
+            error: message,
+            orderNumbers: input.orderNumbers,
+            downloadDir: this.downloadDir,
+            requestId: getRequestId()
+          })
+          result.errors.push(`Extraction failed: ${message}`)
+        }
+
+        return result
+      },
+      { operation: 'extract' }
+    )
   }
 
   /**
@@ -121,9 +157,13 @@ export class ExtractorService {
    * Uses ExcelParser to parse and combine all material plans
    *
    * @param filePaths - Array of downloaded Excel file paths
+   * @param orderNumbers - Order numbers for context logging
    * @returns Merged file path, total record count, and optional error message
    */
-  private async mergeFiles(filePaths: string[]): Promise<{
+  private async mergeFiles(
+    filePaths: string[],
+    orderNumbers: string[]
+  ): Promise<{
     mergedFile: string | null
     recordCount: number
     error?: string
@@ -133,75 +173,101 @@ export class ExtractorService {
       return { mergedFile: null, recordCount: 0, orderRecordCounts: [] }
     }
 
-    log.info('Starting merge', { fileCount: filePaths.length })
-    const parser = new ExcelParser()
+    log.info('Starting merge', { fileCount: filePaths.length, orderCount: orderNumbers.length })
 
-    // Collect all orders with full order info and materials
-    // Each order has: { orderInfo: OrderHeader, materials: MaterialRow[] }
-    const allOrders: Array<{ orderInfo: any; materials: any[] }> = []
+    // Track merge operation duration and unwrap result
+    const trackedResult = await trackDuration(
+      async () => {
+        const parser = new ExcelParser()
 
-    // Parse each downloaded file and collect orders
-    for (const filePath of filePaths) {
-      try {
-        log.debug('Parsing file', { filePath })
-        await parser.parse(filePath)
-        // After parse(), the parser store orders internally as lastOrders
-        const orders = (parser as any).lastOrders
-        log.debug('File parsed', { filePath, orderCount: orders?.length || 0 })
-        if (orders && Array.isArray(orders)) {
-          allOrders.push(...orders)
+        // Collect all orders with full order info and materials
+        // Each order has: { orderInfo: OrderHeader, materials: MaterialRow[] }
+        const allOrders: Array<{ orderInfo: any; materials: any[] }> = []
+
+        // Parse each downloaded file and collect orders
+        for (const filePath of filePaths) {
+          try {
+            log.debug('Parsing file', { filePath })
+            await parser.parse(filePath)
+            // After parse(), the parser store orders internally as lastOrders
+            const orders = (parser as any).lastOrders
+            log.debug('File parsed', { filePath, orderCount: orders?.length || 0 })
+            if (orders && Array.isArray(orders)) {
+              allOrders.push(...orders)
+            }
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error)
+            log.error('Failed to parse file', {
+              filePath,
+              error: errorMsg,
+              orderNumbers,
+              batchId: filePaths.indexOf(filePath)
+            })
+          }
         }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error)
-        log.error('Failed to parse file', { filePath, error: errorMsg })
+
+        // Calculate total record count (total material rows)
+        let recordCount = 0
+        const orderRecordCounts: Array<{ orderNumber: string; recordCount: number }> = []
+        for (const order of allOrders) {
+          const count = order.materials.length
+          recordCount += count
+          orderRecordCounts.push({
+            orderNumber: order.orderInfo.productionOrder || '',
+            recordCount: count
+          })
+        }
+
+        log.info('Merge summary', { orderCount: allOrders.length, recordCount })
+
+        if (recordCount === 0) {
+          log.warn('No records found in any downloaded files', { orderNumbers })
+          return { mergedFile: null, recordCount: 0, orderRecordCounts }
+        }
+
+        // Generate output filename with timestamp
+        const timestamp = new Date()
+          .toISOString()
+          .replace(/[-:T]/g, '')
+          .replace(/\..+/, '')
+          .slice(0, 14)
+        const outputPath = path.join(this.downloadDir, `merged_${timestamp}.xlsx`)
+
+        // Save with error handling
+        try {
+          log.info('Saving merged file', { outputPath })
+          await this.saveMergedOrders(allOrders, outputPath)
+          log.info('Merged file saved successfully', { recordCount })
+          return { mergedFile: outputPath, recordCount, orderRecordCounts }
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error)
+          const errorStack = error instanceof Error ? error.stack : ''
+          log.error('Failed to save merged file', {
+            error: errorMsg,
+            stack: errorStack,
+            orderNumbers,
+            downloadDir: this.downloadDir
+          })
+          // Return parsed record count and error info even if save fails
+          return {
+            mergedFile: null,
+            recordCount,
+            orderRecordCounts,
+            error: `保存合并文件失败：${errorMsg}`
+          }
+        }
+      },
+      {
+        operationName: 'File Merge',
+        context: {
+          fileCount: filePaths.length,
+          orderCount: orderNumbers.length,
+          orderNumbers
+        }
       }
-    }
+    )
 
-    // Calculate total record count (total material rows)
-    let recordCount = 0
-    const orderRecordCounts: Array<{ orderNumber: string; recordCount: number }> = []
-    for (const order of allOrders) {
-      const count = order.materials.length
-      recordCount += count
-      orderRecordCounts.push({
-        orderNumber: order.orderInfo.productionOrder || '',
-        recordCount: count
-      })
-    }
-
-    log.info('Merge summary', { orderCount: allOrders.length, recordCount })
-
-    if (recordCount === 0) {
-      log.warn('No records found in any downloaded files')
-      return { mergedFile: null, recordCount: 0, orderRecordCounts }
-    }
-
-    // Generate output filename with timestamp
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[-:T]/g, '')
-      .replace(/\..+/, '')
-      .slice(0, 14)
-    const outputPath = path.join(this.downloadDir, `merged_${timestamp}.xlsx`)
-
-    // Save with error handling
-    try {
-      log.info('Saving merged file', { outputPath })
-      await this.saveMergedOrders(allOrders, outputPath)
-      log.info('Merged file saved successfully', { recordCount })
-      return { mergedFile: outputPath, recordCount, orderRecordCounts }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      const errorStack = error instanceof Error ? error.stack : ''
-      log.error('Failed to save merged file', { error: errorMsg, stack: errorStack })
-      // Return parsed record count and error info even if save fails
-      return {
-        mergedFile: null,
-        recordCount,
-        orderRecordCounts,
-        error: `保存合并文件失败：${errorMsg}`
-      }
-    }
+    return trackedResult.result
   }
 
   /**
@@ -308,14 +374,19 @@ export class ExtractorService {
    * Clean up temporary batch files after merging
    * @param filePaths - Array of temporary file paths to delete
    */
-  private async cleanupTempFiles(filePaths: string[]): Promise<void> {
+  private async cleanupTempFiles(filePaths: string[], orderNumbers?: string[]): Promise<void> {
     for (const filePath of filePaths) {
       try {
         await fs.unlink(filePath)
         log.debug('Deleted temporary file', { filePath })
       } catch (error) {
         // Log error but don't fail the main process
-        log.error('Failed to delete temporary file', { filePath, error })
+        log.error('Failed to delete temporary file', {
+          filePath,
+          error,
+          orderNumbers,
+          downloadDir: this.downloadDir
+        })
       }
     }
   }
@@ -333,41 +404,58 @@ export class ExtractorService {
     log.info('Starting database import', { filePath })
     onLog?.('info', `开始导入数据到数据库...`)
 
-    const importService = new DataImportService()
+    // Track import operation duration and unwrap result
+    const trackedResult = await trackDuration(
+      async () => {
+        const importService = new DataImportService()
 
-    try {
-      const result = await importService.importFromExcel(filePath, 1000)
+        try {
+          const result = await importService.importFromExcel(filePath, 1000)
 
-      log.info('Import completed', {
-        success: result.success,
-        recordsRead: result.recordsRead,
-        recordsDeleted: result.recordsDeleted,
-        recordsImported: result.recordsImported
-      })
+          log.info('Import completed', {
+            success: result.success,
+            recordsRead: result.recordsRead,
+            recordsDeleted: result.recordsDeleted,
+            recordsImported: result.recordsImported
+          })
 
-      if (result.success) {
-        onLog?.(
-          'success',
-          `导入完成：读取 ${result.recordsRead} 条，删除 ${result.recordsDeleted} 条，导入 ${result.recordsImported} 条`
-        )
-      } else if (result.errors.length > 0) {
-        result.errors.forEach((err) => onLog?.('error', err))
+          if (result.success) {
+            onLog?.(
+              'success',
+              `导入完成：读取 ${result.recordsRead} 条，删除 ${result.recordsDeleted} 条，导入 ${result.recordsImported} 条`
+            )
+          } else if (result.errors.length > 0) {
+            result.errors.forEach((err) => onLog?.('error', err))
+          }
+
+          return result
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error)
+          log.error('Import failed', {
+            error: errorMsg,
+            filePath,
+            downloadDir: this.downloadDir
+          })
+          onLog?.('error', `导入失败：${errorMsg}`)
+
+          return {
+            success: false,
+            recordsRead: 0,
+            recordsDeleted: 0,
+            recordsImported: 0,
+            uniqueSourceNumbers: 0,
+            errors: [errorMsg]
+          }
+        }
+      },
+      {
+        operationName: 'Database Import',
+        context: {
+          filePath
+        }
       }
+    )
 
-      return result
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      log.error('Import failed', { error: errorMsg })
-      onLog?.('error', `导入失败：${errorMsg}`)
-
-      return {
-        success: false,
-        recordsRead: 0,
-        recordsDeleted: 0,
-        recordsImported: 0,
-        uniqueSourceNumbers: 0,
-        errors: [errorMsg]
-      }
-    }
+    return trackedResult.result
   }
 }

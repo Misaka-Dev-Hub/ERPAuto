@@ -15,6 +15,7 @@ import { BrowserWindow } from 'electron'
 import { serializeError, sanitizeError } from './error-utils'
 import { getLogDir, isProduction } from './shared'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
+import { getContext, run } from './request-context'
 
 // Cache isProduction() at module load — app.isPackaged never changes at runtime
 const IS_PROD = isProduction()
@@ -37,50 +38,83 @@ function isSerializedError(value: unknown): boolean {
 const consoleFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.colorize(),
-  winston.format.printf(({ timestamp, level, message, context, error, ...meta }) => {
-    const contextStr = context ? `[${context}]` : ''
-
-    // Format error with full stack trace
-    let errorStr = ''
-    if (error) {
-      // Skip re-serialization if already a serialized error object
-      const serialized: { stack?: string; message: string } = isSerializedError(error)
-        ? (error as { stack?: string; message: string })
-        : IS_PROD
-          ? sanitizeError(serializeError(error))
-          : serializeError(error)
-      if (serialized.stack) {
-        errorStr = `\n${serialized.stack}`
-      } else {
-        errorStr = ` ${serialized.message}`
+  // Auto-inject requestId from async context
+  winston.format((info) => {
+    const context = getContext()
+    if (context) {
+      info.requestId = context.requestId
+      if (context.userId) {
+        info.userId = context.userId
+      }
+      if (context.operation) {
+        info.operation = context.operation
       }
     }
+    return info
+  })(),
+  winston.format.printf(
+    ({ timestamp, level, message, context, error, requestId, userId, operation, ...meta }) => {
+      const contextStr = context ? `[${context}]` : ''
+      const requestIdStr = requestId ? ` [${requestId}]` : ''
+      const userStr = userId ? ` (user:${userId})` : ''
+      const opStr = operation ? ` op:${operation}` : ''
 
-    let metaStr = ''
-    if (Object.keys(meta).length > 0) {
-      try {
-        metaStr = ` ${JSON.stringify(meta, null, 2)}`
-      } catch {
-        // Fallback for circular references: stringify primitives, replace complex objects with placeholder
-        metaStr = ` ${JSON.stringify(
-          Object.fromEntries(
-            Object.entries(meta).map(([k, v]) => [
-              k,
-              v !== null && typeof v === 'object' ? `[Object]` : v
-            ])
-          ),
-          null,
-          2
-        )}`
+      // Format error with full stack trace
+      let errorStr = ''
+      if (error) {
+        // Skip re-serialization if already a serialized error object
+        const serialized: { stack?: string; message: string } = isSerializedError(error)
+          ? (error as { stack?: string; message: string })
+          : IS_PROD
+            ? sanitizeError(serializeError(error))
+            : serializeError(error)
+        if (serialized.stack) {
+          errorStr = `\n${serialized.stack}`
+        } else {
+          errorStr = ` ${serialized.message}`
+        }
       }
+
+      let metaStr = ''
+      if (Object.keys(meta).length > 0) {
+        try {
+          metaStr = ` ${JSON.stringify(meta, null, 2)}`
+        } catch {
+          // Fallback for circular references: stringify primitives, replace complex objects with placeholder
+          metaStr = ` ${JSON.stringify(
+            Object.fromEntries(
+              Object.entries(meta).map(([k, v]) => [
+                k,
+                v !== null && typeof v === 'object' ? `[Object]` : v
+              ])
+            ),
+            null,
+            2
+          )}`
+        }
+      }
+      return `${timestamp} [${level}]${contextStr}${requestIdStr}${userStr}${opStr} ${message}${errorStr}${metaStr}`
     }
-    return `${timestamp} [${level}]${contextStr} ${message}${errorStr}${metaStr}`
-  })
+  )
 )
 
 // Custom format for file output - JSON with full error details
 const fileFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  // Auto-inject requestId from async context for file logs
+  winston.format((info) => {
+    const context = getContext()
+    if (context) {
+      info.requestId = context.requestId
+      if (context.userId) {
+        info.userId = context.userId
+      }
+      if (context.operation) {
+        info.operation = context.operation
+      }
+    }
+    return info
+  })(),
   winston.format((info) => {
     // Serialize errors in metadata (skip if already serialized)
     if (info.error) {
@@ -189,11 +223,48 @@ export function createLogger(context: string): winston.Logger {
   return logger.child({ context })
 }
 
+/**
+ * Execute a function with automatic request-scoped logging
+ *
+ * This wrapper ensures all logging within the function has access to the request context.
+ * It's a convenience wrapper around RequestContext.run() that also ensures the logger
+ * properly captures the context.
+ *
+ * @param fn - The async function to execute within the context
+ * @param context - Optional business context (userId, operation)
+ * @returns Promise resolving to the function's return value
+ *
+ * @example
+ * ```typescript
+ * await withRequestContext(async () => {
+ *   logger.info('Processing order') // Will include requestId, userId, operation
+ *   await processOrder()
+ * }, { userId: 'user123', operation: 'process-order' })
+ * ```
+ */
+export async function withRequestContext<T>(
+  fn: () => Promise<T>,
+  context?: { userId?: string; operation?: string }
+): Promise<T> {
+  return run(fn, context)
+}
+
 // Re-export error utilities for convenience
 export { logError, formatErrorForLogging, serializeError, extractErrorContext } from './error-utils'
 
+// Export request context management for async-context logging
+export { run, getRequestId, getContext, withContext, type LoggerContext } from './request-context'
+
 // Export the main logger for direct use
 export default logger
+
+// Export performance monitoring utilities
+export {
+  trackDuration,
+  PerformanceTracker,
+  createPerformanceTracker,
+  DEFAULT_SLOW_THRESHOLD_MS
+} from './performance-monitor'
 
 // Export log level types for convenience
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'verbose'

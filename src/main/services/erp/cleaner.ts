@@ -3,7 +3,7 @@ import { ErpAuthService } from './erp-auth'
 import type { CleanerInput, CleanerResult, OrderCleanDetail } from '../../types/cleaner.types'
 import type { ErpSession } from '../../types/erp.types'
 import type { FrameLocator, Locator, Page } from 'playwright'
-import { createLogger } from '../logger'
+import { createLogger, run, trackDuration } from '../logger'
 
 const log = createLogger('CleanerService')
 
@@ -173,6 +173,15 @@ export class CleanerService {
   }
 
   async clean(input: CleanerInput): Promise<CleanerResult> {
+    return run(
+      async () => {
+        return await this.performCleanup(input)
+      },
+      { operation: 'cleaner' }
+    )
+  }
+
+  private async performCleanup(input: CleanerInput): Promise<CleanerResult> {
     const result: CleanerResult = {
       ordersProcessed: 0,
       materialsDeleted: 0,
@@ -184,6 +193,7 @@ export class CleanerService {
     }
 
     const totalOrders = input.orderNumbers.length
+    const totalMaterials = input.materialCodes.length
     const dryRun = input.dryRun ?? this.dryRun
     const queryBatchSize = clampNumber(
       input.queryBatchSize,
@@ -200,10 +210,12 @@ export class CleanerService {
 
     log.info('Starting cleaner', {
       totalOrders,
-      materialCount: input.materialCodes.length,
+      totalMaterials,
       dryRun,
       queryBatchSize,
-      processConcurrency
+      processConcurrency,
+      orderNumbers: input.orderNumbers,
+      materialCodes: input.materialCodes
     })
 
     const deleteSet = new Set(input.materialCodes)
@@ -231,56 +243,75 @@ export class CleanerService {
         log.info('Processing cleaner batch', {
           batchIndex: batchIndex + 1,
           totalBatches: orderBatches.length,
-          batchSize: batchOrders.length
+          batchSize: batchOrders.length,
+          totalOrders,
+          totalMaterials
         })
 
-        await this.queryOrders(workFrame, batchOrders)
-        await this.waitForLoading(workFrame)
+        // Track batch processing duration with 5s slow threshold
+        await trackDuration(
+          async () => {
+            await this.queryOrders(workFrame, batchOrders)
+            await this.waitForLoading(workFrame)
 
-        const queriedRows = await this.collectQueryResultRows(workFrame)
-        const queriedOrderNumbersInBatch = new Set(queriedRows.map((row) => row.orderNumber))
+            const queriedRows = await this.collectQueryResultRows(workFrame)
+            const queriedOrderNumbersInBatch = new Set(queriedRows.map((row) => row.orderNumber))
 
-        await runWithConcurrency(queriedRows, processConcurrency, async (row) => {
-          const { rowIndex, orderNumber } = row
-          const openedDetailPage = await popupMutex.runExclusive(async () => {
-            return await this.openDetailPageFromRow(workFrame, popupPage!, rowIndex)
-          })
+            await runWithConcurrency(queriedRows, processConcurrency, async (row) => {
+              const { rowIndex, orderNumber } = row
+              const openedDetailPage = await popupMutex.runExclusive(async () => {
+                return await this.openDetailPageFromRow(workFrame, popupPage!, rowIndex)
+              })
 
-          let detail: OrderCleanDetail
-          try {
-            detail = await this.processDetailPage({
-              detailPage: openedDetailPage,
-              deleteSet,
-              dryRun,
-              expectedOrderNumber: orderNumber,
-              progressState,
-              onProgress: input.onProgress
+              let detail: OrderCleanDetail
+              try {
+                detail = await this.processDetailPage({
+                  detailPage: openedDetailPage,
+                  deleteSet,
+                  dryRun,
+                  expectedOrderNumber: orderNumber,
+                  progressState,
+                  onProgress: input.onProgress
+                })
+              } catch (error) {
+                const message = error instanceof Error ? error.message : 'Unknown error'
+                detail = this.createErrorDetail(orderNumber, message)
+              } finally {
+                progressState.completedOrders += 1
+              }
+
+              result.details.push(detail)
+
+              if (detail.errors.length > 0) {
+                result.errors.push(`Order ${detail.orderNumber}: ${detail.errors.join('; ')}`)
+                return
+              }
+
+              result.ordersProcessed += 1
+              result.materialsDeleted += detail.materialsDeleted
+              result.materialsSkipped += detail.materialsSkipped
             })
-          } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unknown error'
-            detail = this.createErrorDetail(orderNumber, message)
-          } finally {
-            progressState.completedOrders += 1
+
+            const missingOrders = getMissingOrders(batchOrders, queriedOrderNumbersInBatch)
+            for (const missingOrder of missingOrders) {
+              const missingMessage = '订单未出现在查询结果中'
+              result.errors.push(`Order ${missingOrder}: ${missingMessage}`)
+              result.details.push(this.createErrorDetail(missingOrder, missingMessage))
+            }
+          },
+          {
+            operationName: `batch-${batchIndex + 1}-${orderBatches[batchIndex].length}-orders`,
+            message: `Batch ${batchIndex + 1}/${orderBatches.length}`,
+            slowThresholdMs: 5000,
+            context: {
+              batchIndex: batchIndex + 1,
+              totalBatches: orderBatches.length,
+              batchSize: batchOrders.length,
+              totalOrders,
+              totalMaterials
+            }
           }
-
-          result.details.push(detail)
-
-          if (detail.errors.length > 0) {
-            result.errors.push(`Order ${detail.orderNumber}: ${detail.errors.join('; ')}`)
-            return
-          }
-
-          result.ordersProcessed += 1
-          result.materialsDeleted += detail.materialsDeleted
-          result.materialsSkipped += detail.materialsSkipped
-        })
-
-        const missingOrders = getMissingOrders(batchOrders, queriedOrderNumbersInBatch)
-        for (const missingOrder of missingOrders) {
-          const missingMessage = '订单未出现在查询结果中'
-          result.errors.push(`Order ${missingOrder}: ${missingMessage}`)
-          result.details.push(this.createErrorDetail(missingOrder, missingMessage))
-        }
+        )
       }
 
       const retryResult = await this.retryFailedOrders({
@@ -321,11 +352,21 @@ export class CleanerService {
         ordersProcessed: result.ordersProcessed,
         materialsDeleted: result.materialsDeleted,
         materialsSkipped: result.materialsSkipped,
-        errorCount: result.errors.length
+        errorCount: result.errors.length,
+        totalOrders,
+        totalMaterials,
+        dryRun
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
-      log.error('Cleaner failed', { error: message })
+      log.error('Cleaner failed', {
+        error: message,
+        totalOrders,
+        totalMaterials,
+        dryRun,
+        orderNumbers: input.orderNumbers,
+        materialCodes: input.materialCodes
+      })
       result.errors.push(`Clean failed: ${message}`)
     } finally {
       if (popupPage) {
@@ -780,86 +821,112 @@ export class CleanerService {
       return result
     }
 
-    log.info('Starting retry for failed orders', { count: failedDetails.length })
+    log.info('Starting retry for failed orders', {
+      count: failedDetails.length,
+      totalOrders: params.failedDetails.length
+    })
 
     const MAX_RETRIES = 2
 
-    for (let detailIndex = 0; detailIndex < failedDetails.length; detailIndex++) {
-      const failedDetail = failedDetails[detailIndex]
-      const orderNumber = failedDetail.orderNumber
-      const retryAttempts: import('../../types/cleaner.types').RetryAttempt[] = []
+    // Track overall retry process duration
+    const trackedResult = await trackDuration(
+      async () => {
+        const retryResult: RetryResult = {
+          retriedOrders: 0,
+          successfulRetries: 0,
+          updatedDetails: []
+        }
 
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          log.info(`Retrying order ${orderNumber} (attempt ${attempt}/${MAX_RETRIES})`)
+        for (let detailIndex = 0; detailIndex < failedDetails.length; detailIndex++) {
+          const failedDetail = failedDetails[detailIndex]
+          const orderNumber = failedDetail.orderNumber
+          const retryAttempts: import('../../types/cleaner.types').RetryAttempt[] = []
 
-          await this.queryOrders(workFrame, [orderNumber])
-          await this.waitForLoading(workFrame)
+          for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+              log.info(`Retrying order ${orderNumber} (attempt ${attempt}/${MAX_RETRIES})`)
 
-          const rows = workFrame.locator('tbody tr')
-          const rowCount = await rows.count()
-          if (rowCount === 0) {
-            throw new Error('订单重试查询无结果')
-          }
+              await this.queryOrders(workFrame, [orderNumber])
+              await this.waitForLoading(workFrame)
 
-          const detailPage = await this.openDetailPageFromCurrentQuery(workFrame, popupPage)
-          const retryDetail = await this.processDetailPage({
-            detailPage,
-            deleteSet,
-            dryRun,
-            expectedOrderNumber: orderNumber,
-            progressState: {
-              completedOrders: detailIndex,
-              totalOrders: failedDetails.length
-            },
-            onProgress: (message, progress, extra) => {
-              onProgress?.(
-                `[重试 ${attempt}/${MAX_RETRIES}] ${message}`,
-                progress,
-                extra ? { ...extra, phase: 'processing' as const } : undefined
-              )
+              const rows = workFrame.locator('tbody tr')
+              const rowCount = await rows.count()
+              if (rowCount === 0) {
+                throw new Error('订单重试查询无结果')
+              }
+
+              const detailPage = await this.openDetailPageFromCurrentQuery(workFrame, popupPage)
+              const retryDetail = await this.processDetailPage({
+                detailPage,
+                deleteSet,
+                dryRun,
+                expectedOrderNumber: orderNumber,
+                progressState: {
+                  completedOrders: detailIndex,
+                  totalOrders: failedDetails.length
+                },
+                onProgress: (message, progress, extra) => {
+                  onProgress?.(
+                    `[重试 ${attempt}/${MAX_RETRIES}] ${message}`,
+                    progress,
+                    extra ? { ...extra, phase: 'processing' as const } : undefined
+                  )
+                }
+              })
+
+              retryResult.successfulRetries += 1
+              retryResult.updatedDetails.push({
+                ...retryDetail,
+                retryCount: attempt,
+                retriedAt: Date.now(),
+                retrySuccess: true,
+                retryAttempts
+              })
+              retryResult.retriedOrders += 1
+              break
+            } catch (error) {
+              const message = error instanceof Error ? error.message : 'Unknown error'
+              log.warn(`Retry attempt ${attempt} failed for order ${orderNumber}: ${message}`)
+
+              retryAttempts.push({
+                attempt,
+                error: message,
+                timestamp: Date.now()
+              })
+
+              if (attempt === MAX_RETRIES) {
+                retryResult.updatedDetails.push({
+                  ...failedDetail,
+                  retryCount: MAX_RETRIES,
+                  retryAttempts,
+                  retriedAt: Date.now(),
+                  retrySuccess: false
+                })
+                retryResult.retriedOrders += 1
+              }
             }
-          })
-
-          result.successfulRetries += 1
-          result.updatedDetails.push({
-            ...retryDetail,
-            retryCount: attempt,
-            retriedAt: Date.now(),
-            retrySuccess: true,
-            retryAttempts
-          })
-          result.retriedOrders += 1
-          break
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error'
-          log.warn(`Retry attempt ${attempt} failed for order ${orderNumber}: ${message}`)
-
-          retryAttempts.push({
-            attempt,
-            error: message,
-            timestamp: Date.now()
-          })
-
-          if (attempt === MAX_RETRIES) {
-            result.updatedDetails.push({
-              ...failedDetail,
-              retryCount: MAX_RETRIES,
-              retryAttempts,
-              retriedAt: Date.now(),
-              retrySuccess: false
-            })
-            result.retriedOrders += 1
           }
         }
+
+        log.info('Retry process completed', {
+          retriedOrders: retryResult.retriedOrders,
+          successfulRetries: retryResult.successfulRetries,
+          totalRetryOrders: failedDetails.length
+        })
+
+        return retryResult
+      },
+      {
+        operationName: 'retry-failed-orders',
+        message: 'Retry failed orders',
+        slowThresholdMs: 5000,
+        context: {
+          totalRetryOrders: failedDetails.length,
+          dryRun
+        }
       }
-    }
+    )
 
-    log.info('Retry process completed', {
-      retriedOrders: result.retriedOrders,
-      successfulRetries: result.successfulRetries
-    })
-
-    return result
+    return trackedResult.result
   }
 }
