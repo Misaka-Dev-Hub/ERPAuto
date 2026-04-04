@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { DownloadCloud, LoaderCircle, X } from 'lucide-react'
 import Modal from './ui/Modal'
+import { useLogger } from '../hooks/useLogger'
 interface DownloadProgress {
   percent: number // 0-100
   downloadedBytes: number
@@ -25,6 +26,7 @@ export default function PlaywrightDownloadDialog({
   const [error, setError] = useState<string | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const logger = useLogger('PlaywrightDownload')
 
   // Format bytes to human-readable string
   const formatBytes = useCallback((bytes: number): string => {
@@ -99,13 +101,15 @@ export default function PlaywrightDownloadDialog({
     try {
       await window.electron.playwrightBrowser.cancel()
     } catch (err) {
-      console.error('Failed to cancel download:', err)
+      logger.error('Failed to cancel download', {
+        error: err instanceof Error ? err.message : String(err)
+      })
     } finally {
       setShowCancelConfirm(false)
       setIsDownloading(false)
       onClose()
     }
-  }, [onClose])
+  }, [onClose, logger])
 
   const handleConfirmCancel = useCallback(() => {
     void handleCancel()

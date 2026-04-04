@@ -139,7 +139,14 @@ export const parseReportData = (
   const executionTimeSecs = parseDurationToSeconds(values.executionTimeStr)
 
   if (values.executionTimeStr === '0秒') {
-    console.warn('Failed to extract execution time from report:', report.key)
+    try {
+      window.electron?.logger?.log?.('warn', 'Failed to extract execution time from report', {
+        reportKey: report.key,
+        context: 'ReportParser'
+      })
+    } catch {
+      // Gracefully degrade if logger unavailable
+    }
   }
 
   // Try to parse the date

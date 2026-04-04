@@ -1,4 +1,5 @@
 import { useEffect, RefObject } from 'react'
+import { useLogger } from './useLogger'
 
 /**
  * Options for configuring dialog focus management
@@ -82,6 +83,8 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
     lockBodyScroll = true,
     shouldCloseOnEscape = true
   } = options
+
+  const logger = useLogger('DialogFocus')
 
   // Handle Escape key press
   useEffect(() => {
@@ -175,10 +178,10 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
             return
           }
           // Fallback: element found but not visible, log warning and try default
-          console.warn(`Focus element found but not visible: ${initialFocusSelector}`)
+          logger.warn('Focus element found but not visible', { selector: initialFocusSelector })
         } else {
           // Fallback: element not found, log warning and try default
-          console.warn(`Focus element not found for selector: ${initialFocusSelector}`)
+          logger.warn('Focus element not found for selector', { selector: initialFocusSelector })
         }
       }
 
@@ -203,7 +206,7 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
 
     // Delay to ensure portal content is rendered
     requestAnimationFrame(setupFocus)
-  }, [isOpen, dialogRef, initialFocusSelector])
+  }, [isOpen, dialogRef, initialFocusSelector, logger])
 
   // Restore focus to trigger element when dialog closes
   useEffect(() => {
@@ -214,50 +217,36 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
 
       // Check if element still exists in DOM
       if (!triggerElement || !document.contains(triggerElement)) {
-        if (import.meta.env.DEV) {
-          console.warn('[useDialogFocus] Trigger element not found in DOM, cannot restore focus')
-        }
+        logger.warn('Trigger element not found in DOM, cannot restore focus')
         return
       }
 
       // Check if element has a focus method
       if (typeof triggerElement.focus !== 'function') {
-        if (import.meta.env.DEV) {
-          console.warn('[useDialogFocus] Trigger element does not have a focus method')
-        }
+        logger.warn('Trigger element does not have a focus method')
         return
       }
 
       // Check if element is visible (not display: none)
       const style = window.getComputedStyle(triggerElement)
       if (style.display === 'none') {
-        if (import.meta.env.DEV) {
-          console.warn('[useDialogFocus] Trigger element is display: none, cannot restore focus')
-        }
+        logger.warn('Trigger element is display: none, cannot restore focus')
         return
       }
 
       if (style.visibility === 'hidden') {
-        if (import.meta.env.DEV) {
-          console.warn(
-            '[useDialogFocus] Trigger element is visibility: hidden, cannot restore focus'
-          )
-        }
+        logger.warn('Trigger element is visibility: hidden, cannot restore focus')
         return
       }
 
       // Check if element is disabled
       if (triggerElement instanceof HTMLButtonElement && triggerElement.disabled) {
-        if (import.meta.env.DEV) {
-          console.warn('[useDialogFocus] Trigger element is disabled, cannot restore focus')
-        }
+        logger.warn('Trigger element is disabled, cannot restore focus')
         // Try to find nearest enabled ancestor or fallback to body
         const focusableParent = findNearestFocusableElement(triggerElement)
         if (focusableParent) {
           focusableParent.focus({ preventScroll: true })
-          if (import.meta.env.DEV) {
-            console.info('[useDialogFocus] Restored focus to nearest focusable ancestor')
-          }
+          logger.debug('Restored focus to nearest focusable ancestor')
         }
         return
       }
@@ -265,13 +254,11 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
       // All checks passed, restore focus
       try {
         triggerElement.focus({ preventScroll: true })
-        if (import.meta.env.DEV) {
-          console.info('[useDialogFocus] Successfully restored focus to trigger element')
-        }
+        logger.debug('Successfully restored focus to trigger element')
       } catch (error) {
-        if (import.meta.env.DEV) {
-          console.error('[useDialogFocus] Error restoring focus:', error)
-        }
+        logger.error('Error restoring focus', {
+          error: error instanceof Error ? error.message : String(error)
+        })
       }
     }
 
@@ -308,7 +295,7 @@ export function useDialogFocus(options: UseDialogFocusOptions): UseDialogFocusRe
 
     // Use microtask queue to ensure this runs after DOM cleanup
     queueMicrotask(restoreFocus)
-  }, [isOpen, triggerRef])
+  }, [isOpen, triggerRef, logger])
 
   // Return focus lock configuration
   return {

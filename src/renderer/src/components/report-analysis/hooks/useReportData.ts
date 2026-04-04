@@ -6,6 +6,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { ReportMetrics } from '../types'
 import { parseReportData } from '../utils/parser'
+import { useLogger } from '../../../hooks/useLogger'
 
 interface UseReportDataResult {
   isLoading: boolean
@@ -26,6 +27,7 @@ export const useReportData = (isAdmin: boolean, isOpen: boolean): UseReportDataR
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reportData, setReportData] = useState<ReportMetrics[]>([])
+  const logger = useLogger('ReportData')
 
   const loadAndAnalyzeReports = useCallback(async () => {
     if (!isAdmin) return
@@ -55,7 +57,10 @@ export const useReportData = (isAdmin: boolean, isOpen: boolean): UseReportDataR
               return { report, content: contentResult.data }
             }
           } catch (e) {
-            console.warn(`Failed to fetch content for report ${report.key}`, e)
+            logger.warn('Failed to fetch content for report', {
+              reportKey: report.key,
+              error: e instanceof Error ? e.message : String(e)
+            })
           }
           return null
         })
@@ -80,7 +85,7 @@ export const useReportData = (isAdmin: boolean, isOpen: boolean): UseReportDataR
     } finally {
       setIsLoading(false)
     }
-  }, [isAdmin])
+  }, [isAdmin, logger])
 
   const clearData = useCallback(() => {
     setReportData([])
