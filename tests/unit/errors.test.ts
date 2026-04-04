@@ -167,9 +167,13 @@ describe('Error Types', () => {
     })
 
     it('getErrorMessage should handle unknown types', () => {
-      expect(getErrorMessage('string error')).toBe('string error')
+      // Non-Error types return the safe default message
+      // This is intentional to avoid leaking sensitive information
+      expect(getErrorMessage('string error')).toBe('An unknown error occurred')
       expect(getErrorMessage(null)).toBe('An unknown error occurred')
       expect(getErrorMessage(undefined)).toBe('An unknown error occurred')
+      expect(getErrorMessage(123)).toBe('An unknown error occurred')
+      expect(getErrorMessage({ message: 'obj' })).toBe('An unknown error occurred')
     })
 
     it('getErrorCode should return code from BaseError', () => {
