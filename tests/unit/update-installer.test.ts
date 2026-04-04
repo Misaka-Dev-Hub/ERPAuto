@@ -11,7 +11,9 @@ describe('UpdateInstaller', () => {
       channel: 'stable'
     })
 
-    expect(result).toContain(path.join('logs', 'pending-update'))
+    // Electron mock in tests/setup.ts sets userData to 'test-user-data'
+    expect(result).toContain('test-user-data')
+    expect(result).toContain('pending-update')
     expect(result).toContain('stable-1.2.3.exe')
   })
 
