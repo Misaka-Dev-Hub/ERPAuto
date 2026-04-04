@@ -10,14 +10,19 @@ import { app } from 'electron'
 /**
  * Get log directory path
  * Uses app.getPath('logs') in production, local logs dir in development
+ * Production = app.isPackaged === true
  */
 export function getLogDir(): string {
-  if (app && app.isReady()) {
+  // Check if running in production (packed app)
+  // This must be checked BEFORE app.getPath('logs') because Electron
+  // always returns the user data logs path regardless of environment
+  if (app && app.isReady() && app.isPackaged) {
     return app.getPath('logs')
   }
-  // Fallback for development or before app is ready
-  // Note: synchronous FS calls are acceptable here because this branch only
-  // executes in dev environments when app is not yet ready (rare, at startup).
+
+  // Development environment: use logs directory in project root
+  // Note: synchronous FS calls are acceptable here because this branch
+  // executes in dev environments or before app is ready.
   const devLogDir = path.join(process.cwd(), 'logs')
   if (!fs.existsSync(devLogDir)) {
     fs.mkdirSync(devLogDir, { recursive: true })
