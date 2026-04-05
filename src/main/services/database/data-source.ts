@@ -2,7 +2,7 @@
  * TypeORM Data Source Configuration
  *
  * Provides a centralized database connection for TypeORM entities.
- * Supports both MySQL and SQL Server based on configuration.
+ * Supports MySQL, SQL Server, and PostgreSQL based on configuration.
  *
  * Note: Configuration is now loaded from config.yaml via ConfigManager,
  * not from environment variables.
@@ -18,10 +18,14 @@ const log = createLogger('DataSource')
 /**
  * Get database type from config manager
  */
-function getDatabaseType(): 'mysql' | 'mssql' {
+function getDatabaseType(): 'mysql' | 'mssql' | 'postgres' {
   const configManager = ConfigManager.getInstance()
   const dbType = configManager.getDatabaseType()
-  return dbType === 'sqlserver' ? 'mssql' : 'mysql'
+  switch (dbType) {
+    case 'sqlserver': return 'mssql'
+    case 'postgresql': return 'postgres'
+    default: return 'mysql'
+  }
 }
 
 /**
@@ -52,6 +56,17 @@ function buildDataSourceOptions(): DataSourceOptions {
         encrypt: false,
         trustServerCertificate: dbConfig.trustServerCertificate
       },
+      ...commonOptions
+    } as DataSourceOptions
+  } else if (type === 'postgres') {
+    const dbConfig = config.database.postgresql
+    return {
+      type: 'postgres',
+      host: dbConfig.host,
+      port: dbConfig.port,
+      username: dbConfig.username,
+      password: dbConfig.password,
+      database: dbConfig.database,
       ...commonOptions
     } as DataSourceOptions
   }

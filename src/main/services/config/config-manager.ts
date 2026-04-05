@@ -28,6 +28,7 @@ import {
   type DatabaseType,
   type MySqlConfig,
   type SqlServerConfig,
+  type PostgreSqlConfig,
   type LoggingConfig
 } from '../../types/config.schema'
 
@@ -66,6 +67,14 @@ const DEFAULT_CONFIG: FullConfig = {
       password: '',
       driver: 'ODBC Driver 18 for SQL Server',
       trustServerCertificate: true
+    },
+    postgresql: {
+      host: 'localhost',
+      port: 5432,
+      database: 'erp_db',
+      username: 'postgres',
+      password: '',
+      maxPoolSize: 10
     }
   },
   paths: {
@@ -299,13 +308,17 @@ export class ConfigManager {
   /**
    * 获取当前激活的数据库配置
    */
-  public getActiveDatabaseConfig(): MySqlConfig | SqlServerConfig {
+  public getActiveDatabaseConfig(): MySqlConfig | SqlServerConfig | PostgreSqlConfig {
     if (!this.config) {
       throw new Error('Configuration not initialized')
     }
 
-    const { activeType, mysql, sqlserver } = this.config.database
-    return activeType === 'mysql' ? mysql : sqlserver
+    const { activeType, mysql, sqlserver, postgresql } = this.config.database
+    switch (activeType) {
+      case 'postgresql': return postgresql
+      case 'sqlserver': return sqlserver
+      default: return mysql
+    }
   }
 
   /**

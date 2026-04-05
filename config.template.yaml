@@ -4,7 +4,7 @@
 # 部署说明：
 # 1. 复制此文件为 config.yaml
 # 2. 根据实际环境修改配置值
-# 3. 设置 database.activeType 为 mysql 或 sqlserver
+# 3. 设置 database.activeType 为 mysql、sqlserver 或 postgresql
 # ================================
 # 注意：ERP 认证信息存储在数据库 (dbo_BIPUsers) 中，按用户管理
 # ================================
@@ -28,6 +28,14 @@ database:
     password: <PASSWORD>
     driver: 'ODBC Driver 18 for SQL Server'
     trustServerCertificate: true
+
+  postgresql:
+    host: <PG_HOST>
+    port: 5432
+    database: <DATABASE_NAME>
+    username: <USERNAME>
+    password: <PASSWORD>
+    maxPoolSize: 10
 
 paths:
   dataDir: './data/'

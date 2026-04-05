@@ -2,17 +2,19 @@
  * Database Factory
  *
  * Creates and manages database service instances based on configuration.
- * Supports both MySQL and SQL Server databases.
+ * Supports MySQL, SQL Server, and PostgreSQL databases.
  */
 
 import { ConfigManager } from '../config/config-manager'
 import { MySqlService } from './mysql'
 import { SqlServerService } from './sql-server'
+import { PostgreSqlService } from './postgresql'
 import type {
   IDatabaseService,
   DatabaseType,
   MySqlConfig,
-  SqlServerConfig
+  SqlServerConfig,
+  PostgreSqlConfig
 } from '../../types/database.types'
 import { createLogger } from '../logger'
 
@@ -66,6 +68,22 @@ export function createSqlServerConfig(): SqlServerConfig {
 }
 
 /**
+ * Create PostgreSQL configuration from config manager
+ */
+export function createPostgreSqlConfig(): PostgreSqlConfig {
+  const configManager = ConfigManager.getInstance()
+  const dbConfig = configManager.getConfig().database.postgresql
+  return {
+    host: dbConfig.host,
+    port: dbConfig.port,
+    user: dbConfig.username,
+    password: dbConfig.password,
+    database: dbConfig.database,
+    maxPoolSize: dbConfig.maxPoolSize
+  }
+}
+
+/**
  * Create a database service instance
  *
  * Uses singleton pattern - returns cached instance if available.
@@ -86,7 +104,10 @@ export async function create(type?: DatabaseType): Promise<IDatabaseService> {
   // Create new instance
   let service: IDatabaseService
 
-  if (dbType === 'sqlserver') {
+  if (dbType === 'postgresql') {
+    log.info('Creating PostgreSQL database service')
+    service = new PostgreSqlService(createPostgreSqlConfig())
+  } else if (dbType === 'sqlserver') {
     log.info('Creating SQL Server database service')
     service = new SqlServerService(createSqlServerConfig())
   } else {
@@ -175,10 +196,12 @@ export function isConnected(type?: DatabaseType): boolean {
 // Re-export types and services
 export { MySqlService } from './mysql'
 export { SqlServerService } from './sql-server'
+export { PostgreSqlService } from './postgresql'
 export type {
   IDatabaseService,
   DatabaseType,
   QueryResult,
   MySqlConfig,
-  SqlServerConfig
+  SqlServerConfig,
+  PostgreSqlConfig
 } from '../../types/database.types'
