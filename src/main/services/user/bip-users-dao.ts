@@ -8,10 +8,13 @@
  * - Create, update, delete users
  */
 
-import { MySqlService } from '../database/mysql'
-import { SqlServerService } from '../database/sql-server'
+import {
+  create,
+  disconnect as disconnectDb,
+  type IDatabaseService
+} from '../database/index'
+import { createDialect, type SqlDialect } from '../database/dialects'
 import { ConfigManager } from '../config/config-manager'
-import sql from 'mssql'
 import type { UserInfo } from '../../types/user.types'
 import { createLogger, logError } from '../logger'
 
@@ -21,10 +24,6 @@ const log = createLogger('BipUsersDao')
  * Database configuration for BIPUsers table
  */
 export const BIP_USERS_CONFIG = {
-  /** Table name in SQL Server: [dbo].[BIPUsers] */
-  TABLE_NAME_SQLSERVER: '[dbo].[BIPUsers]',
-  /** Table name in MySQL: dbo_BIPUsers */
-  TABLE_NAME_MYSQL: 'dbo_BIPUsers',
   /** Column names */
   COLUMNS: {
     ID: 'ID',
@@ -44,71 +43,37 @@ export const BIP_USERS_CONFIG = {
  * BIPUsers DAO Class
  */
 export class BIPUsersDAO {
-  private mysqlService: MySqlService | null = null
-  private sqlServerService: SqlServerService | null = null
-  private dbType: 'mysql' | 'sqlserver' | 'postgresql' = 'mysql'
-  private configManager: ConfigManager
-
-  /**
-   * Constructor - get database type from ConfigManager
-   */
-  constructor() {
-    this.configManager = ConfigManager.getInstance()
-    this.dbType = this.configManager.getDatabaseType()
-  }
+  private dbService: IDatabaseService | null = null
+  private dialect: SqlDialect | null = null
 
   /**
    * Get the appropriate table name based on database type
    */
   private getTableName(): string {
-    return this.dbType === 'sqlserver'
-      ? BIP_USERS_CONFIG.TABLE_NAME_SQLSERVER
-      : BIP_USERS_CONFIG.TABLE_NAME_MYSQL
+    return this.getDialect().quoteTableName('dbo', 'BIPUsers')
   }
 
   /**
-   * Get database service instance (MySQL or SQL Server)
+   * Get dialect instance
    */
-  private async getDatabaseService(): Promise<MySqlService | SqlServerService> {
-    const config = this.configManager.getConfig()
-
-    if (this.dbType === 'sqlserver') {
-      if (this.sqlServerService && this.sqlServerService.isConnected()) {
-        return this.sqlServerService
-      }
-
-      const dbConfig = config.database.sqlserver
-      this.sqlServerService = new SqlServerService({
-        server: dbConfig.server,
-        port: dbConfig.port,
-        user: dbConfig.username,
-        password: dbConfig.password,
-        database: dbConfig.database,
-        options: {
-          encrypt: false,
-          trustServerCertificate: dbConfig.trustServerCertificate
-        }
-      })
-
-      await this.sqlServerService.connect()
-      return this.sqlServerService
-    } else {
-      if (this.mysqlService && this.mysqlService.isConnected()) {
-        return this.mysqlService
-      }
-
-      const dbConfig = config.database.mysql
-      this.mysqlService = new MySqlService({
-        host: dbConfig.host,
-        port: dbConfig.port,
-        user: dbConfig.username,
-        password: dbConfig.password,
-        database: dbConfig.database
-      })
-
-      await this.mysqlService.connect()
-      return this.mysqlService
+  private getDialect(): SqlDialect {
+    if (!this.dialect) {
+      this.dialect = createDialect(this.dbService!.type)
     }
+    return this.dialect
+  }
+
+  /**
+   * Get database service instance via DatabaseFactory
+   */
+  private async getDatabaseService(): Promise<IDatabaseService> {
+    if (this.dbService && this.dbService.isConnected()) {
+      return this.dbService
+    }
+
+    this.dbService = await create()
+    this.dialect = null // Reset dialect when service changes
+    return this.dbService
   }
 
   /**
@@ -121,52 +86,30 @@ export class BIPUsersDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
+      const dialect = this.getDialect()
 
-      if (this.dbType === 'sqlserver') {
-        const sqlString = `
-          SELECT ID, UserName, UserType
-          FROM ${tableName}
-          WHERE UserName = @username AND Password = @password
-        `
+      const sqlString = `
+        SELECT ID, UserName, UserType
+        FROM ${tableName}
+        WHERE UserName = ${dialect.param(0)} AND Password = ${dialect.param(1)}
+      `
 
-        const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
-          username: { value: username, type: sql.NVarChar(255) },
-          password: { value: password, type: sql.NVarChar(255) }
-        })
+      const result = await dbService.query(sqlString, [username, password])
 
-        if (result.rows.length > 0) {
-          const row = result.rows[0]
-          return {
-            id: row.ID as number,
-            username: row.UserName as string,
-            userType: row.UserType as 'Admin' | 'User'
-          }
+      if (result.rows.length > 0) {
+        const row = result.rows[0]
+        return {
+          id: row.ID as number,
+          username: row.UserName as string,
+          userType: row.UserType as 'Admin' | 'User'
         }
-        return null
-      } else {
-        const sqlString = `
-          SELECT ID, UserName, UserType
-          FROM ${tableName}
-          WHERE UserName = ? AND Password = ?
-        `
-
-        const result = await (dbService as MySqlService).query(sqlString, [username, password])
-
-        if (result.rows.length > 0) {
-          const row = result.rows[0]
-          return {
-            id: row.ID as number,
-            username: row.UserName as string,
-            userType: row.UserType as 'Admin' | 'User'
-          }
-        }
-        return null
       }
+      return null
     } catch (error) {
       logError(log, error, {
         message: 'Authenticate failed',
         operation: 'authenticate',
-        context: { username, dbType: this.dbType }
+        context: { username, dbType: this.dbService?.type }
       })
       return null
     }
@@ -181,51 +124,30 @@ export class BIPUsersDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
+      const dialect = this.getDialect()
 
-      if (this.dbType === 'sqlserver') {
-        const sqlString = `
-          SELECT ID, UserName, UserType
-          FROM ${tableName}
-          WHERE ComputerName = @computerName
-        `
+      const sqlString = `
+        SELECT ID, UserName, UserType
+        FROM ${tableName}
+        WHERE ComputerName = ${dialect.param(0)}
+      `
 
-        const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
-          computerName: { value: computerName, type: sql.NVarChar(255) }
-        })
+      const result = await dbService.query(sqlString, [computerName])
 
-        if (result.rows.length > 0) {
-          const row = result.rows[0]
-          return {
-            id: row.ID as number,
-            username: row.UserName as string,
-            userType: row.UserType as 'Admin' | 'User'
-          }
+      if (result.rows.length > 0) {
+        const row = result.rows[0]
+        return {
+          id: row.ID as number,
+          username: row.UserName as string,
+          userType: row.UserType as 'Admin' | 'User'
         }
-        return null
-      } else {
-        const sqlString = `
-          SELECT ID, UserName, UserType
-          FROM ${tableName}
-          WHERE ComputerName = ?
-        `
-
-        const result = await (dbService as MySqlService).query(sqlString, [computerName])
-
-        if (result.rows.length > 0) {
-          const row = result.rows[0]
-          return {
-            id: row.ID as number,
-            username: row.UserName as string,
-            userType: row.UserType as 'Admin' | 'User'
-          }
-        }
-        return null
       }
+      return null
     } catch (error) {
       logError(log, error, {
         message: 'Silent login failed',
         operation: 'authenticateByComputerName',
-        context: { computerName, dbType: this.dbType }
+        context: { computerName, dbType: this.dbService?.type }
       })
       return null
     }
@@ -246,10 +168,7 @@ export class BIPUsersDAO {
         ORDER BY UserName
       `
 
-      const result =
-        this.dbType === 'sqlserver'
-          ? await (dbService as SqlServerService).query(sqlString)
-          : await (dbService as MySqlService).query(sqlString)
+      const result = await dbService.query(sqlString)
 
       return result.rows.map((row) => ({
         id: row.ID as number,
@@ -261,7 +180,7 @@ export class BIPUsersDAO {
       logError(log, error, {
         message: 'Get all users failed',
         operation: 'getAllUsers',
-        context: { dbType: this.dbType }
+        context: { dbType: this.dbService?.type }
       })
       return []
     }
@@ -284,72 +203,34 @@ export class BIPUsersDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
+      const dialect = this.getDialect()
 
-      if (this.dbType === 'sqlserver') {
-        let sqlString: string
-        let params: Record<
-          string,
-          {
-            value: unknown
-            type?: sql.ISqlType | sql.ISqlTypeFactoryWithLength | sql.ISqlTypeWithLength
-          }
-        >
+      let sqlString: string
+      let params: string[]
 
-        if (computerName) {
-          sqlString = `
-            INSERT INTO ${tableName}
-            (UserName, Password, UserType, ComputerName)
-            VALUES (@username, @password, @userType, @computerName)
-          `
-          params = {
-            username: { value: username, type: sql.NVarChar(255) },
-            password: { value: password, type: sql.NVarChar(255) },
-            userType: { value: userType, type: sql.NVarChar(255) },
-            computerName: { value: computerName, type: sql.NVarChar(255) }
-          }
-        } else {
-          sqlString = `
-            INSERT INTO ${tableName}
-            (UserName, Password, UserType)
-            VALUES (@username, @password, @userType)
-          `
-          params = {
-            username: { value: username, type: sql.NVarChar(255) },
-            password: { value: password, type: sql.NVarChar(255) },
-            userType: { value: userType, type: sql.NVarChar(255) }
-          }
-        }
-
-        await (dbService as SqlServerService).queryWithParams(sqlString, params)
-        return true
+      if (computerName) {
+        sqlString = `
+          INSERT INTO ${tableName}
+          (UserName, Password, UserType, ComputerName)
+          VALUES (${dialect.param(0)}, ${dialect.param(1)}, ${dialect.param(2)}, ${dialect.param(3)})
+        `
+        params = [username, password, userType, computerName]
       } else {
-        let sqlString: string
-        let params: unknown[]
-
-        if (computerName) {
-          sqlString = `
-            INSERT INTO ${tableName}
-            (UserName, Password, UserType, ComputerName)
-            VALUES (?, ?, ?, ?)
-          `
-          params = [username, password, userType, computerName]
-        } else {
-          sqlString = `
-            INSERT INTO ${tableName}
-            (UserName, Password, UserType)
-            VALUES (?, ?, ?)
-          `
-          params = [username, password, userType]
-        }
-
-        await (dbService as MySqlService).query(sqlString, params)
-        return true
+        sqlString = `
+          INSERT INTO ${tableName}
+          (UserName, Password, UserType)
+          VALUES (${dialect.param(0)}, ${dialect.param(1)}, ${dialect.param(2)})
+        `
+        params = [username, password, userType]
       }
+
+      await dbService.query(sqlString, params)
+      return true
     } catch (error) {
       logError(log, error, {
         message: 'Create user failed',
         operation: 'createUser',
-        context: { username, userType, dbType: this.dbType }
+        context: { username, userType, dbType: this.dbService?.type }
       })
       return false
     }
@@ -365,34 +246,21 @@ export class BIPUsersDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
+      const dialect = this.getDialect()
 
-      if (this.dbType === 'sqlserver') {
-        const sqlString = `
-          UPDATE ${tableName}
-          SET UserType = @userType
-          WHERE UserName = @username
-        `
+      const sqlString = `
+        UPDATE ${tableName}
+        SET UserType = ${dialect.param(0)}
+        WHERE UserName = ${dialect.param(1)}
+      `
 
-        await (dbService as SqlServerService).queryWithParams(sqlString, {
-          username: { value: username, type: sql.NVarChar(255) },
-          userType: { value: userType, type: sql.NVarChar(255) }
-        })
-        return true
-      } else {
-        const sqlString = `
-          UPDATE ${tableName}
-          SET UserType = ?
-          WHERE UserName = ?
-        `
-
-        await (dbService as MySqlService).query(sqlString, [userType, username])
-        return true
-      }
+      await dbService.query(sqlString, [userType, username])
+      return true
     } catch (error) {
       logError(log, error, {
         message: 'Update user type failed',
         operation: 'updateUserType',
-        context: { username, userType, dbType: this.dbType }
+        context: { username, userType, dbType: this.dbService?.type }
       })
       return false
     }
@@ -408,34 +276,21 @@ export class BIPUsersDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
+      const dialect = this.getDialect()
 
-      if (this.dbType === 'sqlserver') {
-        const sqlString = `
-          UPDATE ${tableName}
-          SET Password = @newPassword
-          WHERE UserName = @username
-        `
+      const sqlString = `
+        UPDATE ${tableName}
+        SET Password = ${dialect.param(0)}
+        WHERE UserName = ${dialect.param(1)}
+      `
 
-        await (dbService as SqlServerService).queryWithParams(sqlString, {
-          username: { value: username, type: sql.NVarChar(255) },
-          newPassword: { value: newPassword, type: sql.NVarChar(255) }
-        })
-        return true
-      } else {
-        const sqlString = `
-          UPDATE ${tableName}
-          SET Password = ?
-          WHERE UserName = ?
-        `
-
-        await (dbService as MySqlService).query(sqlString, [newPassword, username])
-        return true
-      }
+      await dbService.query(sqlString, [newPassword, username])
+      return true
     } catch (error) {
       logError(log, error, {
         message: 'Update password failed',
         operation: 'updatePassword',
-        context: { username, dbType: this.dbType }
+        context: { username, dbType: this.dbService?.type }
       })
       return false
     }
@@ -450,31 +305,20 @@ export class BIPUsersDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
+      const dialect = this.getDialect()
 
-      if (this.dbType === 'sqlserver') {
-        const sqlString = `
-          DELETE FROM ${tableName}
-          WHERE UserName = @username
-        `
+      const sqlString = `
+        DELETE FROM ${tableName}
+        WHERE UserName = ${dialect.param(0)}
+      `
 
-        await (dbService as SqlServerService).queryWithParams(sqlString, {
-          username: { value: username, type: sql.NVarChar(255) }
-        })
-        return true
-      } else {
-        const sqlString = `
-          DELETE FROM ${tableName}
-          WHERE UserName = ?
-        `
-
-        await (dbService as MySqlService).query(sqlString, [username])
-        return true
-      }
+      await dbService.query(sqlString, [username])
+      return true
     } catch (error) {
       logError(log, error, {
         message: 'Delete user failed',
         operation: 'deleteUser',
-        context: { username, dbType: this.dbType }
+        context: { username, dbType: this.dbService?.type }
       })
       return false
     }
@@ -489,33 +333,21 @@ export class BIPUsersDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
+      const dialect = this.getDialect()
 
-      if (this.dbType === 'sqlserver') {
-        const sqlString = `
-          SELECT COUNT(*) as count
-          FROM ${tableName}
-          WHERE UserName = @username
-        `
+      const sqlString = `
+        SELECT COUNT(*) as count
+        FROM ${tableName}
+        WHERE UserName = ${dialect.param(0)}
+      `
 
-        const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
-          username: { value: username, type: sql.NVarChar(255) }
-        })
-        return result.rows.length > 0 && (result.rows[0].count as number) > 0
-      } else {
-        const sqlString = `
-          SELECT COUNT(*) as count
-          FROM ${tableName}
-          WHERE UserName = ?
-        `
-
-        const result = await (dbService as MySqlService).query(sqlString, [username])
-        return result.rows.length > 0 && (result.rows[0].count as number) > 0
-      }
+      const result = await dbService.query(sqlString, [username])
+      return result.rows.length > 0 && (result.rows[0].count as number) > 0
     } catch (error) {
       logError(log, error, {
         message: 'Check user exists failed',
         operation: 'userExists',
-        context: { username, dbType: this.dbType }
+        context: { username, dbType: this.dbService?.type }
       })
       return false
     }
@@ -533,50 +365,30 @@ export class BIPUsersDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
+      const dialect = this.getDialect()
       const cols = BIP_USERS_CONFIG.COLUMNS
 
-      if (this.dbType === 'sqlserver') {
-        const sqlString = `
-          SELECT ${cols.ERP_USERNAME}, ${cols.ERP_PASSWORD}
-          FROM ${tableName}
-          WHERE UserName = @username
-        `
+      const sqlString = `
+        SELECT ${cols.ERP_USERNAME}, ${cols.ERP_PASSWORD}
+        FROM ${tableName}
+        WHERE UserName = ${dialect.param(0)}
+      `
 
-        const result = await (dbService as SqlServerService).queryWithParams(sqlString, {
-          username: { value: username, type: sql.NVarChar(255) }
-        })
+      const result = await dbService.query(sqlString, [username])
 
-        if (result.rows.length > 0) {
-          const row = result.rows[0]
-          return {
-            username: (row[cols.ERP_USERNAME] as string) || '',
-            password: (row[cols.ERP_PASSWORD] as string) || ''
-          }
+      if (result.rows.length > 0) {
+        const row = result.rows[0]
+        return {
+          username: (row[cols.ERP_USERNAME] as string) || '',
+          password: (row[cols.ERP_PASSWORD] as string) || ''
         }
-        return null
-      } else {
-        const sqlString = `
-          SELECT ${cols.ERP_USERNAME}, ${cols.ERP_PASSWORD}
-          FROM ${tableName}
-          WHERE UserName = ?
-        `
-
-        const result = await (dbService as MySqlService).query(sqlString, [username])
-
-        if (result.rows.length > 0) {
-          const row = result.rows[0]
-          return {
-            username: (row[cols.ERP_USERNAME] as string) || '',
-            password: (row[cols.ERP_PASSWORD] as string) || ''
-          }
-        }
-        return null
       }
+      return null
     } catch (error) {
       logError(log, error, {
         message: 'Get user ERP credentials failed',
         operation: 'getUserErpCredentials',
-        context: { username, dbType: this.dbType }
+        context: { username, dbType: this.dbService?.type }
       })
       return null
     }
@@ -597,38 +409,23 @@ export class BIPUsersDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
+      const dialect = this.getDialect()
       const cols = BIP_USERS_CONFIG.COLUMNS
 
-      if (this.dbType === 'sqlserver') {
-        const sqlString = `
-          UPDATE ${tableName}
-          SET ${cols.ERP_USERNAME} = @erpUsername,
-              ${cols.ERP_PASSWORD} = @erpPassword
-          WHERE UserName = @username
-        `
+      const sqlString = `
+        UPDATE ${tableName}
+        SET ${cols.ERP_USERNAME} = ${dialect.param(0)},
+            ${cols.ERP_PASSWORD} = ${dialect.param(1)}
+        WHERE UserName = ${dialect.param(2)}
+      `
 
-        await (dbService as SqlServerService).queryWithParams(sqlString, {
-          username: { value: username, type: sql.NVarChar(255) },
-          erpUsername: { value: erpUsername, type: sql.NVarChar(255) },
-          erpPassword: { value: erpPassword, type: sql.NVarChar(255) }
-        })
-        return true
-      } else {
-        const sqlString = `
-          UPDATE ${tableName}
-          SET ${cols.ERP_USERNAME} = ?,
-              ${cols.ERP_PASSWORD} = ?
-          WHERE UserName = ?
-        `
-
-        await (dbService as MySqlService).query(sqlString, [erpUsername, erpPassword, username])
-        return true
-      }
+      await dbService.query(sqlString, [erpUsername, erpPassword, username])
+      return true
     } catch (error) {
       logError(log, error, {
         message: 'Update user ERP credentials failed',
         operation: 'updateUserErpCredentials',
-        context: { username, dbType: this.dbType }
+        context: { username, dbType: this.dbService?.type }
       })
       return false
     }
@@ -656,10 +453,7 @@ export class BIPUsersDAO {
         ORDER BY ${cols.USERNAME}
       `
 
-      const result =
-        this.dbType === 'sqlserver'
-          ? await (dbService as SqlServerService).query(sqlString)
-          : await (dbService as MySqlService).query(sqlString)
+      const result = await dbService.query(sqlString)
 
       return result.rows.map((row) => ({
         username: row[cols.USERNAME] as string,
@@ -670,7 +464,7 @@ export class BIPUsersDAO {
       logError(log, error, {
         message: 'Get all users ERP config failed',
         operation: 'getAllUsersErpConfig',
-        context: { dbType: this.dbType }
+        context: { dbType: this.dbService?.type }
       })
       return []
     }
@@ -680,13 +474,10 @@ export class BIPUsersDAO {
    * Disconnect from database
    */
   async disconnect(): Promise<void> {
-    if (this.mysqlService) {
-      await this.mysqlService.disconnect()
-      this.mysqlService = null
-    }
-    if (this.sqlServerService) {
-      await this.sqlServerService.disconnect()
-      this.sqlServerService = null
+    if (this.dbService) {
+      await this.dbService.disconnect()
+      this.dbService = null
+      this.dialect = null
     }
   }
 }
