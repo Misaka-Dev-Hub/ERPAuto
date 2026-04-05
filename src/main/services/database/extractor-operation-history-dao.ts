@@ -84,7 +84,6 @@ export class ExtractorOperationHistoryDAO {
     return this.dbService
   }
 
-
   // ==================== INSERT ====================
 
   /**
