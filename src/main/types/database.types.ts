@@ -8,7 +8,7 @@
 /**
  * Supported database types
  */
-export type DatabaseType = 'mysql' | 'sqlserver'
+export type DatabaseType = 'mysql' | 'sqlserver' | 'postgresql'
 
 /**
  * Standard query result interface
@@ -101,4 +101,16 @@ export interface SqlServerConfig extends DatabaseConfig {
     encrypt?: boolean
     trustServerCertificate?: boolean
   }
+}
+
+/**
+ * PostgreSQL-specific configuration
+ */
+export interface PostgreSqlConfig extends DatabaseConfig {
+  host: string
+  port: number
+  user: string
+  password: string
+  database: string
+  maxPoolSize?: number
 }

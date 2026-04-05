@@ -12,7 +12,7 @@ import { z } from 'zod'
 /**
  * 数据库类型枚举
  */
-export const databaseTypeSchema = z.enum(['mysql', 'sqlserver'])
+export const databaseTypeSchema = z.enum(['mysql', 'sqlserver', 'postgresql'])
 export type DatabaseType = z.infer<typeof databaseTypeSchema>
 
 /**
@@ -58,12 +58,26 @@ export const sqlServerConfigSchema = z.object({
 })
 
 /**
+ * PostgreSQL 配置 Schema
+ */
+export const postgresqlConfigSchema = z.object({
+  host: z.string().min(1, 'PostgreSQL host is required'),
+  port: z.number().int().min(1).max(65535).default(5432),
+  database: z.string().min(1, 'PostgreSQL database is required'),
+  username: z.string().min(1, 'PostgreSQL username is required'),
+  password: z.string(),
+  maxPoolSize: z.number().int().min(1).max(100).default(10)
+})
+export type PostgreSqlConfigSchema = z.infer<typeof postgresqlConfigSchema>
+
+/**
  * 数据库配置（包含两种数据库的完整配置）
  */
 export const databaseConfigSchema = z.object({
   activeType: databaseTypeSchema.default('mysql'),
   mysql: mysqlConfigSchema,
-  sqlserver: sqlServerConfigSchema
+  sqlserver: sqlServerConfigSchema,
+  postgresql: postgresqlConfigSchema
 })
 
 /**
@@ -199,6 +213,7 @@ export type FullConfig = z.infer<typeof fullConfigSchema>
 export type DatabaseConfig = z.infer<typeof databaseConfigSchema>
 export type MySqlConfig = z.infer<typeof mysqlConfigSchema>
 export type SqlServerConfig = z.infer<typeof sqlServerConfigSchema>
+export type PostgreSqlConfig = z.infer<typeof postgresqlConfigSchema>
 export type ErpSystemConfig = z.infer<typeof erpSystemConfigSchema>
 export type LoggingConfig = z.infer<typeof loggingConfigSchema>
 export type RustfsConfig = z.infer<typeof rustfsConfigSchema>
