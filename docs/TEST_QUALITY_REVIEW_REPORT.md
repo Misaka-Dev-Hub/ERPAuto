@@ -305,6 +305,7 @@
    ```
 
 3. **错误处理验证**
+
    ```typescript
    it('should handle errors in batch download gracefully', async () => {
      vi.spyOn(extractorCore as any, 'downloadBatch')

@@ -9,7 +9,7 @@ let lastPgOpts: any = null
 let pgConnectCalled = false
 
 let currentDbType: string = 'mysql'
-let currentDbConfig: any = {
+const currentDbConfig: any = {
   database: {
     mysql: { host: 'db', port: 3306, username: 'user', password: 'pass', database: 'erp' },
     sqlserver: {

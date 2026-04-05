@@ -23,7 +23,7 @@ vi.mock('../../../../src/main/services/config/config-manager', () => {
 vi.mock('../../../../src/main/services/erp/order-resolver', () => {
   return {
     OrderNumberResolver: class {
-      constructor(_dbService: any) {}
+      constructor(_dbService: any) {} // eslint-disable-line @typescript-eslint/no-empty-function
       async resolve(orderNumbers: string[]) {
         return orderNumbers
       }
@@ -71,7 +71,7 @@ let erpAuthCloseCalled = false
 vi.mock('../../../../src/main/services/erp/erp-auth', () => {
   return {
     ErpAuthService: class {
-      constructor(_config: any) {}
+      constructor(_config: any) {} // eslint-disable-line @typescript-eslint/no-empty-function
       async login() {
         return Promise.resolve(undefined)
       }
@@ -157,10 +157,16 @@ describe('CleanerApplicationService', () => {
     it('should increase materialsDeleted when dryRun is false vs true', async () => {
       const eventSender: any = { send: vi.fn() }
 
-      const resDry = await service.runCleaner(eventSender, makeInput({ dryRun: true, orderNumbers: ['SC1', 'SC2', 'SC3'] }))
+      const resDry = await service.runCleaner(
+        eventSender,
+        makeInput({ dryRun: true, orderNumbers: ['SC1', 'SC2', 'SC3'] })
+      )
       expect(resDry.materialsDeleted).toBe(0)
 
-      const resActual = await service.runCleaner(eventSender, makeInput({ dryRun: false, orderNumbers: ['SC1', 'SC2', 'SC3'] }))
+      const resActual = await service.runCleaner(
+        eventSender,
+        makeInput({ dryRun: false, orderNumbers: ['SC1', 'SC2', 'SC3'] })
+      )
       expect(resActual.materialsDeleted).toBe(3)
       expect(lastCleanerInput?.dryRun).toBe(false)
     })
@@ -168,7 +174,10 @@ describe('CleanerApplicationService', () => {
     it('should handle different order counts independently across invocations', async () => {
       const eventSender: any = { send: vi.fn() }
 
-      const res1 = await service.runCleaner(eventSender, makeInput({ orderNumbers: ['SC1', 'SC2'] }))
+      const res1 = await service.runCleaner(
+        eventSender,
+        makeInput({ orderNumbers: ['SC1', 'SC2'] })
+      )
       expect(res1.ordersProcessed).toBe(2)
 
       const res2 = await service.runCleaner(eventSender, makeInput({ orderNumbers: ['SC3'] }))
@@ -178,9 +187,9 @@ describe('CleanerApplicationService', () => {
     it('should reject when ERP config fetch fails', async () => {
       ;(service as any).getErpConfig = vi.fn().mockRejectedValue(new Error('ERP config error'))
 
-      await expect(
-        service.runCleaner({ send: vi.fn() } as any, makeInput())
-      ).rejects.toThrow('ERP config error')
+      await expect(service.runCleaner({ send: vi.fn() } as any, makeInput())).rejects.toThrow(
+        'ERP config error'
+      )
     })
 
     it('should reject with DatabaseQueryError when database connection fails', async () => {
@@ -218,10 +227,13 @@ describe('CleanerApplicationService', () => {
     it('should handle processConcurrency=0 gracefully', async () => {
       const eventSender: any = { send: vi.fn() }
 
-      const result = await service.runCleaner(eventSender, makeInput({
-        orderNumbers: ['SC1'],
-        processConcurrency: 0
-      }))
+      const result = await service.runCleaner(
+        eventSender,
+        makeInput({
+          orderNumbers: ['SC1'],
+          processConcurrency: 0
+        })
+      )
       expect(result.ordersProcessed).toBe(1)
     })
 
@@ -236,9 +248,9 @@ describe('CleanerApplicationService', () => {
       cleanerShouldThrow = true
       cleanerError = new Error('cleaner crashed')
 
-      await expect(
-        service.runCleaner({ send: vi.fn() } as any, makeInput())
-      ).rejects.toThrow('cleaner crashed')
+      await expect(service.runCleaner({ send: vi.fn() } as any, makeInput())).rejects.toThrow(
+        'cleaner crashed'
+      )
 
       expect(erpAuthCloseCalled).toBe(true)
     })
@@ -271,9 +283,9 @@ describe('CleanerApplicationService', () => {
       cleanerShouldThrow = true
       cleanerError = new Error('boom')
 
-      await expect(
-        service.runCleaner({ send: vi.fn() } as any, makeInput())
-      ).rejects.toThrow('boom')
+      await expect(service.runCleaner({ send: vi.fn() } as any, makeInput())).rejects.toThrow(
+        'boom'
+      )
 
       expect(mockDisconnect).toHaveBeenCalled()
     })
@@ -282,8 +294,24 @@ describe('CleanerApplicationService', () => {
   describe('exportResults', () => {
     it('should export results successfully for non-empty items', async () => {
       const items = [
-        { materialCode: 'M1', materialName: 'Mat A', specification: '', model: '', managerName: 'Mgr', isMarkedForDeletion: false, isSelected: true },
-        { materialCode: 'M2', materialName: 'Mat B', specification: '', model: '', managerName: 'Mgr', isMarkedForDeletion: true, isSelected: false }
+        {
+          materialCode: 'M1',
+          materialName: 'Mat A',
+          specification: '',
+          model: '',
+          managerName: 'Mgr',
+          isMarkedForDeletion: false,
+          isSelected: true
+        },
+        {
+          materialCode: 'M2',
+          materialName: 'Mat B',
+          specification: '',
+          model: '',
+          managerName: 'Mgr',
+          isMarkedForDeletion: true,
+          isSelected: false
+        }
       ]
 
       const result = await service.exportResults(items as any)

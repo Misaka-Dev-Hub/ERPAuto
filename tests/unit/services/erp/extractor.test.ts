@@ -25,15 +25,18 @@ vi.mock('../../../../src/main/services/logger', () => {
   }
 
   return {
+    default: mockLogger,
     createLogger: vi.fn(() => mockLogger),
     withRequestContext: vi.fn(async (fn) => fn()),
     getRequestId: vi.fn(() => 'test-request-id')
   }
 })
 
-vi.mock('../../../../src/main/services/logger/performance-monitor', () => ({
-  trackDuration: vi.fn(async (fn) => ({ result: await fn() }))
-}))
+vi.mock('../../../../src/main/services/logger/performance-monitor', () => {
+  return {
+    trackDuration: vi.fn(async (fn) => ({ result: await fn() }))
+  }
+})
 
 // Mock ExcelParser - reset in beforeEach
 let mockExcelParserInstance: any

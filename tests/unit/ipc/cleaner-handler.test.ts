@@ -18,7 +18,7 @@ vi.mock('../../../src/main/services/logger/error-utils', () => ({
 }))
 
 // In-memory storage for registered IPC handlers
-const registeredHandlers: Map<string, Function> = new Map()
+const registeredHandlers: Map<string, (...args: any[]) => any> = new Map()
 
 // Mock Electron's ipcMain to capture registered handlers
 vi.mock('electron', () => {
