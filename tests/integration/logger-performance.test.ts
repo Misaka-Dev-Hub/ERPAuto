@@ -15,7 +15,7 @@ import {
 import logger from '../../src/main/services/logger/index'
 
 // Mock the logger to avoid noisy output during tests
-vi.mock('../../src/main/services/logger/index', () => ({
+vi.mock('../../src/main/services/logger', () => ({
   default: {
     debug: vi.fn(),
     info: vi.fn(),
