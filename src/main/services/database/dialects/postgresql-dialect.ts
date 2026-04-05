@@ -8,7 +8,7 @@
  * - LIMIT/OFFSET pagination
  */
 
-import type { SqlDialect } from '@types/sql-dialect.types'
+import type { SqlDialect } from '../../../types/sql-dialect.types'
 
 export class PostgreSqlDialect implements SqlDialect {
   readonly dbType = 'postgresql' as const
@@ -38,16 +38,12 @@ export class PostgreSqlDialect implements SqlDialect {
     const { table, keyColumns, allColumns, startParamIndex } = params
 
     const columns = allColumns.join(', ')
-    const placeholders = allColumns
-      .map((_, i) => `$${startParamIndex + i + 1}`)
-      .join(', ')
+    const placeholders = allColumns.map((_, i) => `$${startParamIndex + i + 1}`).join(', ')
 
     const conflictKeys = keyColumns.map((col) => `"${col}"`).join(', ')
 
     const nonKeyColumns = allColumns.filter((col) => !keyColumns.includes(col))
-    const updateSet = nonKeyColumns
-      .map((col) => `"${col}" = EXCLUDED."${col}"`)
-      .join(', ')
+    const updateSet = nonKeyColumns.map((col) => `"${col}" = EXCLUDED."${col}"`).join(', ')
 
     const sql = [
       `INSERT INTO ${table} (${columns}) VALUES (${placeholders})`,
@@ -61,12 +57,10 @@ export class PostgreSqlDialect implements SqlDialect {
     }
   }
 
-  paginate(params: {
+  paginate(params: { sql: string; limit: number; offset?: number; paramIndex: number }): {
     sql: string
-    limit: number
-    offset?: number
-    paramIndex: number
-  }): { sql: string; nextParamIndex: number } {
+    nextParamIndex: number
+  } {
     const { sql, limit, offset, paramIndex } = params
 
     return {

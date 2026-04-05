@@ -8,7 +8,7 @@
  * - OFFSET/FETCH pagination
  */
 
-import type { SqlDialect } from '@types/sql-dialect.types'
+import type { SqlDialect } from '../../../types/sql-dialect.types'
 
 export class SqlServerDialect implements SqlDialect {
   readonly dbType = 'sqlserver' as const
@@ -37,19 +37,13 @@ export class SqlServerDialect implements SqlDialect {
   }): { sql: string; nextParamIndex: number } {
     const { table, keyColumns, allColumns, startParamIndex } = params
 
-    const valueParams = allColumns
-      .map((_, i) => `@p${startParamIndex + i}`)
-      .join(', ')
+    const valueParams = allColumns.map((_, i) => `@p${startParamIndex + i}`).join(', ')
     const sourceColumns = allColumns.join(', ')
 
-    const joinCondition = keyColumns
-      .map((col) => `target.${col} = source.${col}`)
-      .join(' AND ')
+    const joinCondition = keyColumns.map((col) => `target.${col} = source.${col}`).join(' AND ')
 
     const nonKeyColumns = allColumns.filter((col) => !keyColumns.includes(col))
-    const updateSet = nonKeyColumns
-      .map((col) => `target.${col} = source.${col}`)
-      .join(', ')
+    const updateSet = nonKeyColumns.map((col) => `target.${col} = source.${col}`).join(', ')
 
     const insertColumns = allColumns.join(', ')
     const insertValues = allColumns.map((col) => `source.${col}`).join(', ')
@@ -68,12 +62,10 @@ export class SqlServerDialect implements SqlDialect {
     }
   }
 
-  paginate(params: {
+  paginate(params: { sql: string; limit: number; offset?: number; paramIndex: number }): {
     sql: string
-    limit: number
-    offset?: number
-    paramIndex: number
-  }): { sql: string; nextParamIndex: number } {
+    nextParamIndex: number
+  } {
     const { sql, limit, offset, paramIndex } = params
 
     if (offset !== undefined) {

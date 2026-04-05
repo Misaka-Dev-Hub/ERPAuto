@@ -8,7 +8,7 @@
  * - LIMIT/OFFSET pagination
  */
 
-import type { SqlDialect } from '@types/sql-dialect.types'
+import type { SqlDialect } from '../../../types/sql-dialect.types'
 
 export class MySqlDialect implements SqlDialect {
   readonly dbType = 'mysql' as const
@@ -41,9 +41,7 @@ export class MySqlDialect implements SqlDialect {
     const placeholders = allColumns.map(() => '?').join(', ')
 
     const nonKeyColumns = allColumns.filter((col) => !keyColumns.includes(col))
-    const updateClause = nonKeyColumns
-      .map((col) => `${col} = VALUES(${col})`)
-      .join(', ')
+    const updateClause = nonKeyColumns.map((col) => `${col} = VALUES(${col})`).join(', ')
 
     const sql = `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateClause}`
 
@@ -53,12 +51,10 @@ export class MySqlDialect implements SqlDialect {
     }
   }
 
-  paginate(params: {
+  paginate(params: { sql: string; limit: number; offset?: number; paramIndex: number }): {
     sql: string
-    limit: number
-    offset?: number
-    paramIndex: number
-  }): { sql: string; nextParamIndex: number } {
+    nextParamIndex: number
+  } {
     const { sql, limit, offset, paramIndex } = params
 
     return {

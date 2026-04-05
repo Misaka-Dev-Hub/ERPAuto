@@ -46,7 +46,7 @@ export const BIP_USERS_CONFIG = {
 export class BIPUsersDAO {
   private mysqlService: MySqlService | null = null
   private sqlServerService: SqlServerService | null = null
-  private dbType: 'mysql' | 'sqlserver' = 'mysql'
+  private dbType: 'mysql' | 'sqlserver' | 'postgresql' = 'mysql'
   private configManager: ConfigManager
 
   /**
