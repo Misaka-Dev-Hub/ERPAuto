@@ -1,0 +1,314 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { ErpAuthService } from '../../../../src/main/services/erp/erp-auth'
+import type { ErpConfig } from '../../../../src/main/types/erp.types'
+import { chromium } from 'playwright'
+
+// Mock playwright
+vi.mock('playwright', () => ({
+  chromium: {
+    launch: vi.fn(),
+    connect: vi.fn()
+  }
+}))
+
+// Mock logger
+vi.mock('../../../../src/main/services/logger', () => ({
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
+  }))
+}))
+
+// Mock error context capture
+vi.mock('../../../../src/main/services/erp/erp-error-context', () => ({
+  capturePageContext: vi.fn().mockResolvedValue({})
+}))
+
+// Mock page diagnostics
+vi.mock('../../../../src/main/services/erp/page-diagnostics', () => ({
+  attachPageDiagnostics: vi.fn(),
+  attachContextDiagnostics: vi.fn()
+}))
+
+describe('ErpAuthService', () => {
+  const testConfig: ErpConfig = {
+    url: 'https://test-erp.local',
+    username: 'testuser',
+    password: 'testpass'
+  }
+
+  const mockBrowser = {
+    close: vi.fn().mockResolvedValue(undefined),
+    newContext: vi.fn()
+  }
+
+  const mockContext = {
+    close: vi.fn().mockResolvedValue(undefined),
+    newPage: vi.fn()
+  }
+
+  const mockPage = {
+    goto: vi.fn().mockResolvedValue(undefined),
+    waitForLoadState: vi.fn().mockResolvedValue(undefined),
+    waitForSelector: vi.fn().mockResolvedValue(undefined),
+    locator: vi.fn(),
+    close: vi.fn().mockResolvedValue(undefined)
+  }
+
+  const mockFrame = {
+    locator: vi.fn(),
+    getByRole: vi.fn(),
+    getByText: vi.fn()
+  }
+
+  const mockLocator = {
+    click: vi.fn().mockResolvedValue(undefined),
+    fill: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    isVisible: vi.fn().mockResolvedValue(false),
+    contentFrame: vi.fn()
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockBrowser.newContext.mockResolvedValue(mockContext)
+    mockContext.newPage.mockResolvedValue(mockPage)
+    mockPage.locator.mockImplementation(() => mockLocator)
+    mockLocator.contentFrame.mockResolvedValue(mockFrame)
+    mockFrame.locator.mockImplementation(() => mockLocator)
+    mockFrame.getByRole.mockImplementation(() => mockLocator)
+    mockFrame.getByText.mockImplementation(() => mockLocator)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  describe('login()', () => {
+    it('should login successfully with valid credentials', async () => {
+      vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as any)
+      mockFrame.getByRole.mockImplementation(() => mockLocator)
+      mockFrame.getByText.mockImplementation(() => mockLocator)
+
+      const service = new ErpAuthService(testConfig)
+      const session = await service.login()
+
+      expect(chromium.launch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          headless: false,
+          slowMo: 100
+        })
+      )
+      expect(session).toBeDefined()
+      expect(session.isLoggedIn).toBe(true)
+      expect(service.isActive()).toBe(true)
+    })
+
+    it('should return existing session if already logged in', async () => {
+      vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as any)
+
+      const service = new ErpAuthService(testConfig)
+      const firstSession = await service.login()
+      const secondSession = await service.login()
+
+      expect(firstSession).toBe(secondSession)
+      expect(chromium.launch).toHaveBeenCalledTimes(1)
+    })
+
+    it('should use headless=true from config when specified', async () => {
+      vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as any)
+
+      const headlessConfig: ErpConfig = {
+        ...testConfig,
+        headless: true
+      }
+
+      const service = new ErpAuthService(headlessConfig)
+      await service.login()
+
+      expect(chromium.launch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          headless: true
+        })
+      )
+    })
+
+    it('should throw error when forwardFrame is not accessible', async () => {
+      vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as any)
+      mockLocator.contentFrame.mockResolvedValue(null)
+
+      const service = new ErpAuthService(testConfig)
+
+      await expect(service.login()).rejects.toThrow('Failed to access forwardFrame content frame')
+    })
+
+    it('should throw error when username input is not found', async () => {
+      vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as any)
+      mockFrame.getByRole.mockImplementationOnce(() => ({
+        ...mockLocator,
+        fill: vi.fn().mockRejectedValue(new Error('Element not found'))
+      }))
+
+      const service = new ErpAuthService(testConfig)
+
+      await expect(service.login()).rejects.toThrow('Failed to find username input')
+    })
+
+    it('should throw error when password input is not found', async () => {
+      vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as any)
+      mockFrame.getByRole
+        .mockImplementationOnce(() => mockLocator) // username succeeds
+        .mockImplementationOnce(() => ({
+          ...mockLocator,
+          fill: vi.fn().mockRejectedValue(new Error('Element not found'))
+        }))
+
+      const service = new ErpAuthService(testConfig)
+
+      await expect(service.login()).rejects.toThrow('Failed to find password input')
+    })
+
+    it('should throw error when login button click fails', async () => {
+      vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as any)
+      mockFrame.getByRole
+        .mockImplementationOnce(() => mockLocator) // username
+        .mockImplementationOnce(() => mockLocator) // password
+        .mockImplementationOnce(() => ({
+          ...mockLocator,
+          click: vi.fn().mockRejectedValue(new Error('Button not found'))
+        }))
+
+      const service = new ErpAuthService(testConfig)
+
+      await expect(service.login()).rejects.toThrow('Failed to click login button')
+    })
+  })
+
+  describe('waitForLoginResult()', () => {
+    it('should detect successful login', async () => {
+      vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as any)
+      const successLocator = {
+        waitFor: vi.fn().mockResolvedValue(undefined),
+        isVisible: vi.fn().mockResolvedValue(true)
+      }
+      const errorLocator = {
+        waitFor: vi.fn().mockRejectedValue(new Error('Timeout')),
+        isVisible: vi.fn().mockResolvedValue(false)
+      }
+      mockFrame.locator.mockReturnValueOnce(successLocator).mockReturnValueOnce(errorLocator)
+
+      const service = new ErpAuthService(testConfig)
+      const session = await service.login()
+
+      expect(session.isLoggedIn).toBe(true)
+    })
+
+    it('should detect failed login', async () => {
+      vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as any)
+      const successLocator = {
+        waitFor: vi.fn().mockRejectedValue(new Error('Timeout')),
+        isVisible: vi.fn().mockResolvedValue(false)
+      }
+      const errorLocator = {
+        waitFor: vi.fn().mockResolvedValue(undefined),
+        isVisible: vi.fn().mockResolvedValue(true)
+      }
+      mockFrame.locator.mockReturnValueOnce(successLocator).mockReturnValueOnce(errorLocator)
+
+      const service = new ErpAuthService(testConfig)
+
+      await expect(service.login()).rejects.toThrow('名称或密码错误')
+    })
+
+    it('should handle force login popup', async () => {
+      vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as any)
+      const forceLoginButton = {
+        waitFor: vi.fn().mockResolvedValue(undefined),
+        click: vi.fn().mockResolvedValue(undefined),
+        isVisible: vi.fn().mockResolvedValue(false)
+      }
+      const successLocator = {
+        waitFor: vi.fn().mockResolvedValue(undefined),
+        isVisible: vi.fn().mockResolvedValue(true)
+      }
+      const errorLocator = {
+        waitFor: vi.fn().mockRejectedValue(new Error('Timeout')),
+        isVisible: vi.fn().mockResolvedValue(false)
+      }
+
+      mockFrame.locator
+        .mockReturnValueOnce(forceLoginButton)
+        .mockReturnValueOnce(successLocator)
+        .mockReturnValueOnce(errorLocator)
+        .mockReturnValueOnce(forceLoginButton)
+        .mockReturnValueOnce(successLocator)
+        .mockReturnValueOnce(errorLocator)
+
+      const service = new ErpAuthService(testConfig)
+      const session = await service.login()
+
+      expect(session.isLoggedIn).toBe(true)
+    })
+  })
+
+  describe('logout()', () => {
+    it('should close browser and clear session', async () => {
+      vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as any)
+
+      const service = new ErpAuthService(testConfig)
+      await service.login()
+      await service.close()
+
+      expect(mockContext.close).toHaveBeenCalled()
+      expect(mockBrowser.close).toHaveBeenCalled()
+      expect(service.isActive()).toBe(false)
+    })
+
+    it('should be no-op if not logged in', async () => {
+      const service = new ErpAuthService(testConfig)
+
+      await expect(service.close()).resolves.toBeUndefined()
+      expect(mockContext.close).not.toHaveBeenCalled()
+      expect(mockBrowser.close).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('getSession()', () => {
+    it('should return current session', async () => {
+      vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as any)
+
+      const service = new ErpAuthService(testConfig)
+      const session = await service.login()
+      const retrievedSession = service.getSession()
+
+      expect(retrievedSession).toBe(session)
+    })
+
+    it('should throw error if not logged in', () => {
+      const service = new ErpAuthService(testConfig)
+
+      expect(() => service.getSession()).toThrow('Not logged in. Call login() first.')
+    })
+  })
+
+  describe('isActive()', () => {
+    it('should return correct login state', async () => {
+      vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as any)
+
+      const service = new ErpAuthService(testConfig)
+
+      // Before login
+      expect(service.isActive()).toBe(false)
+
+      // After login
+      await service.login()
+      expect(service.isActive()).toBe(true)
+
+      // After logout
+      await service.close()
+      expect(service.isActive()).toBe(false)
+    })
+  })
+})
