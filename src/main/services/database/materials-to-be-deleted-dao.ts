@@ -9,6 +9,7 @@
  */
 
 import { create, type IDatabaseService } from './index'
+import { createDialect, type SqlDialect } from './dialects'
 import { createLogger, run, getRequestId, trackDuration } from '../logger'
 
 const log = createLogger('MaterialsToBeDeletedDAO')
@@ -44,8 +45,6 @@ export interface MaterialStats {
  * Configuration for MaterialsToBeDeleted table
  */
 export const MATERIALS_TO_BE_DELETED_CONFIG = {
-  TABLE_NAME_SQLSERVER: '[dbo].[MaterialsToBeDeleted]',
-  TABLE_NAME_MYSQL: 'dbo_MaterialsToBeDeleted',
   COLUMNS: {
     ID: 'ID',
     MATERIAL_CODE: 'MaterialCode',
@@ -58,15 +57,20 @@ export const MATERIALS_TO_BE_DELETED_CONFIG = {
  */
 export class MaterialsToBeDeletedDAO {
   private dbService: IDatabaseService | null = null
+  private dialect: SqlDialect | null = null
+
+  private getDialect(): SqlDialect {
+    if (!this.dialect) {
+      this.dialect = createDialect(this.dbService!.type)
+    }
+    return this.dialect
+  }
 
   /**
    * Get the appropriate table name based on database type
    */
   private getTableName(): string {
-    const isSqlServer = this.dbService?.type === 'sqlserver'
-    return isSqlServer
-      ? MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_SQLSERVER
-      : MATERIALS_TO_BE_DELETED_CONFIG.TABLE_NAME_MYSQL
+    return this.getDialect().quoteTableName('dbo', 'MaterialsToBeDeleted')
   }
 
   /**
@@ -79,15 +83,6 @@ export class MaterialsToBeDeletedDAO {
 
     this.dbService = await create()
     return this.dbService
-  }
-
-  /**
-   * Build placeholders for IN clause based on database type
-   */
-  private buildPlaceholders(count: number, isSqlServer: boolean): string {
-    return isSqlServer
-      ? Array.from({ length: count }, (_, idx) => `@p${idx}`).join(',')
-      : Array.from({ length: count }, () => '?').join(',')
   }
 
   // ==================== UPSERT (MERGE) ====================
@@ -113,33 +108,19 @@ export class MaterialsToBeDeletedDAO {
       const tableName = this.getTableName()
       const code = materialCode.trim()
       const manager = managerName?.trim() || null
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      if (isSqlServer) {
-        const sqlString = `
-          MERGE ${tableName} AS target
-          USING (VALUES (@p0, @p1)) AS source (MaterialCode, ManagerName)
-          ON target.MaterialCode = source.MaterialCode
-          WHEN MATCHED THEN UPDATE SET ManagerName = source.ManagerName
-          WHEN NOT MATCHED THEN INSERT (MaterialCode, ManagerName) VALUES (source.MaterialCode, source.ManagerName);
-        `
+      const { sql: sqlString } = dialect.upsert({
+        table: tableName,
+        keyColumns: ['MaterialCode'],
+        allColumns: ['MaterialCode', 'ManagerName'],
+        startParamIndex: 0
+      })
 
-        await trackDuration(async () => await dbService.query(sqlString, [code, manager]), {
-          operationName: 'MaterialsToBeDeletedDAO.upsertMaterial',
-          context: { tableName, operationType: 'MERGE' }
-        })
-      } else {
-        const sqlString = `
-          INSERT INTO ${tableName} (MaterialCode, ManagerName)
-          VALUES (?, ?)
-          ON DUPLICATE KEY UPDATE ManagerName = VALUES(ManagerName)
-        `
-
-        await trackDuration(async () => await dbService.query(sqlString, [code, manager]), {
-          operationName: 'MaterialsToBeDeletedDAO.upsertMaterial',
-          context: { tableName, operationType: 'INSERT' }
-        })
-      }
+      await trackDuration(async () => await dbService.query(sqlString, [code, manager]), {
+        operationName: 'MaterialsToBeDeletedDAO.upsertMaterial',
+        context: { tableName, operationType: 'UPSERT' }
+      })
 
       return true
     } catch (error) {
@@ -176,7 +157,7 @@ export class MaterialsToBeDeletedDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
       log.info('Batch upsert started', {
         tableName,
@@ -196,37 +177,20 @@ export class MaterialsToBeDeletedDAO {
         }
 
         try {
-          if (isSqlServer) {
-            const sqlString = `
-              MERGE ${tableName} AS target
-              USING (VALUES (@p0, @p1)) AS source (MaterialCode, ManagerName)
-              ON target.MaterialCode = source.MaterialCode
-              WHEN MATCHED THEN UPDATE SET ManagerName = source.ManagerName
-              WHEN NOT MATCHED THEN INSERT (MaterialCode, ManagerName) VALUES (source.MaterialCode, source.ManagerName);
-            `
+          const { sql: sqlString } = dialect.upsert({
+            table: tableName,
+            keyColumns: ['MaterialCode'],
+            allColumns: ['MaterialCode', 'ManagerName'],
+            startParamIndex: 0
+          })
 
-            await trackDuration(
-              async () => await dbService.query(sqlString, [materialCode, managerName || null]),
-              {
-                operationName: 'MaterialsToBeDeletedDAO.upsertBatch',
-                context: { tableName, operationType: 'MERGE', batchId }
-              }
-            )
-          } else {
-            const sqlString = `
-              INSERT INTO ${tableName} (MaterialCode, ManagerName)
-              VALUES (?, ?)
-              ON DUPLICATE KEY UPDATE ManagerName = VALUES(ManagerName)
-            `
-
-            await trackDuration(
-              async () => await dbService.query(sqlString, [materialCode, managerName || null]),
-              {
-                operationName: 'MaterialsToBeDeletedDAO.upsertBatch',
-                context: { tableName, operationType: 'INSERT', batchId }
-              }
-            )
-          }
+          await trackDuration(
+            async () => await dbService.query(sqlString, [materialCode, managerName || null]),
+            {
+              operationName: 'MaterialsToBeDeletedDAO.upsertBatch',
+              context: { tableName, operationType: 'UPSERT', batchId }
+            }
+          )
 
           stats.success++
         } catch (error) {
@@ -276,25 +240,15 @@ export class MaterialsToBeDeletedDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      if (isSqlServer) {
-        const sqlString = `
-          MERGE ${tableName} AS target
-          USING (VALUES (@p0, @p1)) AS source (MaterialCode, ManagerName)
-          ON target.MaterialCode = source.MaterialCode
-          WHEN MATCHED THEN UPDATE SET ManagerName = source.ManagerName
-          WHEN NOT MATCHED THEN INSERT (MaterialCode, ManagerName) VALUES (source.MaterialCode, source.ManagerName);
-        `
-        await dbService.query(sqlString, [materialCode, managerName || null])
-      } else {
-        const sqlString = `
-          INSERT INTO ${tableName} (MaterialCode, ManagerName)
-          VALUES (?, ?)
-          ON DUPLICATE KEY UPDATE ManagerName = VALUES(ManagerName)
-        `
-        await dbService.query(sqlString, [materialCode, managerName || null])
-      }
+      const { sql: sqlString } = dialect.upsert({
+        table: tableName,
+        keyColumns: ['MaterialCode'],
+        allColumns: ['MaterialCode', 'ManagerName'],
+        startParamIndex: 0
+      })
+      await dbService.query(sqlString, [materialCode, managerName || null])
 
       return { success: true }
     } catch (error) {
@@ -387,9 +341,9 @@ export class MaterialsToBeDeletedDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         SELECT ID, MaterialCode, ManagerName
         FROM ${tableName}
@@ -462,9 +416,9 @@ export class MaterialsToBeDeletedDAO {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
       const code = materialCode.trim()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         SELECT ID, MaterialCode, ManagerName
         FROM ${tableName}
@@ -509,9 +463,9 @@ export class MaterialsToBeDeletedDAO {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
       const code = materialCode.trim()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         DELETE FROM ${tableName}
         WHERE MaterialCode = ${placeholder}
@@ -542,9 +496,9 @@ export class MaterialsToBeDeletedDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         DELETE FROM ${tableName}
         WHERE ManagerName = ${placeholder}
@@ -612,7 +566,7 @@ export class MaterialsToBeDeletedDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
       const totalBatches = Math.ceil(materialCodes.length / batchSize)
 
       log.info('Batch delete started', {
@@ -627,7 +581,7 @@ export class MaterialsToBeDeletedDAO {
       for (let i = 0; i < materialCodes.length; i += batchSize) {
         const batch = materialCodes.slice(i, i + batchSize)
         const batchNumber = Math.floor(i / batchSize) + 1
-        const placeholders = this.buildPlaceholders(batch.length, isSqlServer)
+        const placeholders = dialect.params(batch.length)
 
         const sqlString = `
           DELETE FROM ${tableName}
@@ -688,9 +642,9 @@ export class MaterialsToBeDeletedDAO {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
       const code = materialCode.trim()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         SELECT COUNT(*) as count
         FROM ${tableName}
@@ -749,9 +703,9 @@ export class MaterialsToBeDeletedDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         SELECT COUNT(*) as count
         FROM ${tableName}
@@ -845,6 +799,7 @@ export class MaterialsToBeDeletedDAO {
     if (this.dbService) {
       await this.dbService.disconnect()
       this.dbService = null
+      this.dialect = null
     }
   }
 }

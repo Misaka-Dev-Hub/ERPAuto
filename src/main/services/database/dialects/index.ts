@@ -14,6 +14,7 @@ import { SqlServerDialect } from './sqlserver-dialect'
 export { MySqlDialect } from './mysql-dialect'
 export { PostgreSqlDialect } from './postgresql-dialect'
 export { SqlServerDialect } from './sqlserver-dialect'
+export type { SqlDialect } from '@types/sql-dialect.types'
 
 export function createDialect(type: DatabaseType): SqlDialect {
   switch (type) {
