@@ -463,6 +463,18 @@ export class ValidationApplicationService {
       )
     }
 
+    if (dbService.type === 'postgresql') {
+      return dbService.query(
+        `
+          SELECT "MaterialName", "Specification", "Model"
+          FROM ${detailTableName}
+          WHERE "MaterialCode" = $1
+          LIMIT 1
+        `,
+        [materialCode]
+      )
+    }
+
     return dbService.query(
       `
         SELECT MaterialName, Specification, Model
@@ -513,6 +525,24 @@ export class ValidationApplicationService {
       const materialCodes = result.rows
         .map((row: Record<string, unknown>) => row.MaterialCode as string)
         .filter(Boolean)
+      log.info(`Regular user: got ${materialCodes.length} materials`, {
+        userId: username,
+        isAdmin: false,
+        materialCount: materialCodes.length
+      })
+      return materialCodes
+    }
+
+    if (dbService.type === 'postgresql') {
+      const result = await dbService.query(
+        `
+          SELECT "MaterialCode"
+          FROM ${markedTableName}
+          WHERE "ManagerName" = $1 AND "MaterialCode" IS NOT NULL
+        `,
+        [username]
+      )
+      const materialCodes = result.rows.map((row) => row.MaterialCode as string).filter(Boolean)
       log.info(`Regular user: got ${materialCodes.length} materials`, {
         userId: username,
         isAdmin: false,

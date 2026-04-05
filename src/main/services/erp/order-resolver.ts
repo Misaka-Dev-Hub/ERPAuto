@@ -58,22 +58,33 @@ export class OrderNumberResolver {
 
   /**
    * Get table name based on database type
-   * Converts MySQL schema_tablename format to SQL Server [schema].[tablename] format
-   * e.g., productionContractData_26年压力表合同数据 -> [productionContractData].[26年压力表合同数据]
-   *      dbo_MaterialsToBeDeleted -> [dbo].[MaterialsToBeDeleted]
+   * Converts schema_tablename format to database-specific quoting:
+   * - SQL Server: [schema].[tablename]
+   * - PostgreSQL: "schema"."tablename"
+   * - MySQL: schema_tablename (as-is)
+   * e.g., productionContractData_26年压力表合同数据 ->
+   *   SQL Server: [productionContractData].[26年压力表合同数据]
+   *   PostgreSQL: "productionContractData"."26年压力表合同数据"
+   *   MySQL: productionContractData_26年压力表合同数据
    */
   private getTableName(tableName: string): string {
-    if (this.dbService.type === 'sqlserver') {
+    if (this.dbService.type === 'sqlserver' || this.dbService.type === 'postgresql') {
       // Find the FIRST underscore to split schema and table name
       // This handles patterns like: schema_tablename
       const firstUnderscoreIndex = tableName.indexOf('_')
       if (firstUnderscoreIndex > 0) {
         const schema = tableName.substring(0, firstUnderscoreIndex)
         const actualTableName = tableName.substring(firstUnderscoreIndex + 1)
-        return `[${schema}].[${actualTableName}]`
+        if (this.dbService.type === 'sqlserver') {
+          return `[${schema}].[${actualTableName}]`
+        }
+        return `"${schema}"."${actualTableName}"`
       }
-      // If no underscore found, default to dbo schema
-      return `[dbo].[${tableName}]`
+      // If no underscore found, default schema
+      if (this.dbService.type === 'sqlserver') {
+        return `[dbo].[${tableName}]`
+      }
+      return `"public"."${tableName}"`
     }
     return tableName
   }
@@ -106,6 +117,11 @@ export class OrderNumberResolver {
       if (this.dbService.type === 'sqlserver') {
         // 使用 COLLATE 指定不区分大小写的排序规则
         sql = `SELECT TOP 1 [${dbConfig.FIELD_ORDER_NUMBER}] FROM ${tableName} WHERE [${dbConfig.FIELD_PRODUCTION_ID}] COLLATE SQL_Latin1_General_CP1_CI_AS = @p0`
+        params = [productionId]
+      } else if (this.dbService.type === 'postgresql') {
+        // PostgreSQL: 使用双引号保护中文标识符，UPPER 实现不区分大小写
+        // prepareSql() 会保留已双引号包裹的标识符
+        sql = `SELECT "${dbConfig.FIELD_ORDER_NUMBER}" FROM "${tableName}" WHERE UPPER("${dbConfig.FIELD_PRODUCTION_ID}") = UPPER($1) LIMIT 1`
         params = [productionId]
       } else {
         // MySQL 默认不区分大小写，但显式使用 UPPER 确保一致性
@@ -155,6 +171,10 @@ export class OrderNumberResolver {
         // P0: Use DISTINCT to prevent duplicates from one-to-many relationships
         // 使用 COLLATE 指定不区分大小写的排序规则
         sql = `SELECT DISTINCT [${dbConfig.FIELD_PRODUCTION_ID}], [${dbConfig.FIELD_ORDER_NUMBER}] FROM ${tableName} WHERE [${dbConfig.FIELD_PRODUCTION_ID}] COLLATE SQL_Latin1_General_CP1_CI_AS IN (${placeholders})`
+      } else if (this.dbService.type === 'postgresql') {
+        // PostgreSQL: 使用双引号保护中文标识符，UPPER 实现不区分大小写
+        const pgPlaceholders = uniqueProductionIds.map((_, i) => `UPPER($${i + 1})`).join(', ')
+        sql = `SELECT DISTINCT "${dbConfig.FIELD_PRODUCTION_ID}", "${dbConfig.FIELD_ORDER_NUMBER}" FROM "${tableName}" WHERE UPPER("${dbConfig.FIELD_PRODUCTION_ID}") IN (${pgPlaceholders})`
       } else {
         const idPlaceholders = uniqueProductionIds.map(() => 'UPPER(?)').join(', ')
         // P0: Use DISTINCT to prevent duplicates from one-to-many relationships

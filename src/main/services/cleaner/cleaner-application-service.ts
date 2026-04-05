@@ -1,11 +1,11 @@
 import type { WebContents } from 'electron'
-import type { MySqlService } from '../database/mysql'
-import type { SqlServerService } from '../database/sql-server'
+import type { IDatabaseService } from '../../types/database.types'
 import { ErpAuthService } from '../erp/erp-auth'
 import { CleanerService } from '../erp/cleaner'
 import { OrderNumberResolver } from '../erp/order-resolver'
 import { MySqlService as MySqlServiceImpl } from '../database/mysql'
 import { SqlServerService as SqlServerServiceImpl } from '../database/sql-server'
+import { PostgreSqlService as PostgreSqlServiceImpl } from '../database/postgresql'
 import { ConfigManager } from '../config/config-manager'
 import { ResultExporter } from '../excel/result-exporter'
 import { CleanerReportGenerator } from '../report/cleaner-report-generator'
@@ -26,13 +26,11 @@ import type {
 
 const log = createLogger('CleanerApplicationService')
 
-type DatabaseService = MySqlService | SqlServerService
-
 export class CleanerApplicationService {
   async runCleaner(eventSender: WebContents, input: CleanerInput): Promise<CleanerResult> {
     const startTime = Date.now()
     let authService: ErpAuthService | null = null
-    let dbService: DatabaseService | null = null
+    let dbService: IDatabaseService | null = null
 
     try {
       log.info('Fetching ERP configuration from database...')
@@ -46,7 +44,7 @@ export class CleanerApplicationService {
       const configManager = ConfigManager.getInstance()
       const dbType = configManager.getDatabaseType()
       log.info(
-        `Connecting to ${dbType === 'sqlserver' ? 'SQL Server' : 'MySQL'} for order resolution...`
+        `Connecting to ${dbType === 'sqlserver' ? 'SQL Server' : dbType === 'postgresql' ? 'PostgreSQL' : 'MySQL'} for order resolution...`
       )
 
       try {
@@ -201,7 +199,7 @@ export class CleanerApplicationService {
     }
   }
 
-  private async getDatabaseService(): Promise<DatabaseService> {
+  private async getDatabaseService(): Promise<IDatabaseService> {
     const configManager = ConfigManager.getInstance()
     const config = configManager.getConfig()
     const dbType = configManager.getDatabaseType()
@@ -221,6 +219,19 @@ export class CleanerApplicationService {
       })
       await sqlServerService.connect()
       return sqlServerService
+    }
+
+    if (dbType === 'postgresql') {
+      const dbConfig = config.database.postgresql
+      const pgService = new PostgreSqlServiceImpl({
+        host: dbConfig.host,
+        port: dbConfig.port,
+        user: dbConfig.username,
+        password: dbConfig.password,
+        database: dbConfig.database
+      })
+      await pgService.connect()
+      return pgService
     }
 
     const dbConfig = config.database.mysql

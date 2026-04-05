@@ -29,7 +29,7 @@ export async function getSourceNumbersFromInputs(
   const productionIds: string[] = []
   const orderNumbers: string[] = []
   const configManager = ConfigManager.getInstance()
-  const isSqlServer = configManager.getDatabaseType() === 'sqlserver'
+  const dbType = configManager.getDatabaseType()
 
   for (const item of inputs) {
     const type = identifyInputType(item)
@@ -44,7 +44,7 @@ export async function getSourceNumbersFromInputs(
     const contractTableName = getValidationTableName('productionContractData_26年压力表合同数据')
     const batchSize = 2000
 
-    if (isSqlServer) {
+    if (dbType === 'sqlserver') {
       const sql = await import('mssql')
       const allOrderNumbers: string[] = []
 
@@ -69,6 +69,22 @@ export async function getSourceNumbersFromInputs(
         allOrderNumbers.push(
           ...contractResult.rows.map((row: Record<string, unknown>) => row.生产订单号 as string)
         )
+      }
+
+      orderNumbers.push(...allOrderNumbers)
+    } else if (dbType === 'postgresql') {
+      const allOrderNumbers: string[] = []
+
+      for (let i = 0; i < productionIds.length; i += batchSize) {
+        const batch = productionIds.slice(i, i + batchSize)
+        const placeholders = batch.map((_, idx) => `$${idx + 1}`).join(',')
+        const contractSql = `
+          SELECT DISTINCT "生产订单号"
+          FROM ${contractTableName}
+          WHERE "总排号" IN (${placeholders})
+        `
+        const contractResult = await dbService.query(contractSql, batch)
+        allOrderNumbers.push(...contractResult.rows.map((row) => row.生产订单号 as string))
       }
 
       orderNumbers.push(...allOrderNumbers)
