@@ -15,9 +15,20 @@ export type { PostgreSqlConfig } from '../../types/database.types'
  * SQL keywords that should NOT be double-quoted during identifier preprocessing.
  * PostgreSQL lowercases unquoted identifiers, but SSMA-migrated databases
  * have uppercase column names that require double-quoting to preserve case.
+ *
+ * This list covers PostgreSQL reserved words across multiple categories:
+ * - DML (Data Manipulation Language)
+ * - DDL (Data Definition Language)
+ * - Window functions
+ * - CTEs (Common Table Expressions)
+ * - Advanced GROUP BY clauses
+ * - JSON operations
+ * - Type system
+ * - Table sampling
+ * - Transaction control
  */
 const SQL_KEYWORDS = new Set([
-  // DML
+  // ==================== DML (Data Manipulation Language) ====================
   'SELECT',
   'FROM',
   'WHERE',
@@ -33,7 +44,8 @@ const SQL_KEYWORDS = new Set([
   'UPDATE',
   'SET',
   'DELETE',
-  // Ordering & limiting
+
+  // ==================== Ordering & Limiting ====================
   'ORDER',
   'BY',
   'ASC',
@@ -44,7 +56,8 @@ const SQL_KEYWORDS = new Set([
   'NEXT',
   'ROWS',
   'ONLY',
-  // Joins
+
+  // ==================== Joins ====================
   'JOIN',
   'LEFT',
   'RIGHT',
@@ -53,16 +66,67 @@ const SQL_KEYWORDS = new Set([
   'CROSS',
   'FULL',
   'ON',
-  // Set operations
+  'NATURAL',
+  'LATERAL',
+
+  // ==================== Set Operations ====================
   'UNION',
   'ALL',
   'INTERSECT',
   'EXCEPT',
-  // Grouping
+
+  // ==================== Grouping & Aggregation ====================
   'GROUP',
   'HAVING',
   'DISTINCT',
-  // DDL
+  'GROUPING',
+  'SETS',
+  'ROLLUP',
+  'CUBE',
+  'FILTER',
+  'WITHIN',
+
+  // ==================== Window Functions ====================
+  'OVER',
+  'PARTITION',
+  'WINDOW',
+  'RANGE',
+  'UNBOUNDED',
+  'PRECEDING',
+  'FOLLOWING',
+  'CURRENT',
+  'ROW',
+  'GROUPS',
+  'EXCLUDE',
+  'TIES',
+  'RANK',
+  'DENSE_RANK',
+  'ROW_NUMBER',
+  'NTILE',
+  'LAG',
+  'LEAD',
+  'FIRST_VALUE',
+  'LAST_VALUE',
+  'NTH_VALUE',
+
+  // ==================== CTE (Common Table Expressions) ====================
+  'WITH',
+  'RECURSIVE',
+  'MATERIALIZED',
+  'SEARCH',
+  'CYCLE',
+  'PATH',
+  'ROOT',
+  'SIBLINGS',
+
+  // ==================== CASE Expressions ====================
+  'CASE',
+  'WHEN',
+  'THEN',
+  'ELSE',
+  'END',
+
+  // ==================== DDL (Data Definition Language) ====================
   'CREATE',
   'ALTER',
   'DROP',
@@ -73,7 +137,15 @@ const SQL_KEYWORDS = new Set([
   'MODIFY',
   'RENAME',
   'TO',
-  // PostgreSQL specific
+  'GENERATED',
+  'ALWAYS',
+  'IDENTITY',
+  'INCLUDE',
+  'TEMP',
+  'TEMPORARY',
+  'UNLOGGED',
+
+  // ==================== PostgreSQL Specific - UPSERT/MERGE ====================
   'CONFLICT',
   'DO',
   'NOTHING',
@@ -82,32 +154,76 @@ const SQL_KEYWORDS = new Set([
   'MERGE',
   'USING',
   'MATCHED',
-  'WHEN',
-  'THEN',
-  'ELSE',
-  'END',
   'TARGET',
   'SOURCE',
-  // Functions
+
+  // ==================== Aggregate Functions ====================
   'COUNT',
   'SUM',
   'AVG',
   'MIN',
   'MAX',
   'EXISTS',
-  'CURRENT_TIMESTAMP',
-  'NOW',
-  'GETDATE',
   'COALESCE',
   'NULLIF',
   'CAST',
   'AS',
-  // Transaction
+
+  // ==================== JSON Operations ====================
+  'JSON',
+  'JSONB',
+  'JSON_ARRAY',
+  'JSON_OBJECT',
+  'JSON_AGG',
+  'JSONB_AGG',
+  'JSONB_OBJECT_AGG',
+
+  // ==================== Types & Casting ====================
+  'DECIMAL',
+  'NUMERIC',
+  'BOOLEAN',
+  'CHARACTER',
+  'VARYING',
+  'PRECISION',
+  'REAL',
+  'DOUBLE',
+  'FLOAT',
+  'TEXT',
+  'INTEGER',
+  'SERIAL',
+  'BIGINT',
+  'SMALLINT',
+  'DATE',
+  'TIME',
+  'TIMESTAMP',
+  'TIMESTAMPTZ',
+  'TIMEZONE',
+  'INTERVAL',
+  'BIGSERIAL',
+  'SMALLSERIAL',
+
+  // ==================== Table Sampling ====================
+  'TABLESAMPLE',
+  'BERNOULLI',
+  'SYSTEM',
+  'REPEATABLE',
+  'SEED',
+
+  // ==================== Transaction Control ====================
   'BEGIN',
   'COMMIT',
   'ROLLBACK',
   'SAVEPOINT',
-  // Types & values
+  'WORK',
+  'ISOLATION',
+  'LEVEL',
+  'READ',
+  'WRITE',
+  'COMMITTED',
+  'REPEATABLE',
+  'SERIALIZABLE',
+
+  // ==================== Types & Values ====================
   'TRUE',
   'FALSE',
   'DEFAULT',
@@ -118,23 +234,65 @@ const SQL_KEYWORDS = new Set([
   'CONSTRAINT',
   'UNIQUE',
   'CHECK',
-  'CASE',
+  'NULLS',
+  'FIRST',
+  'LAST',
+
+  // ==================== Pattern Matching ====================
   'BETWEEN',
   'LIKE',
   'ILIKE',
+  'SIMILAR',
+  'ESCAPE',
   'ANY',
   'SOME',
-  // Common
-  'IF',
-  'WITH',
-  'RECURSIVE',
-  'OVER',
-  'PARTITION',
-  'WINDOW',
-  'ROW',
-  'FIRST',
+
+  // ==================== Functions & Procedures ====================
   'AFTER',
-  'BEFORE'
+  'BEFORE',
+  'EACH',
+  'STATEMENT',
+  'TRIGGER',
+  'FUNCTION',
+  'PROCEDURE',
+  'LANGUAGE',
+  'SQL',
+  'PLPGSQL',
+  'RETURNS',
+  'CALLED',
+  'STRICT',
+  'SECURITY',
+  'INVOKER',
+  'DEFINER',
+  'VOLATILE',
+  'STABLE',
+  'IMMUTABLE',
+  'PARALLEL',
+  'SAFE',
+  'RESTRICTED',
+  'UNSAFE',
+
+  // ==================== Utility Commands ====================
+  'CONCURRENTLY',
+  'REINDEX',
+  'VACUUM',
+  'ANALYZE',
+  'EXPLAIN',
+  'LOCAL',
+  'GLOBAL',
+  'ORDINALITY',
+  'FREEZE',
+  'VERBOSE',
+  'BUFFERS',
+  'FORMAT',
+  'XML',
+  'YAML',
+
+  // ==================== Additional Reserved Words ====================
+  'IF',
+  'CURRENT_TIMESTAMP',
+  'NOW',
+  'GETDATE'
 ])
 
 /**
@@ -286,7 +444,31 @@ export class PostgreSqlService implements IDatabaseService {
         user: this.config.user,
         password: this.config.password,
         database: this.config.database,
-        max: this.config.maxPoolSize ?? 10
+        max: this.config.maxPoolSize ?? 10,
+        /**
+         * Connection timeout in milliseconds.
+         * Time to wait when connecting to PostgreSQL before failing.
+         * Prevents hanging during network issues or server overload.
+         */
+        connectionTimeoutMillis: 10000,
+        /**
+         * PostgreSQL statement timeout in milliseconds.
+         * Limits execution time for individual SQL statements.
+         * Prevents long-running queries from blocking the connection pool.
+         */
+        statement_timeout: 30000,
+        /**
+         * Idle connection timeout in milliseconds.
+         * Closes connections that have been idle for this duration.
+         * Frees up pool resources and prevents stale connections.
+         */
+        idleTimeoutMillis: 30000,
+        /**
+         * Query timeout in milliseconds (pg driver level).
+         * Fallback protection to abort queries that exceed this duration.
+         * Should be longer than statement_timeout to allow PG to handle first.
+         */
+        query_timeout: 60000
       })
 
       // Test connection

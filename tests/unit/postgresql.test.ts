@@ -206,4 +206,225 @@ describe('prepareSql', () => {
     expect(result).toContain('as count')
     expect(result).toContain('"UserName"')
   })
+
+  // ==================== Window Functions ====================
+
+  it('should handle ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)', () => {
+    const sql = `
+      SELECT UserName, ROW_NUMBER() OVER (PARTITION BY UserType ORDER BY CreatedAt DESC) as rn
+      FROM "dbo"."BIPUsers"
+    `
+    const result = prepareSql(sql)
+    expect(result).toContain('"UserName"')
+    expect(result).toContain('"UserType"')
+    expect(result).toContain('"CreatedAt"')
+    expect(result).not.toContain('"ROW_NUMBER"')
+    expect(result).not.toContain('"OVER"')
+    expect(result).not.toContain('"PARTITION"')
+    expect(result).not.toContain('"ORDER"')
+  })
+
+  it('should handle RANK() and DENSE_RANK()', () => {
+    const sql = `
+      SELECT MaterialCode, RANK() OVER (ORDER BY Quantity DESC) as rnk, DENSE_RANK() OVER (ORDER BY Quantity DESC) as drnk
+      FROM "dbo"."Materials"
+    `
+    const result = prepareSql(sql)
+    expect(result).toContain('"MaterialCode"')
+    expect(result).toContain('"Quantity"')
+    expect(result).not.toContain('"RANK"')
+    expect(result).not.toContain('"DENSE_RANK"')
+  })
+
+  it('should handle LAG() and LEAD()', () => {
+    const sql = `
+      SELECT OrderId, LAG(TotalAmount, 1) OVER (ORDER BY OrderDate) as prevAmount, LEAD(TotalAmount, 1) OVER (ORDER BY OrderDate) as nextAmount
+      FROM "dbo"."Orders"
+    `
+    const result = prepareSql(sql)
+    expect(result).toContain('"OrderId"')
+    expect(result).toContain('"TotalAmount"')
+    expect(result).toContain('"OrderDate"')
+    expect(result).not.toContain('"LAG"')
+    expect(result).not.toContain('"LEAD"')
+  })
+
+  // ==================== CTEs (Common Table Expressions) ====================
+
+  it('should handle WITH clause', () => {
+    const sql = `
+      WITH UserSummary AS (
+        SELECT UserId, COUNT(OrderId) as OrderCount
+        FROM "dbo"."Orders"
+        GROUP BY UserId
+      )
+      SELECT UserName, OrderCount
+      FROM UserSummary
+      JOIN "dbo"."BIPUsers" ON UserSummary.UserId = "dbo"."BIPUsers".ID
+    `
+    const result = prepareSql(sql)
+    expect(result).toContain('"UserId"')
+    expect(result).toContain('"OrderId"')
+    expect(result).toContain('"UserName"')
+    expect(result).not.toContain('"WITH"')
+    expect(result).not.toContain('"AS"')
+    expect(result).not.toContain('"FROM"')
+    expect(result).not.toContain('"JOIN"')
+    expect(result).not.toContain('"ON"')
+  })
+
+  it('should handle recursive CTE', () => {
+    const sql = `
+      WITH RECURSIVE CategoryTree AS (
+        SELECT CategoryId, ParentCategoryId, CategoryName, 0 as Level
+        FROM "dbo"."Categories"
+        WHERE ParentCategoryId IS NULL
+        UNION ALL
+        SELECT c.CategoryId, c.ParentCategoryId, c.CategoryName, ct.Level + 1
+        FROM "dbo"."Categories" c
+        INNER JOIN CategoryTree ct ON c.ParentCategoryId = ct.CategoryId
+      )
+      SELECT * FROM CategoryTree
+    `
+    const result = prepareSql(sql)
+    expect(result).toContain('"CategoryId"')
+    expect(result).toContain('"ParentCategoryId"')
+    expect(result).toContain('"CategoryName"')
+    expect(result).not.toContain('"WITH"')
+    expect(result).not.toContain('"RECURSIVE"')
+    expect(result).not.toContain('"UNION"')
+    expect(result).not.toContain('"ALL"')
+    expect(result).not.toContain('"INNER"')
+    expect(result).not.toContain('"JOIN"')
+  })
+
+  // ==================== Advanced Grouping ====================
+
+  it('should handle ROLLUP', () => {
+    const sql = `
+      SELECT DepartmentId, JobTitle, COUNT(*) as EmployeeCount
+      FROM "dbo"."Employees"
+      GROUP BY ROLLUP (DepartmentId, JobTitle)
+    `
+    const result = prepareSql(sql)
+    expect(result).toContain('"DepartmentId"')
+    expect(result).toContain('"JobTitle"')
+    expect(result).not.toContain('"GROUP"')
+    expect(result).not.toContain('"BY"')
+    expect(result).not.toContain('"ROLLUP"')
+  })
+
+  it('should handle CUBE', () => {
+    const sql = `
+      SELECT Year, Quarter, Region, SUM(SalesAmount) as TotalSales
+      FROM "dbo"."Sales"
+      GROUP BY CUBE (Year, Quarter, Region)
+    `
+    const result = prepareSql(sql)
+    expect(result).toContain('"Year"')
+    expect(result).toContain('"Quarter"')
+    expect(result).toContain('"Region"')
+    expect(result).toContain('"SalesAmount"')
+    expect(result).not.toContain('"CUBE"')
+    expect(result).not.toContain('"GROUP"')
+    expect(result).not.toContain('"BY"')
+  })
+
+  it('should handle GROUPING SETS', () => {
+    const sql = `
+      SELECT DepartmentId, JobTitle, COUNT(*) as EmployeeCount
+      FROM "dbo"."Employees"
+      GROUP BY GROUPING SETS ((DepartmentId, JobTitle), (DepartmentId), ())
+    `
+    const result = prepareSql(sql)
+    expect(result).toContain('"DepartmentId"')
+    expect(result).toContain('"JobTitle"')
+    expect(result).not.toContain('"GROUPING"')
+    expect(result).not.toContain('"SETS"')
+    expect(result).not.toContain('"GROUP"')
+    expect(result).not.toContain('"BY"')
+  })
+
+  // ==================== CASE Expressions ====================
+
+  it('should handle simple CASE', () => {
+    const sql = `
+      SELECT UserName, CASE UserType
+        WHEN 'admin' THEN 'Administrator'
+        WHEN 'user' THEN 'Regular User'
+        ELSE 'Guest'
+      END as UserRole
+      FROM "dbo"."BIPUsers"
+    `
+    const result = prepareSql(sql)
+    expect(result).toContain('"UserName"')
+    expect(result).toContain('"UserType"')
+    expect(result).not.toContain('"CASE"')
+    expect(result).not.toContain('"WHEN"')
+    expect(result).not.toContain('"THEN"')
+    expect(result).not.toContain('"ELSE"')
+    expect(result).not.toContain('"END"')
+  })
+
+  it('should handle searched CASE', () => {
+    const sql = `
+      SELECT OrderId, TotalAmount,
+        CASE
+          WHEN TotalAmount > 10000 THEN 'Large'
+          WHEN TotalAmount > 1000 THEN 'Medium'
+          ELSE 'Small'
+        END as OrderSize
+      FROM "dbo"."Orders"
+    `
+    const result = prepareSql(sql)
+    expect(result).toContain('"OrderId"')
+    expect(result).toContain('"TotalAmount"')
+    expect(result).not.toContain('"CASE"')
+    expect(result).not.toContain('"WHEN"')
+    expect(result).not.toContain('"THEN"')
+    expect(result).not.toContain('"ELSE"')
+    expect(result).not.toContain('"END"')
+  })
+
+  // ==================== Set Operations ====================
+
+  it('should handle UNION, UNION ALL, INTERSECT, EXCEPT', () => {
+    const sql = `
+      SELECT UserId FROM "dbo"."ActiveUsers"
+      UNION
+      SELECT UserId FROM "dbo"."PremiumUsers"
+      UNION ALL
+      SELECT UserId FROM "dbo"."TrialUsers"
+      INTERSECT
+      SELECT UserId FROM "dbo"."VerifiedUsers"
+      EXCEPT
+      SELECT UserId FROM "dbo"."BannedUsers"
+    `
+    const result = prepareSql(sql)
+    expect(result).toContain('"UserId"')
+    expect(result).not.toContain('"UNION"')
+    expect(result).not.toContain('"ALL"')
+    expect(result).not.toContain('"INTERSECT"')
+    expect(result).not.toContain('"EXCEPT"')
+    expect(result).not.toContain('"SELECT"')
+    expect(result).not.toContain('"FROM"')
+  })
+
+  // ==================== JSON Operators ====================
+
+  it('should handle -> and ->> operators', () => {
+    const sql = `
+      SELECT UserId, ProfileData->'address'->>'city' as City, ProfileData->'contact'->>'phone' as Phone
+      FROM "dbo"."Users"
+      WHERE ProfileData->'preferences'->>'newsletter' = 'true'
+    `
+    const result = prepareSql(sql)
+    expect(result).toContain('"UserId"')
+    expect(result).toContain('"ProfileData"')
+    expect(result).toContain('->')
+    expect(result).toContain('->>')
+    expect(result).not.toContain('"SELECT"')
+    expect(result).not.toContain('"FROM"')
+    expect(result).not.toContain('"WHERE"')
+  })
 })
