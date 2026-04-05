@@ -1,36 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import {
+  CleanerService,
   createBatches,
   getMissingOrders,
   runWithConcurrency
 } from '../../src/main/services/erp/cleaner'
-import type { ShouldDeleteParams } from '../../src/main/services/erp/cleaner'
 
 describe('Cleaner Service (Unit)', () => {
   describe('shouldDeleteMaterial', () => {
-    // Create a mock cleaner service (no auth needed for this pure function test)
-    const mockCleaner = {
-      shouldDeleteMaterial: (params: ShouldDeleteParams): boolean => {
-        const { rowNumber, pendingQty, materialCode, deleteSet } = params
-
-        // Check if material is in delete list
-        if (!deleteSet.has(materialCode)) {
-          return false
-        }
-
-        // Check row number range (2000-7999 are protected)
-        if (rowNumber >= 2000 && rowNumber < 8000) {
-          return false
-        }
-
-        // Check pending quantity (must be empty)
-        if (pendingQty && pendingQty.trim() !== '') {
-          return false
-        }
-
-        return true
-      }
-    }
+    // CleanerService constructor requires ErpAuthService, but shouldDeleteMaterial doesn't use it
+    const cleaner = new CleanerService({} as any)
 
     it('should skip materials with row number 2000-7999', () => {
       const testCases = [
@@ -42,7 +21,7 @@ describe('Cleaner Service (Unit)', () => {
       ]
 
       for (const tc of testCases) {
-        const shouldDelete = mockCleaner.shouldDeleteMaterial({
+        const shouldDelete = cleaner.shouldDeleteMaterial({
           rowNumber: tc.rowNumber,
           pendingQty: tc.pendingQty,
           materialCode: tc.materialCode,
@@ -53,7 +32,7 @@ describe('Cleaner Service (Unit)', () => {
     })
 
     it('should skip materials with non-empty pending quantity', () => {
-      const result = mockCleaner.shouldDeleteMaterial({
+      const result = cleaner.shouldDeleteMaterial({
         rowNumber: 100,
         pendingQty: '5',
         materialCode: 'TEST001',
@@ -64,7 +43,7 @@ describe('Cleaner Service (Unit)', () => {
     })
 
     it('should skip materials not in delete list', () => {
-      const result = mockCleaner.shouldDeleteMaterial({
+      const result = cleaner.shouldDeleteMaterial({
         rowNumber: 100,
         pendingQty: '',
         materialCode: 'NOT_IN_LIST',
@@ -84,7 +63,7 @@ describe('Cleaner Service (Unit)', () => {
       ]
 
       for (const tc of testCases) {
-        const shouldDelete = mockCleaner.shouldDeleteMaterial({
+        const shouldDelete = cleaner.shouldDeleteMaterial({
           rowNumber: tc.rowNumber,
           pendingQty: tc.pendingQty,
           materialCode: tc.materialCode,
@@ -97,7 +76,7 @@ describe('Cleaner Service (Unit)', () => {
     it('should handle multiple conditions correctly', () => {
       // Material in list, valid row, no pending qty = should delete
       expect(
-        mockCleaner.shouldDeleteMaterial({
+        cleaner.shouldDeleteMaterial({
           rowNumber: 100,
           pendingQty: '',
           materialCode: 'TEST001',
@@ -107,7 +86,7 @@ describe('Cleaner Service (Unit)', () => {
 
       // Material in list, protected row, no pending qty = should NOT delete
       expect(
-        mockCleaner.shouldDeleteMaterial({
+        cleaner.shouldDeleteMaterial({
           rowNumber: 7500,
           pendingQty: '',
           materialCode: 'TEST001',
@@ -117,7 +96,7 @@ describe('Cleaner Service (Unit)', () => {
 
       // Material in list, valid row, has pending qty = should NOT delete
       expect(
-        mockCleaner.shouldDeleteMaterial({
+        cleaner.shouldDeleteMaterial({
           rowNumber: 100,
           pendingQty: '10',
           materialCode: 'TEST001',
@@ -127,7 +106,7 @@ describe('Cleaner Service (Unit)', () => {
 
       // Material NOT in list = should NOT delete
       expect(
-        mockCleaner.shouldDeleteMaterial({
+        cleaner.shouldDeleteMaterial({
           rowNumber: 100,
           pendingQty: '',
           materialCode: 'OTHER',
