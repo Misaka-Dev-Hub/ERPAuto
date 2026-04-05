@@ -9,6 +9,7 @@
  */
 
 import { create, type IDatabaseService } from './index'
+import { createDialect, type SqlDialect } from './dialects'
 import { createLogger, run, getRequestId, trackDuration } from '../logger'
 
 const log = createLogger('DiscreteMaterialPlanDAO')
@@ -53,8 +54,6 @@ export interface MaterialPlanRecord {
  * Configuration for DiscreteMaterialPlanData table
  */
 export const DISCRETE_MATERIAL_PLAN_CONFIG = {
-  TABLE_NAME_SQLSERVER: '[dbo].[DiscreteMaterialPlanData]',
-  TABLE_NAME_MYSQL: 'dbo_DiscreteMaterialPlanData',
   COLUMNS: {
     ID: 'ID',
     FACTORY: 'Factory',
@@ -94,15 +93,20 @@ export const DISCRETE_MATERIAL_PLAN_CONFIG = {
  */
 export class DiscreteMaterialPlanDAO {
   private dbService: IDatabaseService | null = null
+  private dialect: SqlDialect | null = null
+
+  private getDialect(): SqlDialect {
+    if (!this.dialect) {
+      this.dialect = createDialect(this.dbService!.type)
+    }
+    return this.dialect
+  }
 
   /**
    * Get the appropriate table name based on database type
    */
   private getTableName(): string {
-    const isSqlServer = this.dbService?.type === 'sqlserver'
-    return isSqlServer
-      ? DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_SQLSERVER
-      : DISCRETE_MATERIAL_PLAN_CONFIG.TABLE_NAME_MYSQL
+    return this.getDialect().quoteTableName('dbo', 'DiscreteMaterialPlanData')
   }
 
   /**
@@ -115,15 +119,6 @@ export class DiscreteMaterialPlanDAO {
 
     this.dbService = await create()
     return this.dbService
-  }
-
-  /**
-   * Build placeholders for IN clause based on database type
-   */
-  private buildPlaceholders(count: number, isSqlServer: boolean): string {
-    return isSqlServer
-      ? Array.from({ length: count }, (_, idx) => `@p${idx}`).join(',')
-      : Array.from({ length: count }, () => '?').join(',')
   }
 
   // ==================== QUERY ALL ====================
@@ -219,13 +214,13 @@ export class DiscreteMaterialPlanDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
       const batchSize = 1500
       const allResults: any[] = []
 
       for (let i = 0; i < sourceNumbers.length; i += batchSize) {
         const batch = sourceNumbers.slice(i, i + batchSize)
-        const placeholders = this.buildPlaceholders(batch.length, isSqlServer)
+        const placeholders = dialect.params(batch.length)
 
         const sqlString = `
           SELECT *
@@ -273,13 +268,13 @@ export class DiscreteMaterialPlanDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
       const batchSize = 1500
       const allResults: any[] = []
 
       for (let i = 0; i < sourceNumbers.length; i += batchSize) {
         const batch = sourceNumbers.slice(i, i + batchSize)
-        const placeholders = this.buildPlaceholders(batch.length, isSqlServer)
+        const placeholders = dialect.params(batch.length)
 
         const sqlString = `
           WITH RankedRecords AS (
@@ -338,9 +333,9 @@ export class DiscreteMaterialPlanDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         SELECT *
         FROM ${tableName}
@@ -377,9 +372,9 @@ export class DiscreteMaterialPlanDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         SELECT *
         FROM ${tableName}
@@ -418,13 +413,13 @@ export class DiscreteMaterialPlanDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
       const batchSize = 1500
       const allResults: any[] = []
 
       for (let i = 0; i < planNumbers.length; i += batchSize) {
         const batch = planNumbers.slice(i, i + batchSize)
-        const placeholders = this.buildPlaceholders(batch.length, isSqlServer)
+        const placeholders = dialect.params(batch.length)
 
         const sqlString = `
           SELECT *
@@ -476,7 +471,7 @@ export class DiscreteMaterialPlanDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
       const batchSize = 2000
 
       // Get unique source numbers
@@ -495,7 +490,7 @@ export class DiscreteMaterialPlanDAO {
       for (let i = 0; i < uniqueSourceNumbers.length; i += batchSize) {
         const batch = uniqueSourceNumbers.slice(i, i + batchSize)
         const batchNumber = Math.floor(i / batchSize) + 1
-        const placeholders = this.buildPlaceholders(batch.length, isSqlServer)
+        const placeholders = dialect.params(batch.length)
 
         const sqlString = `
           DELETE FROM ${tableName}
@@ -565,23 +560,19 @@ export class DiscreteMaterialPlanDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
       // SQL Server has a limit of 2100 parameters per query
       // Each record has 28 columns, so max rows per batch = 2100 / 28 = 75
       // Leave some margin for query overhead
       const columnsPerRow = 28
-      const sqlServerMaxParams = 2000
-      const effectiveBatchSize = isSqlServer
-        ? Math.min(batchSize, Math.floor(sqlServerMaxParams / columnsPerRow))
-        : batchSize
+      const effectiveBatchSize = Math.min(batchSize, dialect.maxBatchRows(columnsPerRow))
       const totalBatches = Math.ceil(records.length / effectiveBatchSize)
 
       log.info('Batch insert started', {
         tableName,
         operationType: 'INSERT',
         requestId: batchId,
-        isSqlServer,
         dbType: dbService.type,
         columnsPerRow,
         effectiveBatchSize,
@@ -598,7 +589,6 @@ export class DiscreteMaterialPlanDAO {
           dbService,
           tableName,
           batch,
-          isSqlServer,
           batchId,
           batchNumber,
           totalBatches
@@ -643,7 +633,6 @@ export class DiscreteMaterialPlanDAO {
     dbService: IDatabaseService,
     tableName: string,
     records: MaterialPlanRecord[],
-    isSqlServer: boolean,
     batchId: string,
     batchNumber: number,
     totalBatches: number
@@ -689,7 +678,7 @@ export class DiscreteMaterialPlanDAO {
     const rowPlaceholders: string[] = []
 
     records.forEach((record, rowIndex) => {
-      const rowValues = this.buildRowValues(record, columns, rowIndex, isSqlServer, values)
+      const rowValues = this.buildRowValues(record, columns, rowIndex, values)
       rowPlaceholders.push(`(${rowValues.join(',')})`)
     })
 
@@ -718,10 +707,9 @@ export class DiscreteMaterialPlanDAO {
   private async insertBatch(
     dbService: IDatabaseService,
     tableName: string,
-    records: MaterialPlanRecord[],
-    isSqlServer: boolean
+    records: MaterialPlanRecord[]
   ): Promise<number> {
-    return this.insertBatchWithTracking(dbService, tableName, records, isSqlServer, 'unknown', 1, 1)
+    return this.insertBatchWithTracking(dbService, tableName, records, 'unknown', 1, 1)
   }
 
   /**
@@ -731,18 +719,14 @@ export class DiscreteMaterialPlanDAO {
     record: MaterialPlanRecord,
     columns: string[],
     _rowIndex: number,
-    isSqlServer: boolean,
     values: any[]
   ): string[] {
+    const dialect = this.getDialect()
     return columns.map((col) => {
       const value = this.getColumnValue(record, col)
       values.push(value)
 
-      if (isSqlServer) {
-        return `@p${values.length - 1}`
-      } else {
-        return '?'
-      }
+      return dialect.param(values.length - 1)
     })
   }
 
@@ -839,9 +823,9 @@ export class DiscreteMaterialPlanDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         SELECT COUNT(*) as count
         FROM ${tableName}
@@ -876,7 +860,7 @@ export class DiscreteMaterialPlanDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
       if (sourceNumbers && sourceNumbers.length > 0) {
         const batchSize = 1500
@@ -884,7 +868,7 @@ export class DiscreteMaterialPlanDAO {
 
         for (let i = 0; i < sourceNumbers.length; i += batchSize) {
           const batch = sourceNumbers.slice(i, i + batchSize)
-          const placeholders = this.buildPlaceholders(batch.length, isSqlServer)
+          const placeholders = dialect.params(batch.length)
 
           const sqlString = `
             SELECT DISTINCT MaterialName
@@ -975,6 +959,7 @@ export class DiscreteMaterialPlanDAO {
     if (this.dbService) {
       await this.dbService.disconnect()
       this.dbService = null
+      this.dialect = null
     }
   }
 }
