@@ -11,7 +11,7 @@
 
 import { create, type IDatabaseService } from './index'
 import { createDialect, type SqlDialect } from './dialects'
-import { createLogger, run, getRequestId, trackDuration } from '../logger'
+import { createLogger, getRequestId, trackDuration } from '../logger'
 import type {
   OperationHistoryRecord,
   BatchStats,
@@ -202,7 +202,7 @@ export class ExtractorOperationHistoryDAO {
       `
       const params = [status, batchId]
 
-      const result = await trackDuration(async () => await dbService.query(sqlString, params), {
+      await trackDuration(async () => await dbService.query(sqlString, params), {
         operationName: 'ExtractorOperationHistoryDAO.updateBatchStatus',
         context: { tableName, operationType: 'UPDATE', batchId }
       })

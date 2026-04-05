@@ -20,7 +20,7 @@ import { dirname } from 'path'
 import { app } from 'electron'
 import yaml from 'js-yaml'
 import { z } from 'zod'
-import { createLogger, applyLoggingConfig, trackDuration } from '../logger'
+import { createLogger, applyLoggingConfig } from '../logger'
 import { applyAuditConfig } from '../logger/audit-logger'
 import {
   fullConfigSchema,
@@ -315,9 +315,12 @@ export class ConfigManager {
 
     const { activeType, mysql, sqlserver, postgresql } = this.config.database
     switch (activeType) {
-      case 'postgresql': return postgresql
-      case 'sqlserver': return sqlserver
-      default: return mysql
+      case 'postgresql':
+        return postgresql
+      case 'sqlserver':
+        return sqlserver
+      default:
+        return mysql
     }
   }
 

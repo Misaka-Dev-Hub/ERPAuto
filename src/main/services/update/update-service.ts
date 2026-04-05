@@ -1,6 +1,6 @@
 import * as fs from 'fs'
 import { ConfigManager } from '../config/config-manager'
-import { createLogger, run, trackDuration, PerformanceTracker } from '../logger'
+import { createLogger } from '../logger'
 import type { UpdateConfig } from '../../types/config.schema'
 import type { UserType } from '../../types/user.types'
 import type {

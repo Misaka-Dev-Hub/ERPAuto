@@ -119,7 +119,6 @@ export async function trackDuration<T>(
     return { result, durationMs, isSlow }
   } catch (error) {
     const durationMs = performance.now() - startTime
-    const isSlow = durationMs > slowThresholdMs
 
     // Log the error with duration
     logger.error(`${message} failed after ${durationMs.toFixed(2)}ms`, {

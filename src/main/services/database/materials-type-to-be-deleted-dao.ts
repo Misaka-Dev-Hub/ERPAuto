@@ -7,7 +7,7 @@
 
 import { create, type IDatabaseService } from './index'
 import { createDialect, type SqlDialect } from './dialects'
-import { createLogger, run, getRequestId, trackDuration } from '../logger'
+import { createLogger, getRequestId, trackDuration } from '../logger'
 
 const log = createLogger('MaterialsTypeToBeDeletedDAO')
 

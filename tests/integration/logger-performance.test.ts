@@ -5,14 +5,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
-import {
-  trackDuration,
-  PerformanceTracker,
-  createPerformanceTracker,
-  DEFAULT_SLOW_THRESHOLD_MS,
-  type TrackDurationOptions
-} from '../../src/main/services/logger/performance-monitor'
-import logger from '../../src/main/services/logger/index'
 
 // Mock the logger to avoid noisy output during tests
 vi.mock('../../src/main/services/logger', () => ({
@@ -26,7 +18,23 @@ vi.mock('../../src/main/services/logger', () => ({
 }))
 
 describe('Performance Monitor', () => {
-  beforeEach(() => {
+  let trackDuration: typeof import('../../src/main/services/logger/performance-monitor').trackDuration
+  let PerformanceTracker: typeof import('../../src/main/services/logger/performance-monitor').PerformanceTracker
+  let createPerformanceTracker: typeof import('../../src/main/services/logger/performance-monitor').createPerformanceTracker
+  let DEFAULT_SLOW_THRESHOLD_MS: typeof import('../../src/main/services/logger/performance-monitor').DEFAULT_SLOW_THRESHOLD_MS
+  let logger: typeof import('../../src/main/services/logger').default
+
+  beforeEach(async () => {
+    vi.resetModules()
+    const perfMod = await import('../../src/main/services/logger/performance-monitor')
+    const loggerMod = await import('../../src/main/services/logger/index')
+
+    trackDuration = perfMod.trackDuration
+    PerformanceTracker = perfMod.PerformanceTracker
+    createPerformanceTracker = perfMod.createPerformanceTracker
+    DEFAULT_SLOW_THRESHOLD_MS = perfMod.DEFAULT_SLOW_THRESHOLD_MS
+    logger = loggerMod.default
+
     vi.clearAllMocks()
   })
 
@@ -230,7 +238,7 @@ describe('Performance Monitor', () => {
       })
     })
 
-    it('should log summary with aggregated metrics', () => {
+    it('should log summary with aggregated metrics', async () => {
       const tracker = new PerformanceTracker('TestService', 1000)
 
       tracker.recordDuration(100)
@@ -248,7 +256,7 @@ describe('Performance Monitor', () => {
       })
     })
 
-    it('should include slow percentage in summary', () => {
+    it('should include slow percentage in summary', async () => {
       const tracker = new PerformanceTracker('TestService', 50)
 
       tracker.recordDuration(30) // Normal
@@ -261,7 +269,7 @@ describe('Performance Monitor', () => {
       expect(summaryCall.slowPercentage).toContain('%')
     })
 
-    it('should reset metrics when reset() is called', () => {
+    it('should reset metrics when reset() is called', async () => {
       const tracker = new PerformanceTracker('TestService', 1000)
 
       tracker.recordDuration(100)
@@ -275,7 +283,7 @@ describe('Performance Monitor', () => {
       expect(metrics.slowOperationCount).toBe(0)
     })
 
-    it('should return zero metrics when no operations tracked', () => {
+    it('should return zero metrics when no operations tracked', async () => {
       const tracker = new PerformanceTracker('EmptyService')
 
       const metrics = tracker.getMetrics()
@@ -288,7 +296,7 @@ describe('Performance Monitor', () => {
       expect(metrics.slowOperationCount).toBe(0)
     })
 
-    it('should use custom logger if provided', () => {
+    it('should use custom logger if provided', async () => {
       const customLogger = {
         debug: vi.fn(),
         info: vi.fn(),
@@ -307,7 +315,7 @@ describe('Performance Monitor', () => {
   })
 
   describe('createPerformanceTracker', () => {
-    it('should create a tracker with default threshold', () => {
+    it('should create a tracker with default threshold', async () => {
       const tracker = createPerformanceTracker('MyService')
 
       expect(tracker).toBeInstanceOf(PerformanceTracker)
@@ -315,7 +323,7 @@ describe('Performance Monitor', () => {
       expect(metrics.count).toBe(0)
     })
 
-    it('should create a tracker with custom threshold', () => {
+    it('should create a tracker with custom threshold', async () => {
       const tracker = createPerformanceTracker('FastService', 100)
 
       tracker.recordDuration(150)

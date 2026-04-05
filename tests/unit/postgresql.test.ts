@@ -132,7 +132,7 @@ describe('prepareSql', () => {
   it('should preserve string literals with escaped quotes', () => {
     const sql = "WHERE UserName = 'O''Brien'"
     const result = prepareSql(sql)
-    expect(result).toBe('WHERE "UserName" = \'O\'\'Brien\'')
+    expect(result).toBe("WHERE \"UserName\" = 'O''Brien'")
   })
 
   it('should preserve $N parameter placeholders', () => {
@@ -145,17 +145,13 @@ describe('prepareSql', () => {
   it('should handle COUNT(*) correctly', () => {
     const sql = 'SELECT COUNT(*) as count FROM "dbo"."BIPUsers" WHERE UserName = $1'
     const result = prepareSql(sql)
-    expect(result).toBe(
-      'SELECT COUNT(*) as count FROM "dbo"."BIPUsers" WHERE "UserName" = $1'
-    )
+    expect(result).toBe('SELECT COUNT(*) as count FROM "dbo"."BIPUsers" WHERE "UserName" = $1')
   })
 
   it('should quote underscore-containing column names', () => {
     const sql = 'SELECT ERP_URL, ERP_Username, ERP_Password FROM "dbo"."BIPUsers"'
     const result = prepareSql(sql)
-    expect(result).toBe(
-      'SELECT "ERP_URL", "ERP_Username", "ERP_Password" FROM "dbo"."BIPUsers"'
-    )
+    expect(result).toBe('SELECT "ERP_URL", "ERP_Username", "ERP_Password" FROM "dbo"."BIPUsers"')
   })
 
   it('should handle ON CONFLICT DO UPDATE SET with EXCLUDED', () => {
@@ -168,7 +164,7 @@ describe('prepareSql', () => {
   })
 
   it('should handle CURRENT_TIMESTAMP without quoting', () => {
-    const sql = "INSERT INTO t (OperationTime) VALUES (CURRENT_TIMESTAMP)"
+    const sql = 'INSERT INTO t (OperationTime) VALUES (CURRENT_TIMESTAMP)'
     const result = prepareSql(sql)
     expect(result).toBe('INSERT INTO "t" ("OperationTime") VALUES (CURRENT_TIMESTAMP)')
   })

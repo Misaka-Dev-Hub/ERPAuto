@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { _electron: electron } = require('playwright')
 
 ;(async () => {

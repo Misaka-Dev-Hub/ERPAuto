@@ -8,13 +8,8 @@
  * - Create, update, delete users
  */
 
-import {
-  create,
-  disconnect as disconnectDb,
-  type IDatabaseService
-} from '../database/index'
+import { create, type IDatabaseService } from '../database/index'
 import { createDialect, type SqlDialect } from '../database/dialects'
-import { ConfigManager } from '../config/config-manager'
 import type { UserInfo } from '../../types/user.types'
 import { createLogger, logError } from '../logger'
 

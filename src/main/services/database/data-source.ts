@@ -22,9 +22,12 @@ function getDatabaseType(): 'mysql' | 'mssql' | 'postgres' {
   const configManager = ConfigManager.getInstance()
   const dbType = configManager.getDatabaseType()
   switch (dbType) {
-    case 'sqlserver': return 'mssql'
-    case 'postgresql': return 'postgres'
-    default: return 'mysql'
+    case 'sqlserver':
+      return 'mssql'
+    case 'postgresql':
+      return 'postgres'
+    default:
+      return 'mysql'
   }
 }
 
