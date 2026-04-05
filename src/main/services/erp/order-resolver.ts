@@ -121,7 +121,8 @@ export class OrderNumberResolver {
       } else if (this.dbService.type === 'postgresql') {
         // PostgreSQL: 使用双引号保护中文标识符，UPPER 实现不区分大小写
         // prepareSql() 会保留已双引号包裹的标识符
-        sql = `SELECT "${dbConfig.FIELD_ORDER_NUMBER}" FROM "${tableName}" WHERE UPPER("${dbConfig.FIELD_PRODUCTION_ID}") = UPPER($1) LIMIT 1`
+        // 注意：getTableName() 已返回带双引号的表名，不应再加引号
+        sql = `SELECT DISTINCT "${dbConfig.FIELD_PRODUCTION_ID}", "${dbConfig.FIELD_ORDER_NUMBER}" FROM ${tableName} WHERE UPPER("${dbConfig.FIELD_PRODUCTION_ID}") = UPPER($1) LIMIT 1`
         params = [productionId]
       } else {
         // MySQL 默认不区分大小写，但显式使用 UPPER 确保一致性
@@ -173,8 +174,9 @@ export class OrderNumberResolver {
         sql = `SELECT DISTINCT [${dbConfig.FIELD_PRODUCTION_ID}], [${dbConfig.FIELD_ORDER_NUMBER}] FROM ${tableName} WHERE [${dbConfig.FIELD_PRODUCTION_ID}] COLLATE SQL_Latin1_General_CP1_CI_AS IN (${placeholders})`
       } else if (this.dbService.type === 'postgresql') {
         // PostgreSQL: 使用双引号保护中文标识符，UPPER 实现不区分大小写
+        // 注意：getTableName() 已返回带双引号的表名，不应再加引号
         const pgPlaceholders = uniqueProductionIds.map((_, i) => `UPPER($${i + 1})`).join(', ')
-        sql = `SELECT DISTINCT "${dbConfig.FIELD_PRODUCTION_ID}", "${dbConfig.FIELD_ORDER_NUMBER}" FROM "${tableName}" WHERE UPPER("${dbConfig.FIELD_PRODUCTION_ID}") IN (${pgPlaceholders})`
+        sql = `SELECT DISTINCT "${dbConfig.FIELD_PRODUCTION_ID}", "${dbConfig.FIELD_ORDER_NUMBER}" FROM ${tableName} WHERE UPPER("${dbConfig.FIELD_PRODUCTION_ID}") IN (${pgPlaceholders})`
       } else {
         const idPlaceholders = uniqueProductionIds.map(() => 'UPPER(?)').join(', ')
         // P0: Use DISTINCT to prevent duplicates from one-to-many relationships
