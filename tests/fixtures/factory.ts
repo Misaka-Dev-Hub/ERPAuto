@@ -73,10 +73,12 @@ export class UserFactory {
   /**
    * Generate unique user ID
    *
-   * @returns Unique ID string in format USR-{timestamp}-{random}
+   * @returns Unique numeric ID
    */
-  private static generateId(): string {
-    return `USR-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`
+  private static idCounter = 0
+
+  private static generateId(): number {
+    return ++UserFactory.idCounter
   }
 
   /**

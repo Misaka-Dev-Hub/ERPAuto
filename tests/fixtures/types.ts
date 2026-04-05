@@ -88,8 +88,8 @@ export interface Order {
  * Simplified user data for creating test users.
  */
 export interface TestUser {
-  /** User ID */
-  id: string
+  /** User ID (matches UserInfo.id: number) */
+  id: number
   /** Username for login */
   username: string
   /** User type/role */

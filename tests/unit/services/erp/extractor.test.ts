@@ -120,8 +120,14 @@ describe('ExtractorService', () => {
     })
 
     it('should ensure download directory exists', async () => {
+      // Clear fs.mkdir mock history before creating instance
+      vi.mocked(fs.mkdir).mockClear()
+
+      // Create instance (constructor calls fs.mkdir asynchronously)
       new ExtractorService(mockAuthService, './test-downloads')
 
+      // Flush microtask queue so constructor's async mkdir resolves
+      await new Promise((resolve) => setImmediate(resolve))
       expect(fs.mkdir).toHaveBeenCalledWith('./test-downloads', { recursive: true })
     })
   })
