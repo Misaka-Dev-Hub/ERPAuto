@@ -44,12 +44,10 @@ export interface SqlDialect {
   }): string
 
   // 分页
-  paginate(p: {
+  paginate(p: { sql: string; limit: number; offset?: number; paramIndex: number }): {
     sql: string
-    limit: number
-    offset?: number
     paramIndex: number
-  }): { sql: string; paramIndex: number }
+  }
 
   // 批量限制
   maxBatchRows(columnsPerRow: number): number
@@ -60,13 +58,14 @@ export interface SqlDialect {
 
 新建 `src/main/services/database/dialects/` 目录：
 
-| 文件 | 数据库 | param(n) | quoteTableName | currentTimestamp | upsert | paginate |
-|------|--------|----------|---------------|-----------------|--------|----------|
-| `mysql-dialect.ts` | MySQL | `?` | `dbo_Table` | `NOW()` | `ON DUPLICATE KEY` | `LIMIT x OFFSET y` |
-| `sqlserver-dialect.ts` | SQL Server | `@p{n}` | `[dbo].[Table]` | `GETDATE()` | `MERGE` | `OFFSET/FETCH` |
-| `postgresql-dialect.ts` | PostgreSQL | `${n+1}` | `"dbo"."Table"` | `CURRENT_TIMESTAMP` | `ON CONFLICT` | `LIMIT x OFFSET y` |
+| 文件                    | 数据库     | param(n) | quoteTableName  | currentTimestamp    | upsert             | paginate           |
+| ----------------------- | ---------- | -------- | --------------- | ------------------- | ------------------ | ------------------ |
+| `mysql-dialect.ts`      | MySQL      | `?`      | `dbo_Table`     | `NOW()`             | `ON DUPLICATE KEY` | `LIMIT x OFFSET y` |
+| `sqlserver-dialect.ts`  | SQL Server | `@p{n}`  | `[dbo].[Table]` | `GETDATE()`         | `MERGE`            | `OFFSET/FETCH`     |
+| `postgresql-dialect.ts` | PostgreSQL | `${n+1}` | `"dbo"."Table"` | `CURRENT_TIMESTAMP` | `ON CONFLICT`      | `LIMIT x OFFSET y` |
 
 方言工厂 `dialects/index.ts`：
+
 ```typescript
 export function createDialect(type: DatabaseType): SqlDialect
 ```
@@ -76,16 +75,19 @@ export function createDialect(type: DatabaseType): SqlDialect
 每个 DAO 新增 `dialect` 成员，替代原有的 `getTableName()`、`buildPlaceholders()` 和所有 `isSqlServer` 分支：
 
 **删除：**
+
 - `getTableName()` 私有方法
 - `buildPlaceholders()` 私有方法
 - 所有 `isSqlServer` 局部变量和条件分支
 - `*_CONFIG` 中的 `TABLE_NAME_SQLSERVER` / `TABLE_NAME_MYSQL` → 合并为 `TABLE_SCHEMA` + `TABLE_NAME`
 
 **新增：**
+
 - `private dialect: SqlDialect | null = null`
 - `private getDialect(): SqlDialect`
 
 **涉及 DAO：**
+
 - `DiscreteMaterialPlanDAO` — 占位符、表名、批量大小
 - `MaterialsToBeDeletedDAO` — 占位符、表名、MERGE/ON DUPLICATE KEY → `upsert()`
 - `MaterialsTypeToBeDeletedDAO` — 同上
@@ -94,6 +96,7 @@ export function createDialect(type: DatabaseType): SqlDialect
 ### 4. PostgreSQL 服务层
 
 新建 `src/main/services/database/postgresql.ts`：
+
 - 使用 `pg` 驱动，`Pool` 连接池
 - 实现 `IDatabaseService` 接口
 - `query()` 直接传递参数数组给 `pg`
@@ -113,22 +116,22 @@ export function createDialect(type: DatabaseType): SqlDialect
 
 ## 改动范围
 
-| 层 | 文件 | 动作 |
-|---|---|---|
-| 类型 | `types/database.types.ts` | 修改 |
-| 方言 | `database/dialects/index.ts` | 新建 |
-| 方言 | `database/dialects/mysql-dialect.ts` | 新建 |
-| 方言 | `database/dialects/sqlserver-dialect.ts` | 新建 |
-| 方言 | `database/dialects/postgresql-dialect.ts` | 新建 |
-| 服务 | `database/postgresql.ts` | 新建 |
-| 工厂 | `database/index.ts` | 修改 |
-| TypeORM | `database/data-source.ts` | 修改 |
-| DAO | `database/discrete-material-plan-dao.ts` | 重构 |
-| DAO | `database/materials-to-be-deleted-dao.ts` | 重构 |
-| DAO | `database/materials-type-to-be-deleted-dao.ts` | 重构 |
-| DAO | `database/extractor-operation-history-dao.ts` | 重构 |
-| 配置 | `config.template.yaml` | 修改 |
-| 依赖 | `package.json` | 修改 |
+| 层      | 文件                                           | 动作 |
+| ------- | ---------------------------------------------- | ---- |
+| 类型    | `types/database.types.ts`                      | 修改 |
+| 方言    | `database/dialects/index.ts`                   | 新建 |
+| 方言    | `database/dialects/mysql-dialect.ts`           | 新建 |
+| 方言    | `database/dialects/sqlserver-dialect.ts`       | 新建 |
+| 方言    | `database/dialects/postgresql-dialect.ts`      | 新建 |
+| 服务    | `database/postgresql.ts`                       | 新建 |
+| 工厂    | `database/index.ts`                            | 修改 |
+| TypeORM | `database/data-source.ts`                      | 修改 |
+| DAO     | `database/discrete-material-plan-dao.ts`       | 重构 |
+| DAO     | `database/materials-to-be-deleted-dao.ts`      | 重构 |
+| DAO     | `database/materials-type-to-be-deleted-dao.ts` | 重构 |
+| DAO     | `database/extractor-operation-history-dao.ts`  | 重构 |
+| 配置    | `config.template.yaml`                         | 修改 |
+| 依赖    | `package.json`                                 | 修改 |
 
 共 **4 个新文件 + 10 个修改文件**。
 

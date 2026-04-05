@@ -74,16 +74,13 @@ vi.mock('../../src/main/services/database/data-source', () => ({
 // MaterialsToBeDeletedRepository
 // ---------------------------------------------------------------------------
 describe('MaterialsToBeDeletedRepository', () => {
-  let MaterialsToBeDeletedRepository: typeof import(
-    '../../src/main/services/database/repositories/MaterialsToBeDeletedRepository'
-  ).MaterialsToBeDeletedRepository
+  let MaterialsToBeDeletedRepository: typeof import('../../src/main/services/database/repositories/MaterialsToBeDeletedRepository').MaterialsToBeDeletedRepository
 
   beforeEach(async () => {
     vi.clearAllMocks()
     mockRepo = createMockRepository()
-    const mod = await import(
-      '../../src/main/services/database/repositories/MaterialsToBeDeletedRepository'
-    )
+    const mod =
+      await import('../../src/main/services/database/repositories/MaterialsToBeDeletedRepository')
     MaterialsToBeDeletedRepository = mod.MaterialsToBeDeletedRepository
   })
 
@@ -384,16 +381,13 @@ describe('MaterialsToBeDeletedRepository', () => {
 // DiscreteMaterialPlanRepository
 // ---------------------------------------------------------------------------
 describe('DiscreteMaterialPlanRepository', () => {
-  let DiscreteMaterialPlanRepository: typeof import(
-    '../../src/main/services/database/repositories/DiscreteMaterialPlanRepository'
-  ).DiscreteMaterialPlanRepository
+  let DiscreteMaterialPlanRepository: typeof import('../../src/main/services/database/repositories/DiscreteMaterialPlanRepository').DiscreteMaterialPlanRepository
 
   beforeEach(async () => {
     vi.clearAllMocks()
     mockRepo = createMockRepository()
-    const mod = await import(
-      '../../src/main/services/database/repositories/DiscreteMaterialPlanRepository'
-    )
+    const mod =
+      await import('../../src/main/services/database/repositories/DiscreteMaterialPlanRepository')
     DiscreteMaterialPlanRepository = mod.DiscreteMaterialPlanRepository
   })
 
@@ -430,9 +424,8 @@ describe('DiscreteMaterialPlanRepository', () => {
     mockRepo = { ...createMockRepository(), query: vi.fn().mockResolvedValue(mockQueryResult) }
     // Re-import to pick up new mockRepo
     vi.resetModules()
-    const mod = await import(
-      '../../src/main/services/database/repositories/DiscreteMaterialPlanRepository'
-    )
+    const mod =
+      await import('../../src/main/services/database/repositories/DiscreteMaterialPlanRepository')
     const freshRepo = new mod.DiscreteMaterialPlanRepository()
 
     const result = await freshRepo.queryAllDistinctByMaterialCode()
@@ -447,9 +440,8 @@ describe('DiscreteMaterialPlanRepository', () => {
       query: vi.fn().mockRejectedValue(new Error('db fail'))
     }
     vi.resetModules()
-    const mod = await import(
-      '../../src/main/services/database/repositories/DiscreteMaterialPlanRepository'
-    )
+    const mod =
+      await import('../../src/main/services/database/repositories/DiscreteMaterialPlanRepository')
     const freshRepo = new mod.DiscreteMaterialPlanRepository()
 
     const result = await freshRepo.queryAllDistinctByMaterialCode()
@@ -512,9 +504,8 @@ describe('DiscreteMaterialPlanRepository', () => {
   it('queryBySourceNumbersDistinct: calls repo.query() per batch', async () => {
     mockRepo = { ...createMockRepository(), query: vi.fn().mockResolvedValue([{ M: 'X' }]) }
     vi.resetModules()
-    const mod = await import(
-      '../../src/main/services/database/repositories/DiscreteMaterialPlanRepository'
-    )
+    const mod =
+      await import('../../src/main/services/database/repositories/DiscreteMaterialPlanRepository')
     const repo = new mod.DiscreteMaterialPlanRepository()
 
     const result = await repo.queryBySourceNumbersDistinct(['S1', 'S2'])
@@ -529,9 +520,8 @@ describe('DiscreteMaterialPlanRepository', () => {
       query: vi.fn().mockRejectedValue(new Error('db fail'))
     }
     vi.resetModules()
-    const mod = await import(
-      '../../src/main/services/database/repositories/DiscreteMaterialPlanRepository'
-    )
+    const mod =
+      await import('../../src/main/services/database/repositories/DiscreteMaterialPlanRepository')
     const repo = new mod.DiscreteMaterialPlanRepository()
 
     const result = await repo.queryBySourceNumbersDistinct(['S1'])

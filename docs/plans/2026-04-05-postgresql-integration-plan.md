@@ -13,6 +13,7 @@
 ## Task 1: SqlDialect Interface & Type Definitions
 
 **Files:**
+
 - Create: `src/main/types/sql-dialect.types.ts`
 - Modify: `src/main/types/database.types.ts:11` (extend `DatabaseType`)
 - Modify: `src/main/types/config.schema.ts:15` (extend Zod enum)
@@ -20,11 +21,13 @@
 **Step 1: Add `'postgresql'` to `DatabaseType`**
 
 In `src/main/types/database.types.ts:11`, change:
+
 ```typescript
 export type DatabaseType = 'mysql' | 'sqlserver' | 'postgresql'
 ```
 
 Add after line 104 (after `SqlServerConfig`):
+
 ```typescript
 /**
  * PostgreSQL-specific configuration
@@ -44,11 +47,13 @@ export interface PostgreSqlConfig extends DatabaseConfig {
 In `src/main/types/config.schema.ts`:
 
 Change line 15:
+
 ```typescript
 export const databaseTypeSchema = z.enum(['mysql', 'sqlserver', 'postgresql'])
 ```
 
 Add after `sqlServerConfigSchema` (after line 58):
+
 ```typescript
 /**
  * PostgreSQL 配置 Schema
@@ -65,6 +70,7 @@ export type PostgreSqlConfig = z.infer<typeof postgresqlConfigSchema>
 ```
 
 Change `databaseConfigSchema` (line 63):
+
 ```typescript
 export const databaseConfigSchema = z.object({
   activeType: databaseTypeSchema.default('mysql'),
@@ -77,6 +83,7 @@ export const databaseConfigSchema = z.object({
 **Step 3: Create `SqlDialect` interface**
 
 Create `src/main/types/sql-dialect.types.ts`:
+
 ```typescript
 /**
  * SQL Dialect Abstraction
@@ -152,12 +159,10 @@ export interface SqlDialect {
    *
    * @returns Object with modified sql and next param index
    */
-  paginate(params: {
+  paginate(params: { sql: string; limit: number; offset?: number; paramIndex: number }): {
     sql: string
-    limit: number
-    offset?: number
-    paramIndex: number
-  }): { sql: string; nextParamIndex: number }
+    nextParamIndex: number
+  }
 
   /**
    * Maximum rows per batch given columns per row
@@ -185,6 +190,7 @@ git commit -m "feat(db): add SqlDialect interface and PostgreSQL type definition
 ## Task 2: Implement Three Dialect Classes
 
 **Files:**
+
 - Create: `src/main/services/database/dialects/mysql-dialect.ts`
 - Create: `src/main/services/database/dialects/sqlserver-dialect.ts`
 - Create: `src/main/services/database/dialects/postgresql-dialect.ts`
@@ -196,6 +202,7 @@ git commit -m "feat(db): add SqlDialect interface and PostgreSQL type definition
 **Step 1: Write tests for all three dialects**
 
 Create `tests/unit/dialects/mysql-dialect.test.ts`:
+
 ```typescript
 import { describe, it, expect } from 'vitest'
 import { MySqlDialect } from '@main/services/database/dialects/mysql-dialect'
@@ -255,6 +262,7 @@ describe('MySqlDialect', () => {
 ```
 
 Create `tests/unit/dialects/sqlserver-dialect.test.ts`:
+
 ```typescript
 import { describe, it, expect } from 'vitest'
 import { SqlServerDialect } from '@main/services/database/dialects/sqlserver-dialect'
@@ -327,6 +335,7 @@ describe('SqlServerDialect', () => {
 ```
 
 Create `tests/unit/dialects/postgresql-dialect.test.ts`:
+
 ```typescript
 import { describe, it, expect } from 'vitest'
 import { PostgreSqlDialect } from '@main/services/database/dialects/postgresql-dialect'
@@ -393,6 +402,7 @@ Expected: FAIL — modules not found
 **Step 3: Implement MySqlDialect**
 
 Create `src/main/services/database/dialects/mysql-dialect.ts`:
+
 ```typescript
 import type { SqlDialect } from '../../../types/sql-dialect.types'
 import type { DatabaseType } from '../../../types/database.types'
@@ -437,12 +447,10 @@ export class MySqlDialect implements SqlDialect {
     return { sql, nextParamIndex: p.startParamIndex + p.allColumns.length }
   }
 
-  paginate(p: {
+  paginate(p: { sql: string; limit: number; offset?: number; paramIndex: number }): {
     sql: string
-    limit: number
-    offset?: number
-    paramIndex: number
-  }): { sql: string; nextParamIndex: number } {
+    nextParamIndex: number
+  } {
     let sql = p.sql
     if (p.offset !== undefined) {
       sql += ` LIMIT ${p.limit} OFFSET ${p.offset}`
@@ -461,6 +469,7 @@ export class MySqlDialect implements SqlDialect {
 **Step 4: Implement SqlServerDialect**
 
 Create `src/main/services/database/dialects/sqlserver-dialect.ts`:
+
 ```typescript
 import type { SqlDialect } from '../../../types/sql-dialect.types'
 import type { DatabaseType } from '../../../types/database.types'
@@ -490,21 +499,15 @@ export class SqlServerDialect implements SqlDialect {
     allColumns: string[]
     startParamIndex: number
   }): { sql: string; nextParamIndex: number } {
-    const sourceValues = p.allColumns
-      .map((_, i) => `@p${p.startParamIndex + i}`)
-      .join(', ')
+    const sourceValues = p.allColumns.map((_, i) => `@p${p.startParamIndex + i}`).join(', ')
     const sourceColumns = p.allColumns.join(', ')
-    const keyMatch = p.keyColumns
-      .map((col) => `target.${col} = source.${col}`)
-      .join(' AND ')
+    const keyMatch = p.keyColumns.map((col) => `target.${col} = source.${col}`).join(' AND ')
     const updateSet = p.allColumns
       .filter((col) => !p.keyColumns.includes(col))
       .map((col) => `${col} = source.${col}`)
       .join(', ')
     const insertColumns = p.allColumns.join(', ')
-    const insertValues = p.allColumns
-      .map((col) => `source.${col}`)
-      .join(', ')
+    const insertValues = p.allColumns.map((col) => `source.${col}`).join(', ')
 
     const sql = `
       MERGE ${p.table} AS target
@@ -516,12 +519,10 @@ export class SqlServerDialect implements SqlDialect {
     return { sql, nextParamIndex: p.startParamIndex + p.allColumns.length }
   }
 
-  paginate(p: {
+  paginate(p: { sql: string; limit: number; offset?: number; paramIndex: number }): {
     sql: string
-    limit: number
-    offset?: number
-    paramIndex: number
-  }): { sql: string; nextParamIndex: number } {
+    nextParamIndex: number
+  } {
     let sql = p.sql
     let nextIndex = p.paramIndex
 
@@ -547,6 +548,7 @@ export class SqlServerDialect implements SqlDialect {
 **Step 5: Implement PostgreSqlDialect**
 
 Create `src/main/services/database/dialects/postgresql-dialect.ts`:
+
 ```typescript
 import type { SqlDialect } from '../../../types/sql-dialect.types'
 import type { DatabaseType } from '../../../types/database.types'
@@ -577,9 +579,7 @@ export class PostgreSqlDialect implements SqlDialect {
     allColumns: string[]
     startParamIndex: number
   }): { sql: string; nextParamIndex: number } {
-    const placeholders = p.allColumns
-      .map((_, i) => `$${p.startParamIndex + i + 1}`)
-      .join(', ')
+    const placeholders = p.allColumns.map((_, i) => `$${p.startParamIndex + i + 1}`).join(', ')
     const columns = p.allColumns.join(', ')
     const conflictKeys = p.keyColumns.map((k) => `"${k}"`).join(', ')
     const updateSet = p.allColumns
@@ -595,12 +595,10 @@ export class PostgreSqlDialect implements SqlDialect {
     return { sql, nextParamIndex: p.startParamIndex + p.allColumns.length }
   }
 
-  paginate(p: {
+  paginate(p: { sql: string; limit: number; offset?: number; paramIndex: number }): {
     sql: string
-    limit: number
-    offset?: number
-    paramIndex: number
-  }): { sql: string; nextParamIndex: number } {
+    nextParamIndex: number
+  } {
     let sql = p.sql
     if (p.offset !== undefined) {
       sql += ` LIMIT ${p.limit} OFFSET ${p.offset}`
@@ -619,6 +617,7 @@ export class PostgreSqlDialect implements SqlDialect {
 **Step 6: Create dialect factory index**
 
 Create `src/main/services/database/dialects/index.ts`:
+
 ```typescript
 export { MySqlDialect } from './mysql-dialect'
 export { SqlServerDialect } from './sqlserver-dialect'
@@ -659,12 +658,14 @@ git commit -m "feat(db): implement SqlDialect abstraction with MySQL, SQL Server
 ## Task 3: PostgreSqlService Implementation
 
 **Files:**
+
 - Create: `src/main/services/database/postgresql.ts`
 - Test: `tests/unit/postgresql.test.ts`
 
 **Step 1: Write tests**
 
 Create `tests/unit/postgresql.test.ts`:
+
 ```typescript
 import { describe, it, expect, beforeEach } from 'vitest'
 import { PostgreSqlService } from '@main/services/database/postgresql'
@@ -743,6 +744,7 @@ Run: `npm install pg && npm install -D @types/pg`
 **Step 4: Implement PostgreSqlService**
 
 Create `src/main/services/database/postgresql.ts`:
+
 ```typescript
 import { Pool } from 'pg'
 import type {
@@ -902,6 +904,7 @@ git commit -m "feat(db): add PostgreSqlService with pg driver"
 ## Task 4: Refactor DiscreteMaterialPlanDAO
 
 **Files:**
+
 - Modify: `src/main/services/database/discrete-material-plan-dao.ts`
 - Modify: `src/main/services/database/materials-to-be-deleted-dao.ts`
 - Modify: `src/main/services/database/materials-type-to-be-deleted-dao.ts`
@@ -914,11 +917,13 @@ This is the largest task. Each DAO follows the same pattern — replace `isSqlSe
 **Step 1: Add dialect import and member**
 
 At top of file, add import:
+
 ```typescript
 import { createDialect, type SqlDialect } from './dialects'
 ```
 
 In class body, add:
+
 ```typescript
 private dialect: SqlDialect | null = null
 
@@ -933,6 +938,7 @@ private getDialect(): SqlDialect {
 **Step 2: Remove `getTableName()` and `buildPlaceholders()` methods**
 
 Replace with:
+
 ```typescript
 private getTableName(): string {
   return this.getDialect().quoteTableName('dbo', 'DiscreteMaterialPlanData')
@@ -944,11 +950,14 @@ Delete `buildPlaceholders()` entirely — replaced by `dialect.params()`.
 **Step 3: Replace all `isSqlServer` local variables**
 
 Replace patterns like:
+
 ```typescript
 const isSqlServer = dbService.type === 'sqlserver'
 const placeholder = isSqlServer ? '@p0' : '?'
 ```
+
 With:
+
 ```typescript
 const dialect = this.getDialect()
 const placeholder = dialect.param(0)
@@ -961,6 +970,7 @@ Replace `isSqlServer ? '@p0' : '?'` single placeholders with `dialect.param(0)`.
 **Step 4: Refactor `buildRowValues()`**
 
 Change from:
+
 ```typescript
 if (isSqlServer) {
   return `@p${values.length - 1}`
@@ -968,7 +978,9 @@ if (isSqlServer) {
   return '?'
 }
 ```
+
 To:
+
 ```typescript
 return this.getDialect().param(values.length - 1)
 ```
@@ -976,13 +988,16 @@ return this.getDialect().param(values.length - 1)
 **Step 5: Refactor `batchInsert()` batch size**
 
 Change from:
+
 ```typescript
 const isSqlServer = dbService.type === 'sqlserver'
 const effectiveBatchSize = isSqlServer
   ? Math.min(batchSize, Math.floor(sqlServerMaxParams / columnsPerRow))
   : batchSize
 ```
+
 To:
+
 ```typescript
 const dialect = this.getDialect()
 const effectiveBatchSize = Math.min(batchSize, dialect.maxBatchRows(columnsPerRow))
@@ -995,6 +1010,7 @@ Same pattern as above, plus refactor UPSERT methods:
 **Step 6: Replace MERGE/ON DUPLICATE KEY with `dialect.upsert()`**
 
 In `upsertMaterial()`, replace the entire if/else block:
+
 ```typescript
 if (isSqlServer) {
   // MERGE ...
@@ -1002,7 +1018,9 @@ if (isSqlServer) {
   // ON DUPLICATE KEY UPDATE ...
 }
 ```
+
 With:
+
 ```typescript
 const dialect = this.getDialect()
 const { sql: sqlString } = dialect.upsert({
@@ -1034,6 +1052,7 @@ Additionally, refactor `updateMaterial()` — the entire if/else block that dupl
 Plus specific changes:
 
 In `insertBatchRecords()`, replace the if/else with:
+
 ```typescript
 const dialect = this.getDialect()
 const sqlString = `
@@ -1045,6 +1064,7 @@ const sqlString = `
 ```
 
 In `getBatches()`, replace pagination logic with:
+
 ```typescript
 if (options?.limit) {
   const result = dialect.paginate({
@@ -1075,6 +1095,7 @@ git commit -m "refactor(db): replace isSqlServer checks with SqlDialect abstract
 ## Task 5: Database Factory & Config Integration
 
 **Files:**
+
 - Modify: `src/main/services/database/index.ts`
 - Modify: `src/main/services/config/config-manager.ts:47-69,302-308`
 - Modify: `src/main/services/database/data-source.ts`
@@ -1085,12 +1106,14 @@ git commit -m "refactor(db): replace isSqlServer checks with SqlDialect abstract
 In `src/main/services/database/index.ts`:
 
 Add imports:
+
 ```typescript
 import { PostgreSqlService } from './postgresql'
 import type { PostgreSqlConfig } from '../../types/database.types'
 ```
 
 Add config factory:
+
 ```typescript
 export function createPostgreSqlConfig(): PostgreSqlConfig {
   const configManager = ConfigManager.getInstance()
@@ -1107,6 +1130,7 @@ export function createPostgreSqlConfig(): PostgreSqlConfig {
 ```
 
 Update `create()` function (line 89):
+
 ```typescript
 if (dbType === 'postgresql') {
   log.info('Creating PostgreSQL database service')
@@ -1121,6 +1145,7 @@ if (dbType === 'postgresql') {
 ```
 
 Add to re-exports:
+
 ```typescript
 export { PostgreSqlService } from './postgresql'
 ```
@@ -1128,6 +1153,7 @@ export { PostgreSqlService } from './postgresql'
 **Step 2: Update ConfigManager defaults**
 
 In `src/main/services/config/config-manager.ts`, add to `DEFAULT_CONFIG.database` (after line 69):
+
 ```typescript
 postgresql: {
   host: 'localhost',
@@ -1140,6 +1166,7 @@ postgresql: {
 ```
 
 Update `getActiveDatabaseConfig()` (line 302-308):
+
 ```typescript
 public getActiveDatabaseConfig(): MySqlConfig | SqlServerConfig | PostgreSqlConfig {
   const { activeType, mysql, sqlserver, postgresql } = this.config.database
@@ -1156,19 +1183,24 @@ public getActiveDatabaseConfig(): MySqlConfig | SqlServerConfig | PostgreSqlConf
 In `src/main/services/database/data-source.ts`:
 
 Update `getDatabaseType()`:
+
 ```typescript
 function getDatabaseType(): 'mysql' | 'mssql' | 'postgres' {
   const configManager = ConfigManager.getInstance()
   const dbType = configManager.getDatabaseType()
   switch (dbType) {
-    case 'sqlserver': return 'mssql'
-    case 'postgresql': return 'postgres'
-    default: return 'mysql'
+    case 'sqlserver':
+      return 'mssql'
+    case 'postgresql':
+      return 'postgres'
+    default:
+      return 'mysql'
   }
 }
 ```
 
 Add postgres branch in `buildDataSourceOptions()`:
+
 ```typescript
 if (type === 'mssql') {
   // ... existing mssql config
@@ -1191,17 +1223,19 @@ if (type === 'mssql') {
 **Step 4: Update config template**
 
 In `config.template.yaml`, add after sqlserver section:
+
 ```yaml
-  postgresql:
-    host: <PG_HOST>
-    port: 5432
-    database: <DATABASE_NAME>
-    username: <USERNAME>
-    password: <PASSWORD>
-    maxPoolSize: 10
+postgresql:
+  host: <PG_HOST>
+  port: 5432
+  database: <DATABASE_NAME>
+  username: <USERNAME>
+  password: <PASSWORD>
+  maxPoolSize: 10
 ```
 
 Update header comment to mention postgresql:
+
 ```yaml
 # 3. 设置 database.activeType 为 mysql、sqlserver 或 postgresql
 ```
@@ -1228,6 +1262,7 @@ git commit -m "feat(db): integrate PostgreSQL into factory, config, and TypeORM 
 ## Task 6: Verification & Smoke Test
 
 **Files:**
+
 - Test: Manual integration verification
 
 **Step 1: Run full typecheck**
@@ -1252,6 +1287,7 @@ Run: `npm run format`
 **Step 5: Verify config.yaml can be parsed with postgresql section**
 
 Create a temporary test that validates the config schema accepts postgresql:
+
 ```typescript
 // In a scratch test file
 import { validateConfig } from '../../src/main/types/config.schema'
@@ -1262,7 +1298,13 @@ const config = {
     activeType: 'postgresql',
     mysql: { host: 'localhost', port: 3306, database: 'test', username: 'root', password: '' },
     sqlserver: { server: 'localhost', port: 1433, database: 'test', username: 'sa', password: '' },
-    postgresql: { host: '192.168.31.83', port: 5432, database: 'CompanyDB', username: 'admin', password: 'test' }
+    postgresql: {
+      host: '192.168.31.83',
+      port: 5432,
+      database: 'CompanyDB',
+      username: 'admin',
+      password: 'test'
+    }
   },
   paths: { dataDir: './data/' },
   extraction: {},
@@ -1287,13 +1329,13 @@ git commit -m "chore: format and verify PostgreSQL integration"
 
 ## Summary
 
-| Task | Description | New Files | Modified Files |
-|------|-------------|-----------|---------------|
-| 1 | Types & SqlDialect interface | 1 | 2 |
-| 2 | Three dialect implementations + tests | 4 + 3 tests | 0 |
-| 3 | PostgreSqlService + test | 1 + 1 test | 1 (package.json) |
-| 4 | Refactor all 4 DAOs | 0 | 4 |
-| 5 | Factory, config, TypeORM integration | 0 | 4 |
-| 6 | Verification | 0 | 0 |
+| Task | Description                           | New Files   | Modified Files   |
+| ---- | ------------------------------------- | ----------- | ---------------- |
+| 1    | Types & SqlDialect interface          | 1           | 2                |
+| 2    | Three dialect implementations + tests | 4 + 3 tests | 0                |
+| 3    | PostgreSqlService + test              | 1 + 1 test  | 1 (package.json) |
+| 4    | Refactor all 4 DAOs                   | 0           | 4                |
+| 5    | Factory, config, TypeORM integration  | 0           | 4                |
+| 6    | Verification                          | 0           | 0                |
 
 **Total:** 6 tasks, ~14 files touched (9 new, 10 modified), 5 commits

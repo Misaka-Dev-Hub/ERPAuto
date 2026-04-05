@@ -20,9 +20,7 @@ describe('PostgreSqlDialect', () => {
     })
 
     it('should handle arbitrary names', () => {
-      expect(dialect.quoteTableName('my_schema', 'my_table')).toBe(
-        '"my_schema"."my_table"'
-      )
+      expect(dialect.quoteTableName('my_schema', 'my_table')).toBe('"my_schema"."my_table"')
     })
   })
 

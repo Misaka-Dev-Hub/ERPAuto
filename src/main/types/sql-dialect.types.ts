@@ -64,12 +64,10 @@ export interface SqlDialect {
    * MySQL/PostgreSQL: LIMIT x OFFSET y
    * SQL Server: OFFSET x ROWS FETCH NEXT y ROWS ONLY
    */
-  paginate(params: {
+  paginate(params: { sql: string; limit: number; offset?: number; paramIndex: number }): {
     sql: string
-    limit: number
-    offset?: number
-    paramIndex: number
-  }): { sql: string; nextParamIndex: number }
+    nextParamIndex: number
+  }
 
   /**
    * Maximum rows per batch given columns per row

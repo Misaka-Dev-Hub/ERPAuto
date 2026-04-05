@@ -20,9 +20,7 @@ describe('MySqlDialect', () => {
     })
 
     it('should handle arbitrary schema and table names', () => {
-      expect(dialect.quoteTableName('my_schema', 'my_table')).toBe(
-        'my_schema_my_table'
-      )
+      expect(dialect.quoteTableName('my_schema', 'my_table')).toBe('my_schema_my_table')
     })
   })
 

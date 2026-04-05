@@ -19,22 +19,30 @@ describe('ERP Authentication Service (Integration)', () => {
     authService = new ErpAuthService(config)
   })
 
-  it.skipIf(!hasCredentials)('should login successfully', async () => {
-    const session = await authService.login()
+  it.skipIf(!hasCredentials)(
+    'should login successfully',
+    async () => {
+      const session = await authService.login()
 
-    expect(session).toBeDefined()
-    expect(session.browser).toBeDefined()
-    expect(session.context).toBeDefined()
-    expect(session.page).toBeDefined()
-    expect(session.isLoggedIn).toBe(true)
-  }, 30000)
+      expect(session).toBeDefined()
+      expect(session.browser).toBeDefined()
+      expect(session.context).toBeDefined()
+      expect(session.page).toBeDefined()
+      expect(session.isLoggedIn).toBe(true)
+    },
+    30000
+  )
 
-  it.skipIf(!hasCredentials)('should navigate to main page after login', async () => {
-    const session = await authService.login()
+  it.skipIf(!hasCredentials)(
+    'should navigate to main page after login',
+    async () => {
+      const session = await authService.login()
 
-    const url = session.page.url()
-    expect(url).toContain(config.url)
-  }, 30000)
+      const url = session.page.url()
+      expect(url).toContain(config.url)
+    },
+    30000
+  )
 
   afterAll(async () => {
     if (hasCredentials && authService) {

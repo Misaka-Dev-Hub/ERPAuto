@@ -18,9 +18,7 @@ export function setupProcessGuards(): void {
 
   process.on('unhandledRejection', (reason) => {
     const errorMeta =
-      reason instanceof Error
-        ? { error: serializeError(reason) }
-        : { reason: String(reason) }
+      reason instanceof Error ? { error: serializeError(reason) } : { reason: String(reason) }
     logger.error('Unhandled Rejection', errorMeta)
     logAudit('SYSTEM_ERROR', 'system', {
       username: 'system',

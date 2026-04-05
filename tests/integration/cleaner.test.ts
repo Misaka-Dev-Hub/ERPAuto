@@ -21,16 +21,20 @@ describe('Cleaner Service (Integration)', () => {
   const hasCredentials = !!(config.url && config.username && config.password)
 
   describe('Dry-run mode', () => {
-    it.skipIf(!hasCredentials)('should initialize with dry-run mode', async () => {
-      const authService = new ErpAuthService(config)
-      await authService.login()
+    it.skipIf(!hasCredentials)(
+      'should initialize with dry-run mode',
+      async () => {
+        const authService = new ErpAuthService(config)
+        await authService.login()
 
-      const cleaner = new CleanerService(authService, { dryRun: true })
+        const cleaner = new CleanerService(authService, { dryRun: true })
 
-      expect(cleaner.isDryRun()).toBe(true)
+        expect(cleaner.isDryRun()).toBe(true)
 
-      await authService.close()
-    }, 30000)
+        await authService.close()
+      },
+      30000
+    )
 
     it.skipIf(!hasCredentials)(
       'should track materials to delete without actually deleting (dry-run)',
@@ -83,115 +87,131 @@ describe('Cleaner Service (Integration)', () => {
   })
 
   describe('Order processing', () => {
-    it.skipIf(!hasCredentials)('should process single order and return details', async () => {
-      const authService = new ErpAuthService(config)
-      await authService.login()
+    it.skipIf(!hasCredentials)(
+      'should process single order and return details',
+      async () => {
+        const authService = new ErpAuthService(config)
+        await authService.login()
 
-      const orderContent = await fs.readFile(productionIdFile, 'utf-8')
-      const orderNumbers = orderContent
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-        .slice(0, 1) // Test single order
+        const orderContent = await fs.readFile(productionIdFile, 'utf-8')
+        const orderNumbers = orderContent
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+          .slice(0, 1) // Test single order
 
-      const cleaner = new CleanerService(authService, { dryRun: true })
+        const cleaner = new CleanerService(authService, { dryRun: true })
 
-      const result = await cleaner.clean({
-        orderNumbers,
-        materialCodes: [], // Empty list - nothing to delete
-        dryRun: true
-      })
+        const result = await cleaner.clean({
+          orderNumbers,
+          materialCodes: [], // Empty list - nothing to delete
+          dryRun: true
+        })
 
-      expect(result.ordersProcessed).toBe(1)
-      expect(result.details).toHaveLength(1)
-      expect(result.details[0].orderNumber).toBe(orderNumbers[0])
+        expect(result.ordersProcessed).toBe(1)
+        expect(result.details).toHaveLength(1)
+        expect(result.details[0].orderNumber).toBe(orderNumbers[0])
 
-      await authService.close()
-    }, 60000)
+        await authService.close()
+      },
+      60000
+    )
 
-    it.skipIf(!hasCredentials)('should handle order with "审批通过" status', async () => {
-      const authService = new ErpAuthService(config)
-      await authService.login()
+    it.skipIf(!hasCredentials)(
+      'should handle order with "审批通过" status',
+      async () => {
+        const authService = new ErpAuthService(config)
+        await authService.login()
 
-      const orderContent = await fs.readFile(productionIdFile, 'utf-8')
-      const orderNumbers = orderContent
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-        .slice(0, 1)
+        const orderContent = await fs.readFile(productionIdFile, 'utf-8')
+        const orderNumbers = orderContent
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+          .slice(0, 1)
 
-      const cleaner = new CleanerService(authService, { dryRun: true })
+        const cleaner = new CleanerService(authService, { dryRun: true })
 
-      const result = await cleaner.clean({
-        orderNumbers,
-        materialCodes: [],
-        dryRun: true
-      })
+        const result = await cleaner.clean({
+          orderNumbers,
+          materialCodes: [],
+          dryRun: true
+        })
 
-      // Order details should include status information
-      const detail = result.details[0]
-      console.log(
-        `Order ${detail.orderNumber} - Materials deleted: ${detail.materialsDeleted}, Skipped: ${detail.materialsSkipped}`
-      )
+        // Order details should include status information
+        const detail = result.details[0]
+        console.log(
+          `Order ${detail.orderNumber} - Materials deleted: ${detail.materialsDeleted}, Skipped: ${detail.materialsSkipped}`
+        )
 
-      expect(detail).toBeDefined()
+        expect(detail).toBeDefined()
 
-      await authService.close()
-    }, 60000)
+        await authService.close()
+      },
+      60000
+    )
 
-    it.skipIf(!hasCredentials)('should handle multiple orders with progress callback', async () => {
-      const authService = new ErpAuthService(config)
-      await authService.login()
+    it.skipIf(!hasCredentials)(
+      'should handle multiple orders with progress callback',
+      async () => {
+        const authService = new ErpAuthService(config)
+        await authService.login()
 
-      const orderContent = await fs.readFile(productionIdFile, 'utf-8')
-      const orderNumbers = orderContent
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-        .slice(0, 3) // Test 3 orders
+        const orderContent = await fs.readFile(productionIdFile, 'utf-8')
+        const orderNumbers = orderContent
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+          .slice(0, 3) // Test 3 orders
 
-      const progressMessages: string[] = []
+        const progressMessages: string[] = []
 
-      const cleaner = new CleanerService(authService, { dryRun: true })
+        const cleaner = new CleanerService(authService, { dryRun: true })
 
-      const result = await cleaner.clean({
-        orderNumbers,
-        materialCodes: [],
-        dryRun: true,
-        onProgress: (message, progress) => {
-          progressMessages.push(`${progress?.toFixed(0)}%: ${message}`)
-        }
-      })
+        const result = await cleaner.clean({
+          orderNumbers,
+          materialCodes: [],
+          dryRun: true,
+          onProgress: (message, progress) => {
+            progressMessages.push(`${progress?.toFixed(0)}%: ${message}`)
+          }
+        })
 
-      expect(result.ordersProcessed).toBe(3)
-      expect(progressMessages.length).toBeGreaterThan(0)
+        expect(result.ordersProcessed).toBe(3)
+        expect(progressMessages.length).toBeGreaterThan(0)
 
-      console.log('Progress messages:', progressMessages.slice(0, 5))
+        console.log('Progress messages:', progressMessages.slice(0, 5))
 
-      await authService.close()
-    }, 180000)
+        await authService.close()
+      },
+      180000
+    )
   })
 
   describe('Error handling', () => {
-    it.skipIf(!hasCredentials)('should continue processing after order error', async () => {
-      const authService = new ErpAuthService(config)
-      await authService.login()
+    it.skipIf(!hasCredentials)(
+      'should continue processing after order error',
+      async () => {
+        const authService = new ErpAuthService(config)
+        await authService.login()
 
-      const orderNumbers = ['INVALID_ORDER_12345', 'INVALID_ORDER_67890']
+        const orderNumbers = ['INVALID_ORDER_12345', 'INVALID_ORDER_67890']
 
-      const cleaner = new CleanerService(authService, { dryRun: true })
+        const cleaner = new CleanerService(authService, { dryRun: true })
 
-      const result = await cleaner.clean({
-        orderNumbers,
-        materialCodes: [],
-        dryRun: true
-      })
+        const result = await cleaner.clean({
+          orderNumbers,
+          materialCodes: [],
+          dryRun: true
+        })
 
-      // Should still process (even if with errors)
-      expect(result.details.length).toBeGreaterThan(0)
+        // Should still process (even if with errors)
+        expect(result.details.length).toBeGreaterThan(0)
 
-      await authService.close()
-    }, 120000)
+        await authService.close()
+      },
+      120000
+    )
   })
 
   describe('Navigation', () => {

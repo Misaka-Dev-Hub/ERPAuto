@@ -689,11 +689,12 @@ export function createMockRepository(options?: {
   return {
     find: vi.fn().mockResolvedValue(mockFindResult),
     findOne: vi.fn().mockResolvedValue(mockFindResult[0] ?? null),
-    create: vi.fn((plainObject?: Record<string, unknown>) => plainObject ?? ({})),
+    create: vi.fn((plainObject?: Record<string, unknown>) => plainObject ?? {}),
     save: vi.fn().mockImplementation((entity: Record<string, unknown>) => Promise.resolve(entity)),
     delete: vi.fn().mockResolvedValue({ affected: 1 }),
     count: vi.fn().mockResolvedValue(mockFindResult.length),
-    createQueryBuilder: vi      .fn()
+    createQueryBuilder: vi
+      .fn()
       .mockImplementation(() => createMockQueryBuilder({ result: mockFindResult }))
   }
 }
@@ -724,9 +725,12 @@ export function createMockDataSource(
     destroy: vi.fn().mockResolvedValue(undefined),
     isInitialized,
     getRepository: vi.fn().mockReturnValue(mockRepo),
-    create: vi.fn().mockImplementation(
-      (_entityClass: unknown, plainObject?: Record<string, unknown>) => plainObject ?? ({} as Record<string, unknown>)
-    ),
+    create: vi
+      .fn()
+      .mockImplementation(
+        (_entityClass: unknown, plainObject?: Record<string, unknown>) =>
+          plainObject ?? ({} as Record<string, unknown>)
+      ),
     save: vi.fn().mockImplementation((entity: Record<string, unknown>) => Promise.resolve(entity)),
     createQueryBuilder: vi
       .fn()
