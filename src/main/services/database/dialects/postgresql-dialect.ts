@@ -69,6 +69,7 @@ export class PostgreSqlDialect implements SqlDialect {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   maxBatchRows(_columnsPerRow: number): number {
     return 1000
   }

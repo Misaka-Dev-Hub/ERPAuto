@@ -66,7 +66,8 @@ export class SqlServerDialect implements SqlDialect {
     sql: string
     nextParamIndex: number
   } {
-    const { sql, limit, offset, paramIndex } = params
+    const { sql, offset, paramIndex } = params
+    void params.limit // used by caller to push param values
 
     if (offset !== undefined) {
       return {

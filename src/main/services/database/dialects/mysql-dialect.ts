@@ -17,6 +17,7 @@ export class MySqlDialect implements SqlDialect {
     return `${schema}_${table}`
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   param(_index: number): string {
     return '?'
   }
@@ -63,6 +64,7 @@ export class MySqlDialect implements SqlDialect {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   maxBatchRows(_columnsPerRow: number): number {
     return 1000
   }
