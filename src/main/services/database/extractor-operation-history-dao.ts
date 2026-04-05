@@ -10,6 +10,7 @@
  */
 
 import { create, type IDatabaseService } from './index'
+import { createDialect, type SqlDialect } from './dialects'
 import { createLogger, run, getRequestId, trackDuration } from '../logger'
 import type {
   OperationHistoryRecord,
@@ -36,8 +37,6 @@ function formatDateTime(value: unknown): string {
  * Configuration for ExtractorOperationHistory table
  */
 export const EXTRACTOR_OPERATION_HISTORY_CONFIG = {
-  TABLE_NAME_SQLSERVER: '[dbo].[ExtractorOperationHistory]',
-  TABLE_NAME_MYSQL: 'dbo_ExtractorOperationHistory',
   COLUMNS: {
     ID: 'ID',
     BATCH_ID: 'BatchId',
@@ -57,15 +56,20 @@ export const EXTRACTOR_OPERATION_HISTORY_CONFIG = {
  */
 export class ExtractorOperationHistoryDAO {
   private dbService: IDatabaseService | null = null
+  private dialect: SqlDialect | null = null
+
+  private getDialect(): SqlDialect {
+    if (!this.dialect) {
+      this.dialect = createDialect(this.dbService!.type)
+    }
+    return this.dialect
+  }
 
   /**
    * Get the appropriate table name based on database type
    */
   private getTableName(): string {
-    const isSqlServer = this.dbService?.type === 'sqlserver'
-    return isSqlServer
-      ? EXTRACTOR_OPERATION_HISTORY_CONFIG.TABLE_NAME_SQLSERVER
-      : EXTRACTOR_OPERATION_HISTORY_CONFIG.TABLE_NAME_MYSQL
+    return this.getDialect().quoteTableName('dbo', 'ExtractorOperationHistory')
   }
 
   /**
@@ -80,14 +84,6 @@ export class ExtractorOperationHistoryDAO {
     return this.dbService
   }
 
-  /**
-   * Build placeholders for IN clause based on database type
-   */
-  private buildPlaceholders(count: number, isSqlServer: boolean): string {
-    return isSqlServer
-      ? Array.from({ length: count }, (_, idx) => `@p${idx}`).join(',')
-      : Array.from({ length: count }, () => '?').join(',')
-  }
 
   // ==================== INSERT ====================
 
@@ -119,7 +115,7 @@ export class ExtractorOperationHistoryDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
       log.info('Batch records insertion started', {
         tableName,
@@ -133,49 +129,26 @@ export class ExtractorOperationHistoryDAO {
 
       for (const record of records) {
         try {
-          if (isSqlServer) {
-            const sqlString = `
-              INSERT INTO ${tableName}
-                (BatchId, UserId, Username, ProductionId, OrderNumber, OperationTime, Status)
-              VALUES
-                (@p0, @p1, @p2, @p3, @p4, GETDATE(), 'pending')
-            `
-            await trackDuration(
-              async () =>
-                await dbService.query(sqlString, [
-                  batchId,
-                  userId,
-                  username,
-                  record.productionId || null,
-                  record.orderNumber
-                ]),
-              {
-                operationName: 'ExtractorOperationHistoryDAO.insertBatchRecords',
-                context: { tableName, operationType: 'INSERT', batchId }
-              }
-            )
-          } else {
-            const sqlString = `
-              INSERT INTO ${tableName}
-                (BatchId, UserId, Username, ProductionId, OrderNumber, OperationTime, Status)
-              VALUES
-                (?, ?, ?, ?, ?, NOW(), 'pending')
-            `
-            await trackDuration(
-              async () =>
-                await dbService.query(sqlString, [
-                  batchId,
-                  userId,
-                  username,
-                  record.productionId || null,
-                  record.orderNumber
-                ]),
-              {
-                operationName: 'ExtractorOperationHistoryDAO.insertBatchRecords',
-                context: { tableName, operationType: 'INSERT', batchId }
-              }
-            )
-          }
+          const sqlString = `
+            INSERT INTO ${tableName}
+              (BatchId, UserId, Username, ProductionId, OrderNumber, OperationTime, Status)
+            VALUES
+              (${dialect.param(0)}, ${dialect.param(1)}, ${dialect.param(2)}, ${dialect.param(3)}, ${dialect.param(4)}, ${dialect.currentTimestamp()}, 'pending')
+          `
+          await trackDuration(
+            async () =>
+              await dbService.query(sqlString, [
+                batchId,
+                userId,
+                username,
+                record.productionId || null,
+                record.orderNumber
+              ]),
+            {
+              operationName: 'ExtractorOperationHistoryDAO.insertBatchRecords',
+              context: { tableName, operationType: 'INSERT', batchId }
+            }
+          )
         } catch (error) {
           log.error('Error inserting individual record', {
             tableName,
@@ -221,12 +194,12 @@ export class ExtractorOperationHistoryDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
       const sqlString = `
         UPDATE ${tableName}
-        SET Status = ${isSqlServer ? '@p0' : '?'}
-        WHERE BatchId = ${isSqlServer ? '@p1' : '?'}
+        SET Status = ${dialect.param(0)}
+        WHERE BatchId = ${dialect.param(1)}
       `
       const params = [status, batchId]
 
@@ -274,7 +247,7 @@ export class ExtractorOperationHistoryDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
       let sqlString: string
       let params: (string | number | null)[]
@@ -282,20 +255,20 @@ export class ExtractorOperationHistoryDAO {
       if (recordCount !== undefined) {
         sqlString = `
           UPDATE ${tableName}
-          SET Status = ${isSqlServer ? '@p0' : '?'},
-              ErrorMessage = ${isSqlServer ? '@p1' : '?'},
-              RecordCount = ${isSqlServer ? '@p2' : '?'}
-          WHERE BatchId = ${isSqlServer ? '@p3' : '?'}
-            AND OrderNumber = ${isSqlServer ? '@p4' : '?'}
+          SET Status = ${dialect.param(0)},
+              ErrorMessage = ${dialect.param(1)},
+              RecordCount = ${dialect.param(2)}
+          WHERE BatchId = ${dialect.param(3)}
+            AND OrderNumber = ${dialect.param(4)}
         `
         params = [status, errorMessage || null, recordCount, batchId, orderNumber]
       } else {
         sqlString = `
           UPDATE ${tableName}
-          SET Status = ${isSqlServer ? '@p0' : '?'},
-              ErrorMessage = ${isSqlServer ? '@p1' : '?'}
-          WHERE BatchId = ${isSqlServer ? '@p2' : '?'}
-            AND OrderNumber = ${isSqlServer ? '@p3' : '?'}
+          SET Status = ${dialect.param(0)},
+              ErrorMessage = ${dialect.param(1)}
+          WHERE BatchId = ${dialect.param(2)}
+            AND OrderNumber = ${dialect.param(3)}
         `
         params = [status, errorMessage || null, batchId, orderNumber]
       }
@@ -331,7 +304,7 @@ export class ExtractorOperationHistoryDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
       let sqlString = `
         SELECT
@@ -350,11 +323,10 @@ export class ExtractorOperationHistoryDAO {
       const params: (number | string)[] = []
 
       if (userId !== undefined) {
-        sqlString += isSqlServer ? ` WHERE UserId = @p0 ` : ` WHERE UserId = ? `
+        sqlString += ` WHERE UserId = ${dialect.param(params.length)} `
         params.push(userId)
       } else if (options?.usernames && options.usernames.length > 0) {
-        const placeholders = this.buildPlaceholders(options.usernames.length, isSqlServer)
-        sqlString += ` WHERE Username IN (${placeholders}) `
+        sqlString += ` WHERE Username IN (${dialect.params(options.usernames.length)}) `
         params.push(...options.usernames)
       }
 
@@ -367,24 +339,19 @@ export class ExtractorOperationHistoryDAO {
         const safeLimit = Math.floor(options.limit)
         const safeOffset = options.offset !== undefined ? Math.floor(options.offset) : undefined
 
-        if (isSqlServer) {
-          const offsetIndex = params.length
+        const result = dialect.paginate({
+          sql: sqlString,
+          limit: safeLimit,
+          offset: safeOffset,
+          paramIndex: params.length
+        })
+        sqlString = result.sql
+
+        if (dialect.dbType === 'sqlserver') {
           if (safeOffset !== undefined) {
             params.push(safeOffset)
           }
           params.push(safeLimit)
-
-          if (safeOffset !== undefined) {
-            sqlString += ` OFFSET @p${offsetIndex} ROWS FETCH NEXT @p${offsetIndex + 1} ROWS ONLY`
-          } else {
-            sqlString += ` OFFSET 0 ROWS FETCH NEXT @p${offsetIndex} ROWS ONLY`
-          }
-        } else {
-          if (safeOffset !== undefined) {
-            sqlString += ` LIMIT ${safeLimit} OFFSET ${safeOffset}`
-          } else {
-            sqlString += ` LIMIT ${safeLimit}`
-          }
         }
       }
 
@@ -425,9 +392,9 @@ export class ExtractorOperationHistoryDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         SELECT
           ID,
@@ -483,9 +450,9 @@ export class ExtractorOperationHistoryDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         SELECT
           BatchId,
@@ -554,7 +521,7 @@ export class ExtractorOperationHistoryDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
       // First check if the batch exists and if the user has permission
       const batchStats = await this.getBatchStats(batchId)
@@ -569,7 +536,7 @@ export class ExtractorOperationHistoryDAO {
       }
 
       // Delete the batch
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         DELETE FROM ${tableName}
         WHERE BatchId = ${placeholder}
@@ -612,9 +579,9 @@ export class ExtractorOperationHistoryDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         DELETE FROM ${tableName}
         WHERE UserId = ${placeholder}
@@ -648,9 +615,9 @@ export class ExtractorOperationHistoryDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
-      const placeholder = isSqlServer ? '@p0' : '?'
+      const placeholder = dialect.param(0)
       const sqlString = `
         SELECT COUNT(*) as count
         FROM ${tableName}
@@ -684,7 +651,7 @@ export class ExtractorOperationHistoryDAO {
     try {
       const dbService = await this.getDatabaseService()
       const tableName = this.getTableName()
-      const isSqlServer = dbService.type === 'sqlserver'
+      const dialect = this.getDialect()
 
       let sqlString = `
         SELECT COUNT(DISTINCT BatchId) as count
@@ -694,11 +661,10 @@ export class ExtractorOperationHistoryDAO {
       const params: (number | string)[] = []
 
       if (userId !== undefined) {
-        sqlString += isSqlServer ? ` WHERE UserId = @p0 ` : ` WHERE UserId = ? `
+        sqlString += ` WHERE UserId = ${dialect.param(params.length)} `
         params.push(userId)
       } else if (usernames && usernames.length > 0) {
-        const placeholders = this.buildPlaceholders(usernames.length, isSqlServer)
-        sqlString += ` WHERE Username IN (${placeholders}) `
+        sqlString += ` WHERE Username IN (${dialect.params(usernames.length)}) `
         params.push(...usernames)
       }
 
@@ -725,6 +691,7 @@ export class ExtractorOperationHistoryDAO {
     if (this.dbService) {
       await this.dbService.disconnect()
       this.dbService = null
+      this.dialect = null
     }
   }
 }
