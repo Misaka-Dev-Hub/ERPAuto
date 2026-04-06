@@ -139,7 +139,10 @@ describe('AuthApplicationService', () => {
       const user = UserFactory.createUserDefault()
       let resolveLogin: (value: boolean) => void
       mockSessionManager.loginByComputerName.mockImplementation(
-        () => new Promise<boolean>((resolve) => { resolveLogin = resolve })
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveLogin = resolve
+          })
       )
       mockSessionManager.getUserInfo.mockReturnValue({
         id: user.id,
@@ -213,10 +216,7 @@ describe('AuthApplicationService', () => {
 
   describe('getAllUsers', () => {
     it('should delegate to session manager', async () => {
-      const users = [
-        UserFactory.createAdmin(),
-        UserFactory.createUserDefault()
-      ]
+      const users = [UserFactory.createAdmin(), UserFactory.createUserDefault()]
       mockSessionManager.getAllUsers.mockResolvedValue(users)
 
       const result = await service.getAllUsers()

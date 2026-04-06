@@ -134,9 +134,7 @@ describe('ValidationApplicationService', () => {
     filteredMaterialRecords = [
       { MaterialName: 'FilteredMat', MaterialCode: 'MF1', Model: 'FMod', Specification: 'FSpec' }
     ]
-    materialsByManagerResult = [
-      { materialCode: 'M1', managerName: 'Mgr' }
-    ]
+    materialsByManagerResult = [{ materialCode: 'M1', managerName: 'Mgr' }]
     allMaterialsResult = [
       { materialCode: 'M1', managerName: 'Mgr' },
       { materialCode: 'M2', managerName: 'Other' }
@@ -347,7 +345,8 @@ describe('ValidationApplicationService', () => {
     })
 
     it('should handle errors gracefully', async () => {
-      const { createValidationDatabaseService } = await import('../../../../src/main/services/validation/validation-database')
+      const { createValidationDatabaseService } =
+        await import('../../../../src/main/services/validation/validation-database')
       vi.mocked(createValidationDatabaseService).mockRejectedValueOnce(new Error('DB down'))
 
       const userInfo = { id: 1, username: 'admin', userType: 'Admin' } as any
