@@ -132,7 +132,10 @@ describe('MySqlService Unit Tests', () => {
     it('should execute SELECT and return rows with columns', async () => {
       await service.connect()
       mockExecute.mockResolvedValue([
-        [{ id: 1, name: 'test' }, { id: 2, name: 'foo' }],
+        [
+          { id: 1, name: 'test' },
+          { id: 2, name: 'foo' }
+        ],
         [{ name: 'id' }, { name: 'name' }]
       ])
 

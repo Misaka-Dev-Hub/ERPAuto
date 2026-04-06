@@ -10,6 +10,8 @@
  */
 
 import { createLogger } from '../logger'
+import { logAuditWithCurrentUser } from '../logger/audit-logger'
+import { AuditAction, AuditStatus } from '../../types/audit.types'
 import { DiscreteMaterialPlanDAO, type MaterialPlanRecord } from './discrete-material-plan-dao'
 
 const log = createLogger('DataImportService')
@@ -147,6 +149,20 @@ export class DataImportService {
         })
       }
     }
+
+    // Audit log: DATA_IMPORT
+    logAuditWithCurrentUser(
+      AuditAction.DATA_IMPORT,
+      'MATERIAL_PLAN',
+      result.success ? AuditStatus.SUCCESS : AuditStatus.FAILURE,
+      {
+        recordsRead: result.recordsRead,
+        recordsDeleted: result.recordsDeleted,
+        recordsImported: result.recordsImported,
+        uniqueSourceNumbers: result.uniqueSourceNumbers,
+        errorCount: result.errors.length
+      }
+    )
 
     return result
   }

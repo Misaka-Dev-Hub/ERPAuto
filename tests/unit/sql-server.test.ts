@@ -149,7 +149,10 @@ describe('SqlServerService Unit Tests', () => {
     it('should execute SELECT and return rows with columns', async () => {
       await service.connect()
       mockRequestQuery.mockResolvedValue({
-        recordset: [{ ID: 1, Name: 'test' }, { ID: 2, Name: 'foo' }],
+        recordset: [
+          { ID: 1, Name: 'test' },
+          { ID: 2, Name: 'foo' }
+        ],
         rowsAffected: [2]
       })
 
@@ -209,9 +212,9 @@ describe('SqlServerService Unit Tests', () => {
 
   describe('queryWithParams', () => {
     it('should throw error when not connected', async () => {
-      await expect(
-        service.queryWithParams('SELECT @p0', { p0: { value: 1 } })
-      ).rejects.toThrow('Not connected to SQL Server')
+      await expect(service.queryWithParams('SELECT @p0', { p0: { value: 1 } })).rejects.toThrow(
+        'Not connected to SQL Server'
+      )
     })
 
     it('should add typed params via request.input', async () => {

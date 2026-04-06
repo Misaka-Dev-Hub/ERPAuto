@@ -1,6 +1,8 @@
 import * as fs from 'fs'
 import { ConfigManager } from '../config/config-manager'
 import { createLogger } from '../logger'
+import { logAuditWithCurrentUser } from '../logger/audit-logger'
+import { AuditAction, AuditStatus } from '../../types/audit.types'
 import type { UpdateConfig } from '../../types/config.schema'
 import type { UserType } from '../../types/user.types'
 import type {
@@ -281,10 +283,21 @@ export class UpdateService {
       log.error('Update package hash mismatch', {
         version: request.version,
         channel: request.channel,
-        expectedHash: request.sha256,
-        actualHash: hash
+        expectedHash: request.sha256.substring(0, 16),
+        actualHash: hash.substring(0, 16)
       })
       await fs.promises.rm(downloadPath, { force: true })
+
+      // Audit log: APP_UPDATE download hash mismatch
+      logAuditWithCurrentUser(AuditAction.APP_UPDATE, 'UPDATE_PACKAGE', AuditStatus.FAILURE, {
+        version: request.version,
+        channel: request.channel,
+        phase: 'download',
+        error: 'Hash mismatch',
+        expectedHash: request.sha256.substring(0, 16),
+        actualHash: hash.substring(0, 16)
+      })
+
       throw new Error('更新包校验失败，文件哈希不匹配')
     }
 
@@ -292,6 +305,13 @@ export class UpdateService {
       version: request.version,
       channel: request.channel,
       downloadPath
+    })
+
+    // Audit log: APP_UPDATE download success
+    logAuditWithCurrentUser(AuditAction.APP_UPDATE, 'UPDATE_PACKAGE', AuditStatus.SUCCESS, {
+      version: request.version,
+      channel: request.channel,
+      phase: 'download'
     })
 
     this.publishStatus({
@@ -336,11 +356,29 @@ export class UpdateService {
       error: undefined
     })
 
-    await this.installer.installDownloadedRelease(downloaded)
-    log.info('Update installation completed', {
-      version: downloaded.version,
-      channel: downloaded.channel
-    })
+    try {
+      await this.installer.installDownloadedRelease(downloaded)
+      log.info('Update installation completed', {
+        version: downloaded.version,
+        channel: downloaded.channel
+      })
+
+      // Audit log: APP_UPDATE install success
+      logAuditWithCurrentUser(AuditAction.APP_UPDATE, 'UPDATE_PACKAGE', AuditStatus.SUCCESS, {
+        version: downloaded.version,
+        channel: downloaded.channel,
+        phase: 'install'
+      })
+    } catch (installError) {
+      const msg = installError instanceof Error ? installError.message : String(installError)
+      logAuditWithCurrentUser(AuditAction.APP_UPDATE, 'UPDATE_PACKAGE', AuditStatus.FAILURE, {
+        version: downloaded.version,
+        channel: downloaded.channel,
+        phase: 'install',
+        error: msg
+      })
+      throw installError
+    }
   }
 
   private ensureInitialized(): void {

@@ -419,11 +419,11 @@ export class AuditLogFactory {
    *
    * @example
    * // Successful login audit
-   * const entry = AuditLogFactory.createAuditLog('LOGIN', 'SUCCESS')
+   * const entry = AuditLogFactory.createAuditLog(AuditAction.LOGIN, AuditStatus.SUCCESS)
    *
    * @example
    * // Failed extract audit
-   * const entry = AuditLogFactory.createAuditLog('EXTRACT', 'FAILURE', { resource: 'Order SC123' })
+   * const entry = AuditLogFactory.createAuditLog(AuditAction.EXTRACT, AuditStatus.FAILURE, { resource: 'Order SC123' })
    */
   static createAuditLog(
     action: AuditAction = AuditAction.LOGIN,
@@ -431,13 +431,15 @@ export class AuditLogFactory {
     overrides?: Partial<AuditEntry>
   ): AuditEntry {
     return {
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
       action,
       userId: 'USR-001',
       username: 'test_user',
       computerName: 'TEST-PC',
       appVersion: '1.0.0',
+      resource: 'test-resource',
       status,
+      metadata: {},
       ...overrides
     }
   }

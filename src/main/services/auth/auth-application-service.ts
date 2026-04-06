@@ -3,6 +3,7 @@ import { SessionManager } from '../user/session-manager'
 import { UpdateService } from '../update/update-service'
 import { createLogger, run, getRequestId, getContext } from '../logger'
 import { logAudit } from '../logger/audit-logger'
+import { AuditAction, AuditStatus } from '../../types/audit.types'
 import { ValidationError } from '../../types/errors'
 import type { UserInfo } from '../../types/user.types'
 import type {
@@ -73,11 +74,11 @@ export class AuthApplicationService {
             userId: userInfo.id
           })
 
-          this.writeAuditLog('LOGIN', String(userInfo.id), {
+          this.writeAuditLog(AuditAction.LOGIN, String(userInfo.id), {
             username: userInfo.username,
             computerName: hostname(),
             resource: 'ERP_SYSTEM',
-            status: 'success',
+            status: AuditStatus.SUCCESS,
             metadata: { loginType: 'silent', userType: userInfo.userType }
           })
 
@@ -127,11 +128,11 @@ export class AuthApplicationService {
           const userInfo = this.sessionManager.getUserInfo()
 
           if (!success || !userInfo) {
-            this.writeAuditLog('LOGIN', '0', {
+            this.writeAuditLog(AuditAction.LOGIN, '0', {
               username,
               computerName: hostname(),
               resource: 'ERP_SYSTEM',
-              status: 'failure',
+              status: AuditStatus.FAILURE,
               metadata: { loginType: 'credentials', reason: 'invalid_credentials' }
             })
 
@@ -155,11 +156,11 @@ export class AuthApplicationService {
           })
           await this.updateService.setUserContext(userInfo.userType)
 
-          this.writeAuditLog('LOGIN', String(userInfo.id), {
+          this.writeAuditLog(AuditAction.LOGIN, String(userInfo.id), {
             username: userInfo.username,
             computerName: hostname(),
             resource: 'ERP_SYSTEM',
-            status: 'success',
+            status: AuditStatus.SUCCESS,
             metadata: { loginType: 'credentials', userType: userInfo.userType }
           })
 
@@ -204,11 +205,11 @@ export class AuthApplicationService {
         })
 
         if (userInfo) {
-          this.writeAuditLog('LOGOUT', String(userInfo.id), {
+          this.writeAuditLog(AuditAction.LOGOUT, String(userInfo.id), {
             username: userInfo.username,
             computerName: hostname(),
             resource: 'ERP_SYSTEM',
-            status: 'success',
+            status: AuditStatus.SUCCESS,
             metadata: { userType: userInfo.userType }
           })
         }
@@ -310,7 +311,7 @@ export class AuthApplicationService {
   }
 
   private writeAuditLog(
-    action: 'LOGIN' | 'LOGOUT',
+    action: AuditAction.LOGIN | AuditAction.LOGOUT,
     actorId: string,
     payload: Parameters<typeof logAudit>[2]
   ): void {

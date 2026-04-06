@@ -6,33 +6,12 @@
 import winston from 'winston'
 import DailyRotateFile from 'winston-daily-rotate-file'
 import path from 'path'
+import { hostname } from 'os'
 import { app } from 'electron'
 import { getLogDir } from './shared'
-
-/**
- * Audit log entry structure
- * All 8 required fields for comprehensive audit tracking
- */
-export interface AuditEntry {
-  /** ISO 8601 timestamp of the audit event */
-  timestamp: string
-  /** The action that was performed (e.g., 'LOGIN', 'EXTRACT', 'DELETE') */
-  action: string
-  /** User ID who performed the action */
-  userId: string
-  /** Username of the user who performed the action */
-  username: string
-  /** Computer name from which the action was performed */
-  computerName: string
-  /** Application version when the action was performed */
-  appVersion: string
-  /** The resource that was affected (e.g., table name, file path) */
-  resource: string
-  /** Status of the action: 'success' | 'failure' | 'partial' */
-  status: 'success' | 'failure' | 'partial'
-  /** Additional metadata about the audit event */
-  metadata: Record<string, unknown>
-}
+import { SessionManager } from '../user/session-manager'
+import type { AuditEntry } from '../../types/audit.types'
+import { AuditAction, AuditStatus } from '../../types/audit.types'
 
 /**
  * JSONL formatter - outputs one JSON object per line
@@ -91,31 +70,58 @@ export function applyAuditConfig(retentionDays: number): void {
  * @param details - Additional details including username, computerName, resource, status, and optional metadata
  */
 export function logAudit(
-  action: string,
+  action: AuditAction,
   userId: string,
   details: {
     username: string
     computerName: string
     resource: string
-    status: 'success' | 'failure' | 'partial'
+    status: AuditStatus
     metadata?: Record<string, unknown>
   }
 ): void {
-  const entry: AuditEntry = {
-    timestamp: new Date().toISOString(),
-    action,
-    userId,
-    username: details.username,
-    computerName: details.computerName,
-    appVersion: app.getVersion(),
-    resource: details.resource,
-    status: details.status,
-    metadata: details.metadata || {}
-  }
+  try {
+    const entry: AuditEntry = {
+      timestamp: new Date().toISOString(),
+      action,
+      userId,
+      username: details.username,
+      computerName: details.computerName,
+      appVersion: app.getVersion(),
+      resource: details.resource,
+      status: details.status,
+      metadata: details.metadata ?? {}
+    }
 
-  // Write as JSONL - one JSON object per line
-  // Using info level with the entry stringified as the message
-  auditLogger.info(JSON.stringify(entry))
+    // Write as JSONL - one JSON object per line
+    // Using info level with the entry stringified as the message
+    auditLogger.info(JSON.stringify(entry))
+  } catch (error) {
+    console.error('Audit logging failed:', error)
+  }
+}
+
+/** Cached hostname — invariant for the app lifecycle */
+const cachedHostname = hostname()
+
+/**
+ * Audit log shortcut that auto-resolves the current user context.
+ * Falls back to 'anonymous' if no user is logged in, so the record is always written.
+ */
+export function logAuditWithCurrentUser(
+  action: AuditAction,
+  resource: string,
+  status: AuditStatus,
+  metadata?: Record<string, unknown>
+): void {
+  const user = SessionManager.getInstance().getUserInfo()
+  logAudit(action, user ? String(user.id) : 'anonymous', {
+    username: user?.username ?? 'anonymous',
+    computerName: cachedHostname,
+    resource,
+    status,
+    metadata: metadata ?? {}
+  })
 }
 
 /**

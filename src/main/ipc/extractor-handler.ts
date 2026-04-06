@@ -5,7 +5,8 @@ import { OrderNumberResolver } from '../services/erp/order-resolver'
 import { create, type IDatabaseService } from '../services/database'
 import { ExtractorOperationHistoryDAO } from '../services/database/extractor-operation-history-dao'
 import { createLogger } from '../services/logger'
-import { logAudit } from '../services/logger/audit-logger'
+import { logAuditWithCurrentUser } from '../services/logger/audit-logger'
+import { AuditAction, AuditStatus } from '../types/audit.types'
 import { SessionManager } from '../services/user/session-manager'
 import { withErrorHandling, type IpcResult } from './index'
 import { ErpConnectionError, ValidationError, DatabaseQueryError } from '../types/errors'
@@ -278,24 +279,17 @@ export function registerExtractorHandlers(): void {
           }
 
           // Audit log: EXTRACT (non-blocking)
-          const os = await import('os')
           if (currentUser) {
-            const auditStatus: 'success' | 'failure' | 'partial' =
+            const auditStatus: AuditStatus =
               result.errors.length > 0 && result.recordCount > 0
-                ? 'partial'
+                ? AuditStatus.PARTIAL
                 : result.errors.length > 0
-                  ? 'failure'
-                  : 'success'
-            logAudit('EXTRACT', String(currentUser.id), {
-              username: currentUser.username,
-              computerName: os.hostname(),
-              resource: 'MATERIAL_PLAN',
-              status: auditStatus,
-              metadata: {
-                orderCount: validOrderNumbers.length,
-                recordCount: result.recordCount,
-                errorCount: result.errors.length
-              }
+                  ? AuditStatus.FAILURE
+                  : AuditStatus.SUCCESS
+            logAuditWithCurrentUser(AuditAction.EXTRACT, 'MATERIAL_PLAN', auditStatus, {
+              orderCount: validOrderNumbers.length,
+              recordCount: result.recordCount,
+              errorCount: result.errors.length
             })
           }
 

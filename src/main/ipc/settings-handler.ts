@@ -5,7 +5,8 @@ import { UserErpConfigService } from '../services/user/user-erp-config-service'
 import { MySqlService } from '../services/database/mysql'
 import { SqlServerService } from '../services/database/sql-server'
 import { createLogger } from '../services/logger'
-import { logAudit } from '../services/logger/audit-logger'
+import { logAuditWithCurrentUser } from '../services/logger/audit-logger'
+import { AuditAction, AuditStatus } from '../types/audit.types'
 import type { UserType, ConnectionTestResult, SaveSettingsResult } from '../types/settings.types'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { ValidationError } from '../types/errors'
@@ -67,13 +68,9 @@ export function registerSettingsHandlers(): void {
           })
 
           // Audit log: SETTINGS_CHANGE (non-blocking)
-          const os = await import('os')
-          logAudit('SETTINGS_CHANGE', String(currentUser.id), {
-            username: currentUser.username,
-            computerName: os.hostname(),
-            resource: 'ERP_CONFIG',
-            status: 'success',
-            metadata: { changeType: 'erp_credentials', usernameChanged: !!settings.erp.username }
+          logAuditWithCurrentUser(AuditAction.SETTINGS_CHANGE, 'ERP_CONFIG', AuditStatus.SUCCESS, {
+            changeType: 'erp_credentials',
+            usernameChanged: !!settings.erp.username
           })
         }
 

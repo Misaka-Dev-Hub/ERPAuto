@@ -91,7 +91,7 @@ describe('AuditLogFactory', () => {
   it('creates audit log with default values', () => {
     const entry = AuditLogFactory.createAuditLog()
 
-    expect(entry.timestamp).toBeInstanceOf(Date)
+    expect(typeof entry.timestamp).toBe('string')
     expect(entry.action).toBe(AuditAction.LOGIN)
     expect(entry.status).toBe(AuditStatus.SUCCESS)
     expect(entry.userId).toBe('USR-001')

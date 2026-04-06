@@ -1,32 +1,42 @@
 import { app } from 'electron'
 import logger from '../services/logger/index'
 import { logAudit, closeAuditLogger } from '../services/logger/audit-logger'
+import { AuditAction, AuditStatus } from '../types/audit.types'
 import { serializeError } from '../services/logger/error-utils'
 
 export function setupProcessGuards(): void {
   process.on('uncaughtException', (err) => {
     logger.error('Uncaught exception', { error: err })
-    logAudit('SYSTEM_CRASH', 'system', {
-      username: 'system',
-      computerName: process.env.COMPUTERNAME || 'unknown',
-      resource: 'main-process',
-      status: 'failure',
-      metadata: { error: err.message, stack: err.stack }
-    })
-    setTimeout(() => process.exit(1), 1000)
+    try {
+      logAudit(AuditAction.SYSTEM_CRASH, 'system', {
+        username: 'system',
+        computerName: process.env.COMPUTERNAME || 'unknown',
+        resource: 'main-process',
+        status: AuditStatus.FAILURE,
+        metadata: { error: err.message, stack: err.stack }
+      })
+    } catch (auditError) {
+      logger.error('Failed to write crash audit log', { error: auditError })
+    } finally {
+      setTimeout(() => process.exit(1), 1000)
+    }
   })
 
   process.on('unhandledRejection', (reason) => {
     const errorMeta =
       reason instanceof Error ? { error: serializeError(reason) } : { reason: String(reason) }
     logger.error('Unhandled Rejection', errorMeta)
-    logAudit('SYSTEM_ERROR', 'system', {
-      username: 'system',
-      computerName: process.env.COMPUTERNAME || 'unknown',
-      resource: 'main-process',
-      status: 'failure',
-      metadata: errorMeta
-    })
+    try {
+      logAudit(AuditAction.SYSTEM_ERROR, 'system', {
+        username: 'system',
+        computerName: process.env.COMPUTERNAME || 'unknown',
+        resource: 'main-process',
+        status: AuditStatus.FAILURE,
+        metadata: errorMeta
+      })
+    } catch (auditError) {
+      logger.error('Failed to write unhandled rejection audit log', { error: auditError })
+    }
   })
 
   app.on('render-process-gone', (_, webContents, details) => {

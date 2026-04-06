@@ -13,7 +13,8 @@ import { RustfsService } from '../rustfs'
 import { SessionManager } from '../user/session-manager'
 import { UserErpConfigService } from '../user/user-erp-config-service'
 import { createLogger } from '../logger'
-import { logAudit } from '../logger/audit-logger'
+import { logAuditWithCurrentUser } from '../logger/audit-logger'
+import { AuditAction, AuditStatus } from '../../types/audit.types'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 import { DatabaseQueryError, ErpConnectionError, ValidationError } from '../../types/errors'
 import type {
@@ -278,27 +279,21 @@ export class CleanerApplicationService {
       return
     }
 
-    const status: 'success' | 'failure' | 'partial' =
+    const status: AuditStatus =
       result.errors.length > 0 && result.materialsDeleted > 0
-        ? 'partial'
+        ? AuditStatus.PARTIAL
         : result.errors.length > 0
-          ? 'failure'
-          : 'success'
+          ? AuditStatus.FAILURE
+          : AuditStatus.SUCCESS
 
-    logAudit('CLEAN', String(currentUser.id), {
-      username: currentUser.username,
-      computerName: (await import('os')).hostname(),
-      resource: 'MATERIAL_PLAN',
-      status,
-      metadata: {
-        orderCount,
-        dryRun: input.dryRun ?? false,
-        queryBatchSize: input.queryBatchSize ?? 100,
-        processConcurrency: input.processConcurrency ?? 1,
-        materialsDeleted: result.materialsDeleted,
-        materialsSkipped: result.materialsSkipped,
-        errorCount: result.errors.length
-      }
+    logAuditWithCurrentUser(AuditAction.CLEAN, 'MATERIAL_PLAN', status, {
+      orderCount,
+      dryRun: input.dryRun ?? false,
+      queryBatchSize: input.queryBatchSize ?? 100,
+      processConcurrency: input.processConcurrency ?? 1,
+      materialsDeleted: result.materialsDeleted,
+      materialsSkipped: result.materialsSkipped,
+      errorCount: result.errors.length
     })
   }
 

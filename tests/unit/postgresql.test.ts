@@ -168,10 +168,7 @@ describe('PostgreSqlService Unit Tests', () => {
       await service.connect()
       mockPgClient.query.mockResolvedValue({ rows: [] })
 
-      await service.transaction([
-        { sql: 'SELECT 1', params: [1] },
-        { sql: 'SELECT 2' }
-      ])
+      await service.transaction([{ sql: 'SELECT 1', params: [1] }, { sql: 'SELECT 2' }])
 
       // BEGIN + 2 queries + COMMIT
       expect(mockPgClient.query).toHaveBeenCalledTimes(4)
@@ -187,9 +184,9 @@ describe('PostgreSqlService Unit Tests', () => {
         .mockRejectedValueOnce(new Error('constraint violation')) // query fails
         .mockResolvedValueOnce({ rows: [] }) // ROLLBACK
 
-      await expect(
-        service.transaction([{ sql: 'SELECT 1', params: [1] }])
-      ).rejects.toThrow('PostgreSQL transaction failed')
+      await expect(service.transaction([{ sql: 'SELECT 1', params: [1] }])).rejects.toThrow(
+        'PostgreSQL transaction failed'
+      )
 
       expect(mockPgClient.query).toHaveBeenCalledWith('ROLLBACK')
       expect(mockPgClient.release).toHaveBeenCalled()
@@ -234,8 +231,7 @@ describe('prepareSql', () => {
   })
 
   it('should quote column names in INSERT', () => {
-    const sql =
-      'INSERT INTO "dbo"."BIPUsers" (UserName, Password, UserType) VALUES ($1, $2, $3)'
+    const sql = 'INSERT INTO "dbo"."BIPUsers" (UserName, Password, UserType) VALUES ($1, $2, $3)'
     const result = prepareSql(sql)
     expect(result).toBe(
       'INSERT INTO "dbo"."BIPUsers" ("UserName", "Password", "UserType") VALUES ($1, $2, $3)'
@@ -303,9 +299,7 @@ describe('prepareSql', () => {
   it('should quote underscore-containing column names', () => {
     const sql = 'SELECT ERP_URL, ERP_Username, ERP_Password FROM "dbo"."BIPUsers"'
     const result = prepareSql(sql)
-    expect(result).toBe(
-      'SELECT "ERP_URL", "ERP_Username", "ERP_Password" FROM "dbo"."BIPUsers"'
-    )
+    expect(result).toBe('SELECT "ERP_URL", "ERP_Username", "ERP_Password" FROM "dbo"."BIPUsers"')
   })
 
   it('should handle ON CONFLICT DO UPDATE SET with EXCLUDED', () => {

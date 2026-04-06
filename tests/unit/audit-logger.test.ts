@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { AuditAction, AuditStatus } from '../../src/main/types/audit.types'
 
 describe('Audit Logger', () => {
   let auditLoggerModule: typeof import('../../src/main/services/logger/audit-logger')
@@ -32,11 +33,11 @@ describe('Audit Logger', () => {
     const { logAudit, applyAuditConfig } = auditLoggerModule
 
     applyAuditConfig(30)
-    logAudit('LOGIN', 'user-001', {
+    logAudit(AuditAction.LOGIN, 'user-001', {
       username: 'alice',
       computerName: 'PC-001',
       resource: 'ERP_SYSTEM',
-      status: 'success',
+      status: AuditStatus.SUCCESS,
       metadata: { sessionId: 'abc' }
     })
 
@@ -60,26 +61,26 @@ describe('Audit Logger', () => {
 
     applyAuditConfig(30)
 
-    logAudit('EXTRACT', 'user1', {
+    logAudit(AuditAction.EXTRACT, 'user1', {
       username: 'extractor',
       computerName: 'PC-001',
       resource: 'materials',
-      status: 'success'
+      status: AuditStatus.SUCCESS
     })
 
-    logAudit('DELETE', 'user2', {
+    logAudit(AuditAction.CLEAN, 'user2', {
       username: 'cleaner',
       computerName: 'PC-002',
       resource: 'temp_files',
-      status: 'failure',
+      status: AuditStatus.FAILURE,
       metadata: { error: 'Permission denied' }
     })
 
-    logAudit('UPDATE', 'user3', {
+    logAudit(AuditAction.APP_UPDATE, 'user3', {
       username: 'updater',
       computerName: 'PC-003',
       resource: 'config',
-      status: 'partial',
+      status: AuditStatus.PARTIAL,
       metadata: { updated: 5, failed: 2 }
     })
 
@@ -95,11 +96,11 @@ describe('Audit Logger', () => {
 
     applyAuditConfig(30)
 
-    logAudit('PING', 'user-no-meta', {
+    logAudit(AuditAction.SYSTEM_ERROR, 'user-no-meta', {
       username: 'tester',
       computerName: 'PC-001',
       resource: 'ERP',
-      status: 'success'
+      status: AuditStatus.SUCCESS
     })
 
     const entry = JSON.parse(infoSpy.mock.calls[0][0])
@@ -111,11 +112,11 @@ describe('Audit Logger', () => {
 
     applyAuditConfig(30)
 
-    logAudit('LOGIN_ATTEMPT', 'user-special', {
+    logAudit(AuditAction.LOGIN, 'user-special', {
       username: 'user.name+test@example.com',
       computerName: 'DESKTOP-特殊字符-001',
       resource: 'ERP/子系统',
-      status: 'failure',
+      status: AuditStatus.FAILURE,
       metadata: { reason: '密码错误', attempt: 3 }
     })
 

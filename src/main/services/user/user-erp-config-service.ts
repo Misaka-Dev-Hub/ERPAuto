@@ -14,6 +14,8 @@
 import { BIPUsersDAO } from './bip-users-dao'
 import { SessionManager } from './session-manager'
 import { createLogger } from '../logger'
+import { logAuditWithCurrentUser } from '../logger/audit-logger'
+import { AuditAction, AuditStatus } from '../../types/audit.types'
 
 const log = createLogger('UserErpConfigService')
 
@@ -131,9 +133,22 @@ export class UserErpConfigService {
         log.error('Failed to update ERP credentials', { username: currentUser.username })
       }
 
+      logAuditWithCurrentUser(
+        AuditAction.ERP_CREDENTIALS_UPDATE,
+        'ERP_CREDENTIALS',
+        success ? AuditStatus.SUCCESS : AuditStatus.FAILURE,
+        { targetUsername: currentUser.username, updateType: 'self' }
+      )
+
       return success
     } catch (error) {
       log.error('Error updating current user ERP credentials', { error })
+      logAuditWithCurrentUser(
+        AuditAction.ERP_CREDENTIALS_UPDATE,
+        'ERP_CREDENTIALS',
+        AuditStatus.FAILURE,
+        { targetUsername: 'unknown', updateType: 'self', error: String(error) }
+      )
       return false
     }
   }
@@ -159,9 +174,22 @@ export class UserErpConfigService {
         log.error('Failed to update ERP credentials', { username })
       }
 
+      logAuditWithCurrentUser(
+        AuditAction.ERP_CREDENTIALS_UPDATE,
+        'ERP_CREDENTIALS',
+        success ? AuditStatus.SUCCESS : AuditStatus.FAILURE,
+        { targetUsername: username, updateType: 'admin' }
+      )
+
       return success
     } catch (error) {
       log.error('Error updating user ERP credentials', { error })
+      logAuditWithCurrentUser(
+        AuditAction.ERP_CREDENTIALS_UPDATE,
+        'ERP_CREDENTIALS',
+        AuditStatus.FAILURE,
+        { targetUsername: username, updateType: 'admin', error: String(error) }
+      )
       return false
     }
   }

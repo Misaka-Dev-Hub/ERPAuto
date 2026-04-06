@@ -3,6 +3,8 @@ import path from 'path'
 import { app } from 'electron'
 import fs from 'fs'
 import { createLogger } from '../logger'
+import { logAuditWithCurrentUser } from '../logger/audit-logger'
+import { AuditAction, AuditStatus } from '../../types/audit.types'
 import type { ExportResultItem, ExportResultResponse } from '../../types/cleaner.types'
 
 const log = createLogger('ResultExporter')
@@ -37,8 +39,8 @@ export class ResultExporter {
    * @returns Export result with file path or error
    */
   async exportValidationResults(items: ExportResultItem[]): Promise<ExportResultResponse> {
+    const filePath = path.join(this.exportDir, this.fileName)
     try {
-      const filePath = path.join(this.exportDir, this.fileName)
       log.info('Exporting validation results', { count: items.length, path: filePath })
 
       const workbook = new ExcelJS.Workbook()
@@ -97,6 +99,12 @@ export class ResultExporter {
       await workbook.xlsx.writeFile(filePath)
       log.info('Export completed', { path: filePath, rows: items.length })
 
+      // Audit log: RESULT_EXPORT success
+      logAuditWithCurrentUser(AuditAction.RESULT_EXPORT, 'VALIDATION_RESULT', AuditStatus.SUCCESS, {
+        itemCount: items.length,
+        filePath
+      })
+
       return {
         success: true,
         filePath
@@ -104,6 +112,14 @@ export class ResultExporter {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       log.error('Export failed', { error: errorMessage })
+
+      // Audit log: RESULT_EXPORT failure
+      logAuditWithCurrentUser(AuditAction.RESULT_EXPORT, 'VALIDATION_RESULT', AuditStatus.FAILURE, {
+        itemCount: items.length,
+        filePath,
+        error: errorMessage
+      })
+
       return {
         success: false,
         error: errorMessage
