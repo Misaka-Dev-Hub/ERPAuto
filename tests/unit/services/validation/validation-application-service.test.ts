@@ -18,130 +18,132 @@ vi.mock('../../../../src/main/services/logger', () => ({
   getRequestId: () => undefined
 }))
 
-// ─── DAO mock state ───
-let returnEmptyMaterials = false
-let materialRecords: any[] = [
-  { MaterialName: 'MatA', MaterialCode: 'M1', Model: 'Mod', Specification: 'Spec' }
-]
-let filteredMaterialRecords: any[] = [
-  { MaterialName: 'FilteredMat', MaterialCode: 'MF1', Model: 'FMod', Specification: 'FSpec' }
-]
+// ─── Hoisted mock functions shared between vi.mock() factories and tests ───
+const {
+  mockQueryAll,
+  mockQueryBySource,
+  mockGetMaterialsByManager,
+  mockGetAllRecords,
+  mockGetAllMaterialCodes,
+  mockGetSourceNumbers,
+  mockReadProductionIds,
+  mockSharedIdsGet,
+  mockDbQuery,
+  mockDbDisconnect,
+  mockCreateDbService
+} = vi.hoisted(() => ({
+  mockQueryAll: vi.fn(),
+  mockQueryBySource: vi.fn(),
+  mockGetMaterialsByManager: vi.fn(),
+  mockGetAllRecords: vi.fn(),
+  mockGetAllMaterialCodes: vi.fn(),
+  mockGetSourceNumbers: vi.fn(),
+  mockReadProductionIds: vi.fn(),
+  mockSharedIdsGet: vi.fn(),
+  mockDbQuery: vi.fn(),
+  mockDbDisconnect: vi.fn(),
+  mockCreateDbService: vi.fn()
+}))
 
-vi.mock('../../../../src/main/services/database/discrete-material-plan-dao', () => {
-  return {
-    DiscreteMaterialPlanDAO: class {
-      async queryAllDistinctByMaterialCode() {
-        if (returnEmptyMaterials) return []
-        return materialRecords
-      }
-      async queryBySourceNumbersDistinct(_nums: string[]) {
-        if (returnEmptyMaterials) return []
-        return filteredMaterialRecords
-      }
-    }
+// ─── DiscreteMaterialPlanDAO mock ───
+vi.mock('../../../../src/main/services/database/discrete-material-plan-dao', () => ({
+  DiscreteMaterialPlanDAO: class {
+    queryAllDistinctByMaterialCode = mockQueryAll
+    queryBySourceNumbersDistinct = mockQueryBySource
   }
-})
+}))
 
-// ─── MaterialsToBeDeletedDAO mock state ───
-let materialsByManagerResult: any[] = []
-let allMaterialsResult: any[] = []
-let allMaterialCodesResult: Set<string> = new Set()
-
-vi.mock('../../../../src/main/services/database/materials-to-be-deleted-dao', () => {
-  return {
-    MaterialsToBeDeletedDAO: class {
-      async getMaterialsByManager(_managerName: string) {
-        return materialsByManagerResult
-      }
-      async getAllRecords() {
-        return allMaterialsResult
-      }
-      async getAllMaterialCodes() {
-        return allMaterialCodesResult
-      }
-    }
+// ─── MaterialsToBeDeletedDAO mock ───
+vi.mock('../../../../src/main/services/database/materials-to-be-deleted-dao', () => ({
+  MaterialsToBeDeletedDAO: class {
+    getMaterialsByManager = mockGetMaterialsByManager
+    getAllRecords = mockGetAllRecords
+    getAllMaterialCodes = mockGetAllMaterialCodes
   }
-})
+}))
 
 // ─── Production input service mock ───
-let sourceNumbersFromInputs: string[] = ['SC001', 'SC002']
-
 vi.mock('../../../../src/main/services/validation/production-input-service', () => ({
-  getSourceNumbersFromInputs: vi.fn().mockImplementation(async () => sourceNumbersFromInputs),
-  readProductionIds: vi.fn().mockReturnValue(['PROD001', 'PROD002'])
+  getSourceNumbersFromInputs: mockGetSourceNumbers,
+  readProductionIds: mockReadProductionIds
 }))
 
 // ─── Shared production IDs store mock ───
-let sharedIds: string[] = []
-
 vi.mock('../../../../src/main/services/validation/shared-production-ids-store', () => ({
   sharedProductionIdsStore: {
-    get: (_senderId: number) => sharedIds
+    get: mockSharedIdsGet
   }
 }))
 
-// ─── Validation database mock with robust SQL matching ───
-function matchQuery(sql: string): string {
-  // Extract table name from FROM clause to avoid substring ambiguity
-  const fromMatch = sql.match(/FROM\s+(\S+)/i)
-  const table = fromMatch?.[1] ?? ''
-
-  if (/MaterialsTypeToBeDeleted/i.test(table)) return 'typeKeywords'
-  if (/MaterialsToBeDeleted/i.test(table)) return 'markedCodes'
-  if (/DiscreteMaterialPlanData/i.test(table)) return 'materialDetail'
-  return 'unknown'
-}
-
+// ─── Validation database mock ───
 vi.mock('../../../../src/main/services/validation/validation-database', () => ({
-  createValidationDatabaseService: vi.fn().mockImplementation(async () => ({
-    type: 'mysql' as const,
-    query: vi.fn().mockImplementation((sql: string) => {
-      const kind = matchQuery(sql)
-      switch (kind) {
-        case 'typeKeywords':
-          return Promise.resolve({
-            rows: [{ MaterialName: 'MatA', ManagerName: 'Mgr' }],
-            rowCount: 1
-          })
-        case 'markedCodes':
-          return Promise.resolve({
-            rows: [{ MaterialCode: 'M1', ManagerName: 'Mgr' }],
-            rowCount: 1
-          })
-        case 'materialDetail':
-          return Promise.resolve({
-            rows: [{ MaterialName: 'MatA', Specification: 'Spec', Model: 'Mod' }],
-            rowCount: 1
-          })
-        default:
-          return Promise.resolve({ rows: [], rowCount: 0 })
-      }
-    }),
-    disconnect: vi.fn().mockResolvedValue(undefined),
-    connect: vi.fn().mockResolvedValue(undefined)
-  })),
+  createValidationDatabaseService: mockCreateDbService,
   getValidationTableName: vi.fn().mockImplementation((name: string) => name)
 }))
+
+function createDbService() {
+  return {
+    type: 'mysql' as const,
+    query: mockDbQuery,
+    connect: vi.fn().mockResolvedValue(undefined),
+    disconnect: mockDbDisconnect
+  }
+}
 
 describe('ValidationApplicationService', () => {
   let service: ValidationApplicationService
 
   beforeEach(() => {
-    returnEmptyMaterials = false
-    materialRecords = [
+    vi.clearAllMocks()
+
+    // DiscreteMaterialPlanDAO defaults
+    mockQueryAll.mockResolvedValue([
       { MaterialName: 'MatA', MaterialCode: 'M1', Model: 'Mod', Specification: 'Spec' }
-    ]
-    filteredMaterialRecords = [
+    ])
+    mockQueryBySource.mockResolvedValue([
       { MaterialName: 'FilteredMat', MaterialCode: 'MF1', Model: 'FMod', Specification: 'FSpec' }
-    ]
-    materialsByManagerResult = [{ materialCode: 'M1', managerName: 'Mgr' }]
-    allMaterialsResult = [
+    ])
+
+    // MaterialsToBeDeletedDAO defaults
+    mockGetMaterialsByManager.mockResolvedValue([{ materialCode: 'M1', managerName: 'Mgr' }])
+    mockGetAllRecords.mockResolvedValue([
       { materialCode: 'M1', managerName: 'Mgr' },
       { materialCode: 'M2', managerName: 'Other' }
-    ]
-    allMaterialCodesResult = new Set(['M1'])
-    sourceNumbersFromInputs = ['SC001', 'SC002']
-    sharedIds = []
+    ])
+    mockGetAllMaterialCodes.mockResolvedValue(new Set(['M1']))
+
+    // Production input defaults
+    mockGetSourceNumbers.mockResolvedValue(['SC001', 'SC002'])
+    mockReadProductionIds.mockReturnValue(['PROD001', 'PROD002'])
+
+    // Shared IDs default: empty
+    mockSharedIdsGet.mockReturnValue([])
+
+    // DB service creation
+    mockCreateDbService.mockImplementation(async () => createDbService())
+    mockDbDisconnect.mockResolvedValue(undefined)
+
+    // DB query dispatches by table name extracted from SQL
+    mockDbQuery.mockImplementation((sql: string) => {
+      const table = sql.match(/FROM\s+(\S+)/i)?.[1] ?? ''
+      if (/MaterialsTypeToBeDeleted/i.test(table))
+        return Promise.resolve({
+          rows: [{ MaterialName: 'MatA', ManagerName: 'Mgr' }],
+          rowCount: 1
+        })
+      if (/MaterialsToBeDeleted/i.test(table))
+        return Promise.resolve({
+          rows: [{ MaterialCode: 'M1', ManagerName: 'Mgr' }],
+          rowCount: 1
+        })
+      if (/DiscreteMaterialPlanData/i.test(table))
+        return Promise.resolve({
+          rows: [{ MaterialName: 'MatA', Specification: 'Spec', Model: 'Mod' }],
+          rowCount: 1
+        })
+      return Promise.resolve({ rows: [], rowCount: 0 })
+    })
+
     service = new ValidationApplicationService()
   })
 
@@ -166,7 +168,7 @@ describe('ValidationApplicationService', () => {
     })
 
     it('should return failure when material records are empty', async () => {
-      returnEmptyMaterials = true
+      mockQueryAll.mockResolvedValueOnce([])
       const req: ValidationRequest = { mode: 'database_full' }
       const userInfo = { id: 1, username: 'admin', userType: 'Admin' } as any
       const res = await service.validate(req, userInfo, 1)
@@ -175,10 +177,10 @@ describe('ValidationApplicationService', () => {
     })
 
     it('should correctly compute stats for matched and marked records', async () => {
-      materialRecords = [
+      mockQueryAll.mockResolvedValueOnce([
         { MaterialName: 'MatA', MaterialCode: 'M1', Model: 'Mod', Specification: 'Spec' },
         { MaterialName: 'Other', MaterialCode: 'M2', Model: 'Mod', Specification: 'Spec' }
-      ]
+      ])
       const req: ValidationRequest = { mode: 'database_full' }
       const userInfo = { id: 1, username: 'admin', userType: 'Admin' } as any
       const res = await service.validate(req, userInfo, 1)
@@ -189,15 +191,15 @@ describe('ValidationApplicationService', () => {
       const m1Result = res.results!.find((r) => r.materialCode === 'M1')
       expect(m1Result?.isMarkedForDeletion).toBe(true)
       expect(m1Result?.managerName).toBe('Mgr')
-      // M2 is NOT in markedCodes but 'Other' doesn't match any type keyword
+      // M2 is NOT in markedCodes and 'Other' doesn't match any type keyword
       const m2Result = res.results!.find((r) => r.materialCode === 'M2')
       expect(m2Result?.isMarkedForDeletion).toBe(false)
     })
 
     it('should match type keywords when material name contains keyword', async () => {
-      materialRecords = [
+      mockQueryAll.mockResolvedValueOnce([
         { MaterialName: 'MatA-Extra', MaterialCode: 'MX1', Model: 'Mod', Specification: 'Spec' }
-      ]
+      ])
       const req: ValidationRequest = { mode: 'database_full' }
       const userInfo = { id: 1, username: 'admin', userType: 'Admin' } as any
       const res = await service.validate(req, userInfo, 1)
@@ -212,7 +214,7 @@ describe('ValidationApplicationService', () => {
   // ─── validate – database_filtered with shared production IDs ───
   describe('validate – database_filtered with shared IDs', () => {
     it('should return success when shared IDs resolve to orders', async () => {
-      sharedIds = ['PROD001']
+      mockSharedIdsGet.mockReturnValue(['PROD001'])
       const req: ValidationRequest = { mode: 'database_filtered', useSharedProductionIds: true }
       const userInfo = { id: 1, username: 'admin', userType: 'Admin' } as any
 
@@ -224,7 +226,7 @@ describe('ValidationApplicationService', () => {
     })
 
     it('should return failure when shared IDs are empty', async () => {
-      sharedIds = []
+      mockSharedIdsGet.mockReturnValue([])
       const req: ValidationRequest = { mode: 'database_filtered', useSharedProductionIds: true }
       const userInfo = { id: 1, username: 'admin', userType: 'Admin' } as any
 
@@ -235,8 +237,8 @@ describe('ValidationApplicationService', () => {
     })
 
     it('should return failure when shared IDs yield no source numbers', async () => {
-      sharedIds = ['PROD001']
-      sourceNumbersFromInputs = []
+      mockSharedIdsGet.mockReturnValue(['PROD001'])
+      mockGetSourceNumbers.mockResolvedValueOnce([])
       const req: ValidationRequest = { mode: 'database_filtered', useSharedProductionIds: true }
       const userInfo = { id: 1, username: 'admin', userType: 'Admin' } as any
 
@@ -263,7 +265,7 @@ describe('ValidationApplicationService', () => {
     })
 
     it('should return failure when file IDs yield no source numbers', async () => {
-      sourceNumbersFromInputs = []
+      mockGetSourceNumbers.mockResolvedValueOnce([])
       const req: ValidationRequest = {
         mode: 'database_filtered',
         productionIdFile: '/tmp/ids.txt'
@@ -290,7 +292,7 @@ describe('ValidationApplicationService', () => {
     })
 
     it('should return empty array when manager has no materials', async () => {
-      materialsByManagerResult = []
+      mockGetMaterialsByManager.mockResolvedValueOnce([])
 
       const result = await service.getMaterialsByManager('Nobody')
 
@@ -312,7 +314,7 @@ describe('ValidationApplicationService', () => {
     })
 
     it('should return empty array when no materials exist', async () => {
-      allMaterialsResult = []
+      mockGetAllRecords.mockResolvedValueOnce([])
 
       const result = await service.getAllMaterials()
 
@@ -323,7 +325,7 @@ describe('ValidationApplicationService', () => {
   // ─── getCleanerData ───
   describe('getCleanerData', () => {
     it('should return order numbers and material codes for admin user', async () => {
-      sharedIds = ['PROD001']
+      mockSharedIdsGet.mockReturnValue(['PROD001'])
       const userInfo = { id: 1, username: 'admin', userType: 'Admin' } as any
 
       const result = await service.getCleanerData(userInfo, 1)
@@ -335,7 +337,7 @@ describe('ValidationApplicationService', () => {
     })
 
     it('should return empty order numbers when no shared IDs', async () => {
-      sharedIds = []
+      mockSharedIdsGet.mockReturnValue([])
       const userInfo = { id: 1, username: 'admin', userType: 'Admin' } as any
 
       const result = await service.getCleanerData(userInfo, 1)
@@ -345,9 +347,7 @@ describe('ValidationApplicationService', () => {
     })
 
     it('should handle errors gracefully', async () => {
-      const { createValidationDatabaseService } =
-        await import('../../../../src/main/services/validation/validation-database')
-      vi.mocked(createValidationDatabaseService).mockRejectedValueOnce(new Error('DB down'))
+      mockCreateDbService.mockRejectedValueOnce(new Error('DB down'))
 
       const userInfo = { id: 1, username: 'admin', userType: 'Admin' } as any
       const result = await service.getCleanerData(userInfo, 1)
