@@ -85,8 +85,10 @@ test.describe('Authentication Flow', () => {
       const errorMessage = page.locator('.error, [role="alert"], .text-red')
       const hasError = await errorMessage.count()
 
-      // Either error shown or still on login page
-      expect(hasError >= 0).toBe(true)
+      // Verify login was rejected: either error shown or still on login page
+      const loginDialog = page.locator('[data-testid="login-dialog"]')
+      const isStillOnLoginPage = await loginDialog.isVisible().catch(() => false)
+      expect(hasError > 0 || isStillOnLoginPage).toBe(true)
     }
   })
 })

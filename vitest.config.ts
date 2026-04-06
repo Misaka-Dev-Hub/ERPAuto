@@ -6,13 +6,13 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/**/*.{test,spec}.{ts,tsx}'],
-    exclude: ['node_modules', 'dist', 'out', 'tests/e2e'],
+    exclude: ['node_modules', 'dist', 'out', 'tests/e2e', 'tests/integration'],
     setupFiles: ['tests/setup.ts'],
     env: {
       NODE_ENV: 'test'
     },
-    // 性能优化配置
-    isolate: false, // 禁用隔离（提升 30-50% 速度）
+    // CI 环境启用隔离以捕获跨文件状态污染；本地开发禁用以提升速度
+    isolate: !!process.env.CI,
     pool: 'threads', // 使用线程池
     maxWorkers: 4,
     bail: process.env.CI ? 1 : undefined,

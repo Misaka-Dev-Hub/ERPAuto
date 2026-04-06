@@ -1,10 +1,46 @@
 /**
  * Unit tests for PostgreSqlService
- * These tests do not require a PostgreSQL instance
+ * Covers both unconnected state and connected-path operations using mocked pg driver.
+ * Also tests the prepareSql pure function (no mocks needed for those).
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { PostgreSqlService, prepareSql } from '@main/services/database/postgresql'
+
+// ---- Hoisted mock functions ----
+const { mockPgPool, mockPgClient } = vi.hoisted(() => {
+  const client = {
+    query: vi.fn(),
+    release: vi.fn()
+  }
+  const pool = {
+    connect: vi.fn(() => client),
+    query: vi.fn(),
+    end: vi.fn()
+  }
+  return { mockPgPool: pool, mockPgClient: client }
+})
+
+// Mock pg driver (must use regular function because source uses `new Pool(...)`)
+vi.mock('pg', () => ({
+  Pool: vi.fn(function () {
+    return mockPgPool
+  })
+}))
+
+// Mock logger
+vi.mock('@main/services/logger', () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
+  }),
+  trackDuration: async <T>(fn: () => Promise<T>) => {
+    const result = await fn()
+    return { result }
+  }
+}))
 
 const mockConfig = {
   host: 'localhost',
@@ -18,7 +54,13 @@ describe('PostgreSqlService Unit Tests', () => {
   let service: PostgreSqlService
 
   beforeEach(() => {
+    vi.clearAllMocks()
     service = new PostgreSqlService(mockConfig)
+    mockPgPool.connect.mockResolvedValue(mockPgClient)
+    mockPgPool.query.mockResolvedValue({ rows: [], fields: [], rowCount: 0 })
+    mockPgPool.end.mockResolvedValue(undefined)
+    mockPgClient.query.mockResolvedValue({ rows: [] })
+    mockPgClient.release.mockReturnValue(undefined)
   })
 
   describe('constructor', () => {
@@ -40,9 +82,78 @@ describe('PostgreSqlService Unit Tests', () => {
     })
   })
 
+  describe('connect', () => {
+    it('should throw error when pool creation fails', async () => {
+      mockPgPool.connect.mockRejectedValue(new Error('connection refused'))
+      const svc = new PostgreSqlService(mockConfig)
+      await expect(svc.connect()).rejects.toThrow('Failed to connect to PostgreSQL')
+    })
+
+    it('should establish connection and release test client', async () => {
+      await service.connect()
+      expect(mockPgPool.connect).toHaveBeenCalled()
+      expect(mockPgClient.release).toHaveBeenCalled()
+      expect(service.isConnected()).toBe(true)
+    })
+
+    it('should throw when already connected', async () => {
+      await service.connect()
+      await expect(service.connect()).rejects.toThrow('Already connected to PostgreSQL')
+    })
+
+    it('should reset pool to null on connection failure', async () => {
+      mockPgPool.connect.mockRejectedValue(new Error('timeout'))
+      await expect(service.connect()).rejects.toThrow('Failed to connect to PostgreSQL')
+      expect(service.isConnected()).toBe(false)
+    })
+  })
+
   describe('query', () => {
     it('should throw error when not connected', async () => {
       await expect(service.query('SELECT 1')).rejects.toThrow('Not connected to PostgreSQL')
+    })
+
+    it('should execute query and return rows with columns', async () => {
+      await service.connect()
+      mockPgPool.query.mockResolvedValue({
+        rows: [{ ID: 1, Name: 'test' }],
+        fields: [{ name: 'ID' }, { name: 'Name' }],
+        rowCount: 1
+      })
+
+      const result = await service.query('SELECT ID, Name FROM Users')
+
+      expect(result.rows).toEqual([{ ID: 1, Name: 'test' }])
+      expect(result.columns).toEqual(['ID', 'Name'])
+      expect(result.rowCount).toBe(1)
+    })
+
+    it('should pass params through to pool.query', async () => {
+      await service.connect()
+      mockPgPool.query.mockResolvedValue({ rows: [], fields: [], rowCount: 0 })
+
+      await service.query('SELECT * FROM Users WHERE ID = $1', [42])
+
+      expect(mockPgPool.query).toHaveBeenCalledWith(expect.any(String), [42])
+    })
+
+    it('should fallback to rows.length when rowCount is null', async () => {
+      await service.connect()
+      mockPgPool.query.mockResolvedValue({
+        rows: [{ ID: 1 }, { ID: 2 }],
+        fields: [{ name: 'ID' }],
+        rowCount: null
+      })
+
+      const result = await service.query('SELECT ID FROM Users')
+      expect(result.rowCount).toBe(2)
+    })
+
+    it('should wrap query errors with context', async () => {
+      await service.connect()
+      mockPgPool.query.mockRejectedValue(new Error('syntax error'))
+
+      await expect(service.query('INVALID SQL')).rejects.toThrow('PostgreSQL query failed')
     })
   })
 
@@ -52,19 +163,59 @@ describe('PostgreSqlService Unit Tests', () => {
         'Not connected to PostgreSQL'
       )
     })
-  })
 
-  describe('connect', () => {
-    it('should throw error with invalid host', async () => {
-      const invalidConfig = { ...mockConfig, host: 'invalid-host-that-does-not-exist' }
-      const invalidService = new PostgreSqlService(invalidConfig)
-      await expect(invalidService.connect()).rejects.toThrow('Failed to connect to PostgreSQL')
+    it('should execute all queries within BEGIN/COMMIT and release client', async () => {
+      await service.connect()
+      mockPgClient.query.mockResolvedValue({ rows: [] })
+
+      await service.transaction([
+        { sql: 'SELECT 1', params: [1] },
+        { sql: 'SELECT 2' }
+      ])
+
+      // BEGIN + 2 queries + COMMIT
+      expect(mockPgClient.query).toHaveBeenCalledTimes(4)
+      expect(mockPgClient.query).toHaveBeenNthCalledWith(1, 'BEGIN')
+      expect(mockPgClient.query).toHaveBeenNthCalledWith(4, 'COMMIT')
+      expect(mockPgClient.release).toHaveBeenCalled()
+    })
+
+    it('should rollback and release client on query failure', async () => {
+      await service.connect()
+      mockPgClient.query
+        .mockResolvedValueOnce({ rows: [] }) // BEGIN
+        .mockRejectedValueOnce(new Error('constraint violation')) // query fails
+        .mockResolvedValueOnce({ rows: [] }) // ROLLBACK
+
+      await expect(
+        service.transaction([{ sql: 'SELECT 1', params: [1] }])
+      ).rejects.toThrow('PostgreSQL transaction failed')
+
+      expect(mockPgClient.query).toHaveBeenCalledWith('ROLLBACK')
+      expect(mockPgClient.release).toHaveBeenCalled()
     })
   })
 
   describe('disconnect', () => {
     it('should resolve when not connected', async () => {
       await expect(service.disconnect()).resolves.not.toThrow()
+    })
+
+    it('should end pool and reset state', async () => {
+      await service.connect()
+      expect(service.isConnected()).toBe(true)
+
+      await service.disconnect()
+
+      expect(mockPgPool.end).toHaveBeenCalled()
+      expect(service.isConnected()).toBe(false)
+    })
+
+    it('should wrap disconnect errors', async () => {
+      await service.connect()
+      mockPgPool.end.mockRejectedValue(new Error('pool end failed'))
+
+      await expect(service.disconnect()).rejects.toThrow('Failed to disconnect from PostgreSQL')
     })
   })
 })
@@ -83,7 +234,8 @@ describe('prepareSql', () => {
   })
 
   it('should quote column names in INSERT', () => {
-    const sql = 'INSERT INTO "dbo"."BIPUsers" (UserName, Password, UserType) VALUES ($1, $2, $3)'
+    const sql =
+      'INSERT INTO "dbo"."BIPUsers" (UserName, Password, UserType) VALUES ($1, $2, $3)'
     const result = prepareSql(sql)
     expect(result).toBe(
       'INSERT INTO "dbo"."BIPUsers" ("UserName", "Password", "UserType") VALUES ($1, $2, $3)'
@@ -151,7 +303,9 @@ describe('prepareSql', () => {
   it('should quote underscore-containing column names', () => {
     const sql = 'SELECT ERP_URL, ERP_Username, ERP_Password FROM "dbo"."BIPUsers"'
     const result = prepareSql(sql)
-    expect(result).toBe('SELECT "ERP_URL", "ERP_Username", "ERP_Password" FROM "dbo"."BIPUsers"')
+    expect(result).toBe(
+      'SELECT "ERP_URL", "ERP_Username", "ERP_Password" FROM "dbo"."BIPUsers"'
+    )
   })
 
   it('should handle ON CONFLICT DO UPDATE SET with EXCLUDED', () => {
