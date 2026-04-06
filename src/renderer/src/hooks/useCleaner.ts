@@ -376,7 +376,8 @@ export function useCleaner() {
         dryRun,
         headless,
         queryBatchSize,
-        processConcurrency
+        processConcurrency,
+        selectedManagers: Array.from(selectedManagers)
       })
       setReportData(result)
     } catch (err) {

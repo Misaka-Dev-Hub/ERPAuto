@@ -231,7 +231,8 @@ export class ValidationApplicationService {
 
   async getCleanerData(
     userInfo: UserInfo,
-    senderId: number
+    senderId: number,
+    selectedManagers: string[] = []
   ): Promise<{
     success: boolean
     orderNumbers?: string[]
@@ -250,6 +251,7 @@ export class ValidationApplicationService {
             userId: userInfo.id,
             username,
             isAdmin,
+            selectedManagers,
             requestId
           })
 
@@ -270,7 +272,13 @@ export class ValidationApplicationService {
             })
           }
 
-          const materialCodes = await this.loadMaterialCodesForCleaner(dbService, username, isAdmin)
+          const materialCodes = await this.loadMaterialCodesForCleaner(
+            dbService,
+            username,
+            isAdmin,
+            selectedManagers,
+            orderNumbers
+          )
           log.info('Cleaner data retrieved', {
             userId: userInfo.id,
             orderCount: orderNumbers.length,
@@ -489,27 +497,54 @@ export class ValidationApplicationService {
   private async loadMaterialCodesForCleaner(
     dbService: ValidationDatabaseService,
     username: string,
-    isAdmin: boolean
+    isAdmin: boolean,
+    selectedManagers: string[],
+    orderNumbers: string[]
   ): Promise<string[]> {
     const markedTableName = getValidationTableName('dbo_MaterialsToBeDeleted')
 
-    if (isAdmin) {
-      const result = await dbService.query(
-        `
-          SELECT MaterialCode
-          FROM ${markedTableName}
-          WHERE MaterialCode IS NOT NULL
-        `
+    // Admin with selected managers: filter MaterialsToBeDeleted by ManagerName IN (selectedManagers)
+    if (isAdmin && selectedManagers && selectedManagers.length > 0) {
+      const materialCodes = await this.queryMaterialCodesByManagers(
+        dbService,
+        markedTableName,
+        selectedManagers
       )
-      const materialCodes = result.rows.map((row) => row.MaterialCode as string).filter(Boolean)
-      log.info(`Admin user: got ${materialCodes.length} materials`, {
+      log.info(`Admin with selected managers: got ${materialCodes.length} materials`, {
         userId: username,
         isAdmin: true,
+        selectedManagers,
         materialCount: materialCodes.length
       })
       return materialCodes
     }
 
+    // Admin without selected managers: query all materials from DiscreteMaterialPlanData by orderNumbers
+    if (isAdmin) {
+      if (orderNumbers.length === 0) {
+        log.warn('Admin without selected managers but no orderNumbers available', {
+          userId: username
+        })
+        return []
+      }
+      const materialDao = new DiscreteMaterialPlanDAO()
+      const records = await materialDao.queryBySourceNumbersDistinct(orderNumbers)
+      const materialCodes = [
+        ...new Set(records.map((r) => r.MaterialCode as string).filter(Boolean))
+      ]
+      log.info(
+        `Admin without selected managers: got ${materialCodes.length} materials from DiscreteMaterialPlanData`,
+        {
+          userId: username,
+          isAdmin: true,
+          orderCount: orderNumbers.length,
+          materialCount: materialCodes.length
+        }
+      )
+      return materialCodes
+    }
+
+    // Regular user: filter MaterialsToBeDeleted by ManagerName = username
     if (dbService.type === 'sqlserver') {
       const sql = await import('mssql')
       const result = await (dbService as SqlServerService).queryWithParams(
@@ -566,6 +601,57 @@ export class ValidationApplicationService {
       materialCount: materialCodes.length
     })
     return materialCodes
+  }
+
+  private async queryMaterialCodesByManagers(
+    dbService: ValidationDatabaseService,
+    tableName: string,
+    managers: string[]
+  ): Promise<string[]> {
+    if (dbService.type === 'sqlserver') {
+      const sql = await import('mssql')
+      const params: Record<string, { value: string; type: any }> = {}
+      const paramNames = managers.map((m, i) => {
+        const name = `@manager${i}`
+        params[`manager${i}`] = { value: m, type: sql.default.NVarChar }
+        return name
+      })
+      const result = await (dbService as SqlServerService).queryWithParams(
+        `
+          SELECT MaterialCode
+          FROM ${tableName}
+          WHERE ManagerName IN (${paramNames.join(', ')}) AND MaterialCode IS NOT NULL
+        `,
+        params
+      )
+      return result.rows
+        .map((row: Record<string, unknown>) => row.MaterialCode as string)
+        .filter(Boolean)
+    }
+
+    if (dbService.type === 'postgresql') {
+      const placeholders = managers.map((_, i) => `$${i + 1}`).join(', ')
+      const result = await dbService.query(
+        `
+          SELECT "MaterialCode"
+          FROM ${tableName}
+          WHERE "ManagerName" IN (${placeholders}) AND "MaterialCode" IS NOT NULL
+        `,
+        managers
+      )
+      return result.rows.map((row) => row.MaterialCode as string).filter(Boolean)
+    }
+
+    const placeholders = managers.map(() => '?').join(', ')
+    const result = await dbService.query(
+      `
+        SELECT MaterialCode
+        FROM ${tableName}
+        WHERE ManagerName IN (${placeholders}) AND MaterialCode IS NOT NULL
+      `,
+      managers
+    )
+    return result.rows.map((row) => row.MaterialCode as string).filter(Boolean)
   }
 
   private async disconnectQuietly(dbService: ValidationDatabaseService): Promise<void> {

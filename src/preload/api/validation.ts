@@ -8,5 +8,6 @@ export const validationApi = {
     invokeIpc(IPC_CHANNELS.VALIDATION_SET_SHARED_PRODUCTION_IDS, productionIds),
   getSharedProductionIds: () => invokeIpc(IPC_CHANNELS.VALIDATION_GET_SHARED_PRODUCTION_IDS),
   clearSharedProductionIds: () => invokeIpc(IPC_CHANNELS.VALIDATION_CLEAR_SHARED_PRODUCTION_IDS),
-  getCleanerData: () => invokeIpc(IPC_CHANNELS.VALIDATION_GET_CLEANER_DATA)
+  getCleanerData: (params?: { selectedManagers?: string[] }) =>
+    invokeIpc(IPC_CHANNELS.VALIDATION_GET_CLEANER_DATA, params ?? { selectedManagers: [] })
 } as const

@@ -194,7 +194,8 @@ export function registerValidationHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.VALIDATION_GET_CLEANER_DATA,
     async (
-      event
+      event,
+      params?: { selectedManagers?: string[] }
     ): Promise<{
       success: boolean
       orderNumbers?: string[]
@@ -213,7 +214,11 @@ export function registerValidationHandlers(): void {
         }
       }
 
-      return validationApplicationService.getCleanerData(userInfo, event.sender.id)
+      return validationApplicationService.getCleanerData(
+        userInfo,
+        event.sender.id,
+        params?.selectedManagers ?? []
+      )
     }
   )
 }

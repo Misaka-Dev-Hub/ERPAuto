@@ -118,8 +118,11 @@ export async function runCleanerExecution(params: {
   headless: boolean
   queryBatchSize: number
   processConcurrency: number
+  selectedManagers: string[]
 }): Promise<CleanerReportData> {
-  const cleanerDataResult = await window.electron.validation.getCleanerData()
+  const cleanerDataResult = await window.electron.validation.getCleanerData({
+    selectedManagers: params.selectedManagers
+  })
   const cleanerData = cleanerDataResult.success
     ? (cleanerDataResult.data as CleanerDataPayload | null)
     : null

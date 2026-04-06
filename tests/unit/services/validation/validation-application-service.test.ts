@@ -324,26 +324,56 @@ describe('ValidationApplicationService', () => {
 
   // ─── getCleanerData ───
   describe('getCleanerData', () => {
-    it('should return order numbers and material codes for admin user', async () => {
+    it('Admin with selected managers should query MaterialsToBeDeleted by ManagerName IN', async () => {
       mockSharedIdsGet.mockReturnValue(['PROD001'])
       const userInfo = { id: 1, username: 'admin', userType: 'Admin' } as any
 
-      const result = await service.getCleanerData(userInfo, 1)
+      const result = await service.getCleanerData(userInfo, 1, ['Mgr', 'Other'])
 
       expect(result.success).toBe(true)
       expect(result.orderNumbers).toBeDefined()
       expect(result.orderNumbers!.length).toBeGreaterThan(0)
+      // materialCodes come from MaterialsToBeDeleted query (mock returns M1)
       expect(result.materialCodes).toBeDefined()
+      expect(result.materialCodes).toContain('M1')
     })
 
-    it('should return empty order numbers when no shared IDs', async () => {
+    it('Admin without selected managers should query DiscreteMaterialPlanData by orderNumbers', async () => {
+      mockSharedIdsGet.mockReturnValue(['PROD001'])
+      const userInfo = { id: 1, username: 'admin', userType: 'Admin' } as any
+
+      const result = await service.getCleanerData(userInfo, 1, [])
+
+      expect(result.success).toBe(true)
+      expect(result.orderNumbers).toBeDefined()
+      // materialCodes come from DiscreteMaterialPlanDAO.queryBySourceNumbersDistinct
+      // mock returns MF1
+      expect(result.materialCodes).toBeDefined()
+      expect(result.materialCodes).toContain('MF1')
+    })
+
+    it('Admin without selected managers and no orderNumbers should return empty material codes', async () => {
       mockSharedIdsGet.mockReturnValue([])
       const userInfo = { id: 1, username: 'admin', userType: 'Admin' } as any
+
+      const result = await service.getCleanerData(userInfo, 1, [])
+
+      expect(result.success).toBe(true)
+      expect(result.orderNumbers).toEqual([])
+      expect(result.materialCodes).toEqual([])
+    })
+
+    it('regular user should filter by ManagerName = username', async () => {
+      mockSharedIdsGet.mockReturnValue(['PROD001'])
+      const userInfo = { id: 2, username: 'guest', userType: 'User' } as any
 
       const result = await service.getCleanerData(userInfo, 1)
 
       expect(result.success).toBe(true)
-      expect(result.orderNumbers).toEqual([])
+      // materialCodes from MaterialsToBeDeleted WHERE ManagerName = 'guest'
+      // mock returns M1 for any MaterialsToBeDeleted query
+      expect(result.materialCodes).toBeDefined()
+      expect(result.materialCodes).toContain('M1')
     })
 
     it('should handle errors gracefully', async () => {
