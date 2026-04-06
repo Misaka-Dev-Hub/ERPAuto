@@ -5,45 +5,39 @@
  * Run: npx playwright test tests/e2e/extractor-workflow.test.ts
  */
 
-import { _electron as electron } from '@playwright/test'
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import type { ElectronApplication, Page, BrowserWindow } from 'playwright'
+import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
+import { _electron as electron } from 'playwright'
 import { join } from 'path'
 
-describe('Extractor E2E Workflow', () => {
-  let electronApp: ElectronApplication
-  let window: BrowserWindow
-  let page: Page
+let electronApp: ElectronApplication
+let page: Page
 
-  beforeAll(async () => {
-    // Build the app first (if not already built)
-    // npm run build
-
+test.describe('Extractor E2E Workflow', () => {
+  test.beforeAll(async () => {
     // Launch Electron app for testing
     electronApp = await electron.launch({
       args: [join(process.cwd(), 'out/main/index.js')]
     })
 
     // Get the main window
-    window = await electronApp.firstWindow()
     page = await electronApp.firstWindow()
 
     // Wait for app to load
     await page.waitForLoadState('domcontentloaded')
-  }, 60000)
+  })
 
-  afterAll(async () => {
+  test.afterAll(async () => {
     if (electronApp) {
       await electronApp.close()
     }
-  }, 60000)
+  })
 
-  it('should launch the application', async () => {
+  test('should launch the application', async () => {
     const title = await page.title()
     expect(title).toBeDefined()
   })
 
-  it('should navigate to Extractor page', async () => {
+  test('should navigate to Extractor page', async () => {
     // Click on the "数据提取" link
     await page.click('a:has-text("数据提取")')
 
@@ -55,7 +49,7 @@ describe('Extractor E2E Workflow', () => {
     expect(pageTitle).toContain('ERP 数据提取')
   })
 
-  it('should display order number input', async () => {
+  test('should display order number input', async () => {
     // Check if order number textarea is visible
     const textarea = page.locator('.order-textarea')
     await expect(textarea).toBeVisible()
@@ -65,7 +59,7 @@ describe('Extractor E2E Workflow', () => {
     expect(placeholder).toContain('订单号')
   })
 
-  it('should update order count when typing', async () => {
+  test('should update order count when typing', async () => {
     // Fill in order numbers
     const textarea = page.locator('.order-textarea')
     await textarea.fill('SC70202602120085\nSC70202602120120')
@@ -79,7 +73,7 @@ describe('Extractor E2E Workflow', () => {
     expect(countText).toContain('2')
   })
 
-  it('should show error when extracting without order numbers', async () => {
+  test('should show error when extracting without order numbers', async () => {
     // Clear the textarea
     const textarea = page.locator('.order-textarea')
     await textarea.fill('')
@@ -90,7 +84,7 @@ describe('Extractor E2E Workflow', () => {
     expect(isDisabled).toBe(true)
   })
 
-  it('should have batch size input', async () => {
+  test('should have batch size input', async () => {
     const batchSizeInput = page.locator('input[type="number"]')
     await expect(batchSizeInput).toBeVisible()
 
@@ -98,7 +92,7 @@ describe('Extractor E2E Workflow', () => {
     expect(value).toBe('100')
   })
 
-  it('should have reset button', async () => {
+  test('should have reset button', async () => {
     const resetButton = page.locator('.btn-secondary:has-text("重置")')
     await expect(resetButton).toBeVisible()
 
@@ -111,7 +105,7 @@ describe('Extractor E2E Workflow', () => {
     expect(value).toBe('')
   })
 
-  it('should navigate back to home', async () => {
+  test('should navigate back to home', async () => {
     // Click back button
     await page.click('.nav-btn:has-text("返回主页")')
 

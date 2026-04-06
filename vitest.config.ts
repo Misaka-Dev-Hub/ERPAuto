@@ -11,8 +11,7 @@ export default defineConfig({
     env: {
       NODE_ENV: 'test'
     },
-    // CI 环境启用隔离以捕获跨文件状态污染；本地开发禁用以提升速度
-    isolate: !!process.env.CI,
+    isolate: true,
     pool: 'threads', // 使用线程池
     maxWorkers: 4,
     bail: process.env.CI ? 1 : undefined,
