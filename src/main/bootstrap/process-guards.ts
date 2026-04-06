@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import logger from '../services/logger/index'
-import { logAudit, closeAuditLogger } from '../services/logger/audit-logger'
+import { logAudit, closeAuditLogger, cachedHostname } from '../services/logger/audit-logger'
 import { AuditAction, AuditStatus } from '../types/audit.types'
 import { serializeError } from '../services/logger/error-utils'
 
@@ -10,7 +10,7 @@ export function setupProcessGuards(): void {
     try {
       logAudit(AuditAction.SYSTEM_CRASH, 'system', {
         username: 'system',
-        computerName: process.env.COMPUTERNAME || 'unknown',
+        computerName: cachedHostname,
         resource: 'main-process',
         status: AuditStatus.FAILURE,
         metadata: { error: err.message, stack: err.stack }
@@ -29,7 +29,7 @@ export function setupProcessGuards(): void {
     try {
       logAudit(AuditAction.SYSTEM_ERROR, 'system', {
         username: 'system',
-        computerName: process.env.COMPUTERNAME || 'unknown',
+        computerName: cachedHostname,
         resource: 'main-process',
         status: AuditStatus.FAILURE,
         metadata: errorMeta

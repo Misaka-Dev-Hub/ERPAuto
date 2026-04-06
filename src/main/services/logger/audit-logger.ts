@@ -102,7 +102,7 @@ export function logAudit(
 }
 
 /** Cached hostname — invariant for the app lifecycle */
-const cachedHostname = hostname()
+export const cachedHostname = hostname()
 
 /**
  * Audit log shortcut that auto-resolves the current user context.
