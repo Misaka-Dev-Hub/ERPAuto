@@ -20,6 +20,8 @@ interface CleanerRunPayload {
   errors: string[]
   retriedOrders: number
   successfulRetries: number
+  materialsFailed?: number
+  uncertainDeletions?: number
 }
 
 export async function initializeCleanerPage(): Promise<CleanerInitializationResult> {
@@ -161,7 +163,9 @@ export async function runCleanerExecution(params: {
     materialsSkipped: cleanerRunData.materialsSkipped,
     errors: cleanerRunData.errors,
     retriedOrders: cleanerRunData.retriedOrders,
-    successfulRetries: cleanerRunData.successfulRetries
+    successfulRetries: cleanerRunData.successfulRetries,
+    materialsFailed: cleanerRunData.materialsFailed ?? 0,
+    uncertainDeletions: cleanerRunData.uncertainDeletions ?? 0
   }
 }
 

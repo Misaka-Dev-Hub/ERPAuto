@@ -2,7 +2,12 @@ import path from 'path'
 import fs from 'fs'
 import { app } from 'electron'
 import { createLogger } from '../logger'
-import type { CleanerResult, OrderCleanDetail, SkippedMaterial } from '../../types/cleaner.types'
+import type {
+  CleanerResult,
+  FailedMaterial,
+  OrderCleanDetail,
+  SkippedMaterial
+} from '../../types/cleaner.types'
 
 const log = createLogger('CleanerReportGenerator')
 
@@ -88,6 +93,12 @@ export class CleanerReportGenerator {
     lines.push(`| **处理订单数** | \`${result.ordersProcessed}\``)
     lines.push(`| **删除物料数** | \`${result.materialsDeleted}\``)
     lines.push(`| **跳过物料数** | \`${result.materialsSkipped}\``)
+    if (result.materialsFailed > 0) {
+      lines.push(`| **删除失败物料数** | \`${result.materialsFailed}\``)
+    }
+    if (result.uncertainDeletions > 0) {
+      lines.push(`| **不确定删除数** | \`${result.uncertainDeletions}\``)
+    }
     lines.push(`| **错误数量**   | \`${result.errors.length}\``)
     if (result.retriedOrders > 0) {
       lines.push(`| **重试订单数** | \`${result.retriedOrders}\``)
@@ -155,6 +166,53 @@ export class CleanerReportGenerator {
       })
 
       lines.push('')
+      lines.push('---')
+      lines.push('')
+    }
+
+    // Failed materials section
+    const allFailedMaterials = this.collectAllFailedMaterials(result.details)
+    if (allFailedMaterials.length > 0) {
+      lines.push('## 删除失败的物料详情')
+      lines.push('')
+      lines.push(`**失败物料总数**: \`${allFailedMaterials.length}\``)
+      lines.push('')
+      lines.push(
+        '| 订单号   | 物料代码 | 物料名称 | 行号 | 最终结果       | 失败原因类别       | 尝试次数 |'
+      )
+      lines.push(
+        '| -------- | -------- | -------- | ---- | -------------- | ------------------ | -------- |'
+      )
+
+      allFailedMaterials.forEach((failed) => {
+        lines.push(
+          `| \`${failed.orderNumber}\` | \`${failed.materialCode}\` | \`${failed.materialName}\` | ${failed.rowNumber} | ${failed.finalOutcome} | ${failed.finalErrorCategory ?? '-'} | ${failed.attempts.length} |`
+        )
+      })
+
+      lines.push('')
+
+      // Detailed attempt records
+      lines.push('### 失败物料尝试记录')
+      lines.push('')
+
+      allFailedMaterials.forEach((failed) => {
+        lines.push(
+          `#### \`${failed.materialCode}\` (${failed.materialName}) — 订单 \`${failed.orderNumber}\``
+        )
+        lines.push('')
+        failed.attempts.forEach((attempt, idx) => {
+          lines.push(`${idx + 1}. **第${attempt.attempt}次尝试** - 结果: ${attempt.outcome}`)
+          if (attempt.errorMessage) {
+            lines.push(`   - 错误: ${attempt.errorMessage}`)
+          }
+          lines.push(
+            `   - 行号: ${attempt.rowNumberBefore} → ${attempt.rowNumberAfter} | 物料数: ${attempt.materialCountBefore} → ${attempt.materialCountAfter} | 耗时: ${attempt.durationMs}ms`
+          )
+        })
+        lines.push('')
+      })
+
       lines.push('---')
       lines.push('')
     }
@@ -266,6 +324,25 @@ export class CleanerReportGenerator {
         detail.skippedMaterials.forEach((skipped) => {
           result.push({
             ...skipped,
+            orderNumber: detail.orderNumber
+          })
+        })
+      }
+    })
+
+    return result
+  }
+
+  private collectAllFailedMaterials(
+    details: OrderCleanDetail[]
+  ): Array<FailedMaterial & { orderNumber: string }> {
+    const result: Array<FailedMaterial & { orderNumber: string }> = []
+
+    details.forEach((detail) => {
+      if (detail.failedMaterials && detail.failedMaterials.length > 0) {
+        detail.failedMaterials.forEach((failed) => {
+          result.push({
+            ...failed,
             orderNumber: detail.orderNumber
           })
         })

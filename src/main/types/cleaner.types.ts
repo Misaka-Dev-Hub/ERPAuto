@@ -30,6 +30,9 @@ export interface CleanerResult {
   // Retry statistics
   retriedOrders: number
   successfulRetries: number
+  // Deletion verification statistics
+  materialsFailed: number
+  uncertainDeletions: number
 }
 
 export interface SkippedMaterial {
@@ -56,6 +59,50 @@ export interface OrderCleanDetail {
   retryAttempts?: RetryAttempt[]
   retriedAt?: number
   retrySuccess?: boolean
+  // Deletion verification fields
+  materialsFailed: number
+  failedMaterials: FailedMaterial[]
+  uncertainDeletions: number
+}
+
+export enum DeletionOutcome {
+  Success = 'success',
+  FailedErpError = 'failed_erp_error',
+  FailedNoChange = 'failed_no_change',
+  FailedTimeout = 'failed_timeout',
+  FailedButtonDisabled = 'failed_button_disabled',
+  Uncertain = 'uncertain'
+}
+
+export enum DeletionErrorCategory {
+  ErpRejection = 'erp_rejection',
+  ErpBusy = 'erp_busy',
+  NetworkLag = 'network_lag',
+  UiUnexpected = 'ui_unexpected',
+  VerificationTimeout = 'verification_timeout',
+  Unknown = 'unknown'
+}
+
+export interface MaterialDeletionAttempt {
+  attempt: number
+  outcome: DeletionOutcome
+  errorCategory?: DeletionErrorCategory
+  errorMessage?: string
+  rowNumberBefore: string
+  rowNumberAfter: string
+  materialCountBefore: number
+  materialCountAfter: number
+  timestamp: number
+  durationMs: number
+}
+
+export interface FailedMaterial {
+  materialCode: string
+  materialName: string
+  rowNumber: number
+  attempts: MaterialDeletionAttempt[]
+  finalOutcome: DeletionOutcome
+  finalErrorCategory?: DeletionErrorCategory
 }
 
 /**

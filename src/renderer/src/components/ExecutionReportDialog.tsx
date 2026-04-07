@@ -8,7 +8,7 @@
  */
 
 import React from 'react'
-import { CheckCircle, XCircle, SkipForward, Package, Loader2 } from 'lucide-react'
+import { CheckCircle, XCircle, SkipForward, Package, Loader2, AlertTriangle } from 'lucide-react'
 import { Modal } from './ui/Modal'
 import type { CleanerProgress } from '../hooks/cleaner/types'
 
@@ -27,6 +27,9 @@ interface ExecutionReportDialogProps {
   // Retry-related props
   retriedOrders?: number
   successfulRetries?: number
+  // Deletion verification props
+  materialsFailed?: number
+  uncertainDeletions?: number
 }
 
 export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
@@ -42,12 +45,15 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
   startTime = null,
   triggerRef,
   retriedOrders = 0,
-  successfulRetries = 0
+  successfulRetries = 0,
+  materialsFailed = 0,
+  uncertainDeletions = 0
 }) => {
   const [now, setNow] = React.useState(() => Date.now())
 
   const hasErrors = errors.length > 0
   const hasRetries = retriedOrders > 0
+  const hasFailedMaterials = materialsFailed > 0 || uncertainDeletions > 0
   const showProgress = isExecuting && progress
   const isProgressing = !!showProgress
 
@@ -325,6 +331,36 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
                     <div className="text-xl font-semibold text-gray-900">{successfulRetries}</div>
                   </div>
                 </div>
+              </>
+            )}
+
+            {hasFailedMaterials && (
+              <>
+                {materialsFailed > 0 && (
+                  <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3 border border-gray-200">
+                    <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
+                      <XCircle size={20} className="text-red-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-gray-600">删除失败</div>
+                      <div className="text-xl font-semibold text-red-600">{materialsFailed}</div>
+                    </div>
+                  </div>
+                )}
+
+                {uncertainDeletions > 0 && (
+                  <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3 border border-gray-200">
+                    <div className="w-9 h-9 rounded-lg bg-yellow-50 flex items-center justify-center flex-shrink-0">
+                      <AlertTriangle size={20} className="text-yellow-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-gray-600">不确定删除</div>
+                      <div className="text-xl font-semibold text-yellow-600">
+                        {uncertainDeletions}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

@@ -45,6 +45,8 @@ export interface CleanerReportData {
   errors: string[]
   retriedOrders?: number
   successfulRetries?: number
+  materialsFailed?: number
+  uncertainDeletions?: number
 }
 
 export interface CleanerInitializationResult {

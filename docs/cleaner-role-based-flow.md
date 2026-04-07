@@ -77,11 +77,11 @@ flowchart TB
 
 **差异总结**:
 
-| 维度 | Admin | User |
-|------|-------|------|
-| 侧边栏 | 有 CleanerSidebar | 无 |
-| 管理员列表 | 查询全部负责人 | 不查询 |
-| 默认选中 | 所有负责人 | 仅自己 |
+| 维度       | Admin             | User   |
+| ---------- | ----------------- | ------ |
+| 侧边栏     | 有 CleanerSidebar | 无     |
+| 管理员列表 | 查询全部负责人    | 不查询 |
+| 默认选中   | 所有负责人        | 仅自己 |
 
 ---
 
@@ -119,11 +119,11 @@ flowchart TB
 
 **匹配优先级说明**:
 
-| 优先级 | 数据源 | 匹配方式 | 适用角色 |
-|--------|--------|----------|----------|
-| 1（最高） | `MaterialsToBeDeleted` | MaterialCode 精确匹配 | 全部 |
-| 2 | `MaterialsTypeToBeDeleted` | MaterialName 包含匹配 | 全部 |
-| 3（User 覆盖） | 当前用户的类型关键词 | MaterialName 包含匹配 | 仅 User |
+| 优先级         | 数据源                     | 匹配方式              | 适用角色 |
+| -------------- | -------------------------- | --------------------- | -------- |
+| 1（最高）      | `MaterialsToBeDeleted`     | MaterialCode 精确匹配 | 全部     |
+| 2              | `MaterialsTypeToBeDeleted` | MaterialName 包含匹配 | 全部     |
+| 3（User 覆盖） | 当前用户的类型关键词       | MaterialName 包含匹配 | 仅 User  |
 
 > **优先级 3 的作用**：当某个物料按优先级 2 被分配给其他负责人，但当前 User 有匹配的类型关键词时，会强制覆盖为自己的。这确保 User 不会为他人操作物料。
 
@@ -185,17 +185,18 @@ const resultsToProcess = isAdmin ? validationResults : filteredResults
 
 **差异总结**:
 
-| 维度 | Admin | User |
-|------|-------|------|
-| 处理范围 | `validationResults`（全部） | `filteredResults`（自己的+无负责人的） |
-| 可操作物料 | 所有负责人的物料 | 仅自己的 + 无负责人的 |
-| 能否修改他人数据 | 是 | 否 |
+| 维度             | Admin                       | User                                   |
+| ---------------- | --------------------------- | -------------------------------------- |
+| 处理范围         | `validationResults`（全部） | `filteredResults`（自己的+无负责人的） |
+| 可操作物料       | 所有负责人的物料            | 仅自己的 + 无负责人的                  |
+| 能否修改他人数据 | 是                          | 否                                     |
 
 ---
 
 ## 阶段三：执行清理（ERP 删除）
 
 **源码位置**:
+
 - 前端调用: `src/renderer/src/hooks/cleaner/api.ts:116-166`
 - 获取数据: `src/main/services/validation/validation-application-service.ts:497-655`
 - 执行删除: `src/main/services/cleaner/cleaner-application-service.ts`
@@ -257,12 +258,12 @@ flowchart TB
 
 **差异总结**:
 
-| 维度 | Admin（有 selectedManagers） | Admin（无 selectedManagers） | User |
-|------|---------------------------|----------------------------|------|
-| 数据源 | `MaterialsToBeDeleted` | `DiscreteMaterialPlanData` | `MaterialsToBeDeleted` |
-| 查询条件 | `WHERE ManagerName IN (...)` | `WHERE SourceNumber IN (orderNumbers)` | `WHERE ManagerName = @username` |
-| 可删除物料 | 选中负责人的物料 | 订单关联的全部物料 | 仅自己标记的物料 |
-| 无订单号时 | — | 返回空数组 | — |
+| 维度       | Admin（有 selectedManagers） | Admin（无 selectedManagers）           | User                            |
+| ---------- | ---------------------------- | -------------------------------------- | ------------------------------- |
+| 数据源     | `MaterialsToBeDeleted`       | `DiscreteMaterialPlanData`             | `MaterialsToBeDeleted`          |
+| 查询条件   | `WHERE ManagerName IN (...)` | `WHERE SourceNumber IN (orderNumbers)` | `WHERE ManagerName = @username` |
+| 可删除物料 | 选中负责人的物料             | 订单关联的全部物料                     | 仅自己标记的物料                |
+| 无订单号时 | —                            | 返回空数组                             | —                               |
 
 ---
 
@@ -295,14 +296,14 @@ flowchart TB
 
 ## 涉及文件索引
 
-| 文件 | 关键函数/逻辑 | 行号 |
-|------|---------------|------|
-| `src/renderer/src/hooks/cleaner/api.ts` | `initializeCleanerPage()`, `runCleanerExecution()` | 25-52, 116-166 |
-| `src/renderer/src/hooks/useCleaner.ts` | `handleConfirmDeletion()`, 初始化逻辑 | 98-120, 289-345 |
-| `src/renderer/src/hooks/cleaner/helpers.ts` | `filterValidationResults()`, `buildDeletionPlan()` | 34-57, 59-92 |
+| 文件                                                             | 关键函数/逻辑                                                                         | 行号                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------- |
+| `src/renderer/src/hooks/cleaner/api.ts`                          | `initializeCleanerPage()`, `runCleanerExecution()`                                    | 25-52, 116-166            |
+| `src/renderer/src/hooks/useCleaner.ts`                           | `handleConfirmDeletion()`, 初始化逻辑                                                 | 98-120, 289-345           |
+| `src/renderer/src/hooks/cleaner/helpers.ts`                      | `filterValidationResults()`, `buildDeletionPlan()`                                    | 34-57, 59-92              |
 | `src/main/services/validation/validation-application-service.ts` | `getCleanerData()`, `loadMaterialCodesForCleaner()`, `queryMaterialCodesByManagers()` | 232-305, 497-604, 606-655 |
-| `src/main/services/cleaner/cleaner-application-service.ts` | `runCleaner()` | 31-168 |
-| `src/main/ipc/cleaner-handler.ts` | `CLEANER_RUN` handler | 16-22 |
-| `src/main/ipc/validation-handler.ts` | `getCleanerData` handler | 194-223 |
-| `src/preload/api/validation.ts` | `getCleanerData()` IPC 桥接 | 11-12 |
-| `src/renderer/src/pages/CleanerPage.tsx` | 页面组件，条件渲染侧边栏 | 74-82 |
+| `src/main/services/cleaner/cleaner-application-service.ts`       | `runCleaner()`                                                                        | 31-168                    |
+| `src/main/ipc/cleaner-handler.ts`                                | `CLEANER_RUN` handler                                                                 | 16-22                     |
+| `src/main/ipc/validation-handler.ts`                             | `getCleanerData` handler                                                              | 194-223                   |
+| `src/preload/api/validation.ts`                                  | `getCleanerData()` IPC 桥接                                                           | 11-12                     |
+| `src/renderer/src/pages/CleanerPage.tsx`                         | 页面组件，条件渲染侧边栏                                                              | 74-82                     |

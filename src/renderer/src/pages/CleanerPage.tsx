@@ -162,6 +162,8 @@ const CleanerPage: React.FC = () => {
           triggerRef={executeButtonRef}
           retriedOrders={reportData?.retriedOrders}
           successfulRetries={reportData?.successfulRetries}
+          materialsFailed={reportData?.materialsFailed}
+          uncertainDeletions={reportData?.uncertainDeletions}
         />
       </Suspense>
 

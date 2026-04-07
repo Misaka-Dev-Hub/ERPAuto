@@ -1,6 +1,12 @@
 import { ERP_LOCATORS } from './locators'
 import { ErpAuthService } from './erp-auth'
-import type { CleanerInput, CleanerResult, OrderCleanDetail } from '../../types/cleaner.types'
+import { DeletionErrorCategory, DeletionOutcome } from '../../types/cleaner.types'
+import type {
+  CleanerInput,
+  CleanerResult,
+  MaterialDeletionAttempt,
+  OrderCleanDetail
+} from '../../types/cleaner.types'
 import type { ErpSession } from '../../types/erp.types'
 import type { FrameLocator, Locator, Page } from 'playwright'
 import { createLogger, run, trackDuration } from '../logger'
@@ -190,7 +196,9 @@ export class CleanerService {
       errors: [],
       details: [],
       retriedOrders: 0,
-      successfulRetries: 0
+      successfulRetries: 0,
+      materialsFailed: 0,
+      uncertainDeletions: 0
     }
 
     const totalOrders = input.orderNumbers.length
@@ -291,6 +299,8 @@ export class CleanerService {
               result.ordersProcessed += 1
               result.materialsDeleted += detail.materialsDeleted
               result.materialsSkipped += detail.materialsSkipped
+              result.materialsFailed += detail.materialsFailed
+              result.uncertainDeletions += detail.uncertainDeletions
             })
 
             const missingOrders = getMissingOrders(batchOrders, queriedOrderNumbersInBatch)
@@ -337,6 +347,8 @@ export class CleanerService {
             result.ordersProcessed += 1
             result.materialsDeleted += updatedDetail.materialsDeleted
             result.materialsSkipped += updatedDetail.materialsSkipped
+            result.materialsFailed += updatedDetail.materialsFailed
+            result.uncertainDeletions += updatedDetail.uncertainDeletions
           }
           result.details[index] = updatedDetail
         }
@@ -353,6 +365,8 @@ export class CleanerService {
         ordersProcessed: result.ordersProcessed,
         materialsDeleted: result.materialsDeleted,
         materialsSkipped: result.materialsSkipped,
+        materialsFailed: result.materialsFailed,
+        uncertainDeletions: result.uncertainDeletions,
         errorCount: result.errors.length,
         totalOrders,
         totalMaterials,
@@ -746,7 +760,10 @@ export class CleanerService {
         retryCount: 0,
         retryAttempts: [],
         retriedAt: undefined,
-        retrySuccess: false
+        retrySuccess: false,
+        materialsFailed: 0,
+        failedMaterials: [],
+        uncertainDeletions: 0
       }
 
       // Step 5: Get material counts and status
@@ -879,33 +896,61 @@ export class CleanerService {
             })
 
             if (shouldDelete && !dryRun) {
-              log.info('[物料操作] 执行删除操作', {
+              log.info('[物料操作] 执行删除操作（多信号验证）', {
                 orderNumber,
                 materialIdx,
                 materialCode,
                 materialName,
                 rowNumber: currentRow,
+                materialCount: detailCount,
                 dryRun: false
               })
-              const oldRowNumber = currentRow
-              await deleteRowBtn.click()
 
-              const deleteSuccess = await this.waitForRowChange(childForm, oldRowNumber, 10000)
+              const currentMaterialCount = await this.readMaterialCount(detailInnerFrame)
+              const deleteResult = await this.deleteWithVerification({
+                childForm,
+                detailInnerFrame,
+                deleteRowBtn,
+                materialCode,
+                materialName,
+                currentRowNumber: currentRow,
+                materialCountBefore: currentMaterialCount ?? detailCount
+              })
+
               const deleteElapsed = Date.now() - materialStartTime
 
-              if (deleteSuccess) {
+              if (
+                deleteResult.outcome === DeletionOutcome.Success ||
+                deleteResult.outcome === DeletionOutcome.Uncertain
+              ) {
                 detail.materialsDeleted += 1
-                log.info('[物料操作完成] 物料已成功删除', {
+                if (deleteResult.outcome === DeletionOutcome.Uncertain) {
+                  detail.uncertainDeletions += 1
+                }
+                log.info('[物料操作完成] 物料删除结果', {
                   orderNumber,
                   materialCode,
-                  rowNumber: currentRow,
+                  outcome: deleteResult.outcome,
+                  attempts: deleteResult.attempts.length,
                   elapsedMs: deleteElapsed
                 })
               } else {
-                log.warn('[物料操作警告] 删除操作后行号未改变', {
+                detail.materialsFailed += 1
+                detail.failedMaterials.push({
+                  materialCode,
+                  materialName,
+                  rowNumber: rowNumInt,
+                  attempts: deleteResult.attempts,
+                  finalOutcome: deleteResult.outcome,
+                  finalErrorCategory: deleteResult.errorCategory
+                })
+                log.error('[物料操作失败] 物料删除失败', {
                   orderNumber,
                   materialCode,
-                  rowNumber: currentRow,
+                  outcome: deleteResult.outcome,
+                  errorCategory: deleteResult.errorCategory,
+                  errorMessage: deleteResult.errorMessage,
+                  attempts: deleteResult.attempts.length,
                   elapsedMs: deleteElapsed
                 })
               }
@@ -1063,7 +1108,10 @@ export class CleanerService {
       retryCount: 0,
       retryAttempts: [],
       retriedAt: undefined,
-      retrySuccess: false
+      retrySuccess: false,
+      materialsFailed: 0,
+      failedMaterials: [],
+      uncertainDeletions: 0
     }
   }
 
@@ -1102,6 +1150,286 @@ export class CleanerService {
       return await button.isEnabled()
     } catch {
       return false
+    }
+  }
+
+  // --- Deletion verification constants ---
+  private static readonly MATERIAL_RETRY_MAX_ATTEMPTS = 3
+  private static readonly MATERIAL_RETRY_DELAY_MS = 1000
+  private static readonly VERIFICATION_TIMEOUT_MS = 8000
+  private static readonly ERROR_CHECK_WINDOW_MS = 2000
+
+  /**
+   * Read current material count from the "详细信息 (N)" text.
+   */
+  private async readMaterialCount(
+    detailInnerFrame: FrameLocator | Locator
+  ): Promise<number | null> {
+    try {
+      const text = await detailInnerFrame.getByText(/^详细信息 \(\d+\)$/).innerText()
+      const match = text.match(/\((\d+)\)/)
+      return match ? parseInt(match[1], 10) : null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Check for ERP error messages or confirm dialogs.
+   */
+  private async checkErpMessages(
+    container: FrameLocator | Locator | Page
+  ): Promise<{ hasError: boolean; errorText?: string; hasConfirmDialog: boolean }> {
+    try {
+      const errorLocator = container.locator(ERP_LOCATORS.common.errorMessage)
+      const hasError = await errorLocator.isVisible().catch(() => false)
+      let errorText: string | undefined
+      if (hasError) {
+        errorText = (await errorLocator.textContent().catch(() => undefined)) ?? undefined
+      }
+
+      const confirmLocator = container.locator(ERP_LOCATORS.common.confirmDialog)
+      const hasConfirmDialog = await confirmLocator.isVisible().catch(() => false)
+
+      return { hasError, errorText, hasConfirmDialog }
+    } catch {
+      return { hasError: false, hasConfirmDialog: false }
+    }
+  }
+
+  /**
+   * Auto-handle a confirm dialog by clicking the confirm button.
+   */
+  private async handleConfirmDialog(container: FrameLocator | Locator | Page): Promise<void> {
+    try {
+      const confirmBtn = container.locator(ERP_LOCATORS.common.confirmButton).first()
+      if (await confirmBtn.isVisible().catch(() => false)) {
+        await confirmBtn.click()
+        log.debug('[确认对话框] 已自动点击确定')
+        await this.delay(500)
+      }
+    } catch {
+      log.warn('[确认对话框] 处理确认对话框失败')
+    }
+  }
+
+  /**
+   * Pure logic: evaluate deletion signals and determine outcome.
+   * No Playwright dependencies — easy to unit test.
+   */
+  evaluateDeletionSignals(params: {
+    rowChanged: boolean
+    countDecreased: boolean | null
+    hasError: boolean
+    errorText?: string
+  }): {
+    outcome: DeletionOutcome
+    errorCategory?: DeletionErrorCategory
+    errorMessage?: string
+  } {
+    const { rowChanged, countDecreased, hasError, errorText } = params
+
+    if (hasError) {
+      return {
+        outcome: DeletionOutcome.FailedErpError,
+        errorCategory: DeletionErrorCategory.ErpRejection,
+        errorMessage: errorText || 'ERP returned an error'
+      }
+    }
+
+    if (rowChanged && countDecreased !== false) {
+      // countDecreased === true or null (unreadable) — both acceptable
+      return { outcome: DeletionOutcome.Success }
+    }
+
+    if (rowChanged && countDecreased === false) {
+      return { outcome: DeletionOutcome.Uncertain }
+    }
+
+    if (!rowChanged && countDecreased === true) {
+      return { outcome: DeletionOutcome.Success }
+    }
+
+    // Neither row changed nor count decreased
+    return {
+      outcome: DeletionOutcome.FailedNoChange,
+      errorCategory: DeletionErrorCategory.Unknown
+    }
+  }
+
+  /**
+   * Core method: delete a single material with multi-signal verification and retry.
+   */
+  private async deleteWithVerification(params: {
+    childForm: FrameLocator | Locator
+    detailInnerFrame: FrameLocator | Locator
+    deleteRowBtn: Locator
+    materialCode: string
+    materialName: string
+    currentRowNumber: string
+    materialCountBefore: number
+    maxAttempts?: number
+    attemptDelayMs?: number
+  }): Promise<{
+    outcome: DeletionOutcome
+    errorCategory?: DeletionErrorCategory
+    errorMessage?: string
+    attempts: MaterialDeletionAttempt[]
+  }> {
+    const {
+      childForm,
+      detailInnerFrame,
+      deleteRowBtn,
+      materialCode,
+      materialName,
+      currentRowNumber,
+      materialCountBefore,
+      maxAttempts = CleanerService.MATERIAL_RETRY_MAX_ATTEMPTS,
+      attemptDelayMs = CleanerService.MATERIAL_RETRY_DELAY_MS
+    } = params
+
+    const attempts: MaterialDeletionAttempt[] = []
+
+    for (let attemptNum = 1; attemptNum <= maxAttempts; attemptNum++) {
+      const attemptStart = Date.now()
+
+      // Check button state before clicking
+      const btnEnabled = await this.isButtonEnabled(deleteRowBtn)
+      if (!btnEnabled) {
+        attempts.push({
+          attempt: attemptNum,
+          outcome: DeletionOutcome.FailedButtonDisabled,
+          errorCategory: DeletionErrorCategory.UiUnexpected,
+          errorMessage: '删行按钮不可用',
+          rowNumberBefore: currentRowNumber,
+          rowNumberAfter: currentRowNumber,
+          materialCountBefore,
+          materialCountAfter: materialCountBefore,
+          timestamp: attemptStart,
+          durationMs: Date.now() - attemptStart
+        })
+        return {
+          outcome: DeletionOutcome.FailedButtonDisabled,
+          errorCategory: DeletionErrorCategory.UiUnexpected,
+          errorMessage: '删行按钮不可用',
+          attempts
+        }
+      }
+
+      // Click delete button
+      await deleteRowBtn.click()
+
+      // Check for ERP messages (error / confirm dialog)
+      const msgCheck = await this.checkErpMessages(detailInnerFrame)
+      if (msgCheck.hasConfirmDialog) {
+        await this.handleConfirmDialog(detailInnerFrame)
+      }
+
+      if (msgCheck.hasError) {
+        const attempt: MaterialDeletionAttempt = {
+          attempt: attemptNum,
+          outcome: DeletionOutcome.FailedErpError,
+          errorCategory: DeletionErrorCategory.ErpRejection,
+          errorMessage: msgCheck.errorText,
+          rowNumberBefore: currentRowNumber,
+          rowNumberAfter: currentRowNumber,
+          materialCountBefore,
+          materialCountAfter: materialCountBefore,
+          timestamp: attemptStart,
+          durationMs: Date.now() - attemptStart
+        }
+        attempts.push(attempt)
+        // No retry for erp_rejection
+        return {
+          outcome: DeletionOutcome.FailedErpError,
+          errorCategory: DeletionErrorCategory.ErpRejection,
+          errorMessage: msgCheck.errorText,
+          attempts
+        }
+      }
+
+      // Wait and poll for verification signals
+      const verificationStart = Date.now()
+      const timeout = CleanerService.VERIFICATION_TIMEOUT_MS
+      let rowNumberAfter = currentRowNumber
+      let materialCountAfter: number | null = materialCountBefore
+
+      while (Date.now() - verificationStart < timeout) {
+        rowNumberAfter = await this.getInputValue(childForm, /^行号$/)
+        materialCountAfter = await this.readMaterialCount(detailInnerFrame)
+
+        const rowChanged = rowNumberAfter !== currentRowNumber
+        const countDecreased =
+          materialCountAfter !== null ? materialCountAfter < materialCountBefore : null
+
+        if (rowChanged || countDecreased === true) {
+          break
+        }
+
+        await this.delay(300)
+      }
+
+      // Final read if we didn't update in the loop
+      if (rowNumberAfter === currentRowNumber && materialCountAfter === materialCountBefore) {
+        rowNumberAfter = await this.getInputValue(childForm, /^行号$/)
+        materialCountAfter = await this.readMaterialCount(detailInnerFrame)
+      }
+
+      const rowChanged = rowNumberAfter !== currentRowNumber
+      const countDecreased =
+        materialCountAfter !== null ? materialCountAfter < materialCountBefore : null
+
+      const evaluation = this.evaluateDeletionSignals({
+        rowChanged,
+        countDecreased,
+        hasError: false
+      })
+
+      const attempt: MaterialDeletionAttempt = {
+        attempt: attemptNum,
+        outcome: evaluation.outcome,
+        errorCategory: evaluation.errorCategory,
+        errorMessage: evaluation.errorMessage,
+        rowNumberBefore: currentRowNumber,
+        rowNumberAfter,
+        materialCountBefore,
+        materialCountAfter: materialCountAfter ?? materialCountBefore,
+        timestamp: attemptStart,
+        durationMs: Date.now() - attemptStart
+      }
+      attempts.push(attempt)
+
+      if (
+        evaluation.outcome === DeletionOutcome.Success ||
+        evaluation.outcome === DeletionOutcome.Uncertain
+      ) {
+        return {
+          outcome: evaluation.outcome,
+          errorCategory: evaluation.errorCategory,
+          errorMessage: evaluation.errorMessage,
+          attempts
+        }
+      }
+
+      // Retryable failure — wait before next attempt
+      if (attemptNum < maxAttempts) {
+        log.info('[物料删除重试] 等待后重试', {
+          materialCode,
+          materialName,
+          attempt: attemptNum,
+          nextAttempt: attemptNum + 1,
+          delayMs: attemptDelayMs
+        })
+        await this.delay(attemptDelayMs)
+      }
+    }
+
+    // All attempts exhausted
+    return {
+      outcome: DeletionOutcome.FailedNoChange,
+      errorCategory: DeletionErrorCategory.VerificationTimeout,
+      errorMessage: `${maxAttempts} 次尝试后仍无法确认删除`,
+      attempts
     }
   }
 

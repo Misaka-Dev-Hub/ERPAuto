@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { DeletionErrorCategory, DeletionOutcome } from '../../../../src/main/types/cleaner.types'
 import {
   CleanerService,
   createBatches,
@@ -268,5 +269,106 @@ describe('CleanerService - Helper Methods', () => {
 
       expect(missing).toEqual(['ORD001', 'ORD002'])
     })
+  })
+})
+
+describe('CleanerService - evaluateDeletionSignals()', () => {
+  const cleaner = new CleanerService({} as any, { dryRun: false })
+
+  it('should return FailedErpError when error is detected', () => {
+    const result = cleaner.evaluateDeletionSignals({
+      rowChanged: false,
+      countDecreased: false,
+      hasError: true,
+      errorText: '物料已被引用'
+    })
+
+    expect(result.outcome).toBe(DeletionOutcome.FailedErpError)
+    expect(result.errorCategory).toBe(DeletionErrorCategory.ErpRejection)
+    expect(result.errorMessage).toBe('物料已被引用')
+  })
+
+  it('should return FailedErpError with default message when no errorText', () => {
+    const result = cleaner.evaluateDeletionSignals({
+      rowChanged: false,
+      countDecreased: false,
+      hasError: true
+    })
+
+    expect(result.outcome).toBe(DeletionOutcome.FailedErpError)
+    expect(result.errorMessage).toBe('ERP returned an error')
+  })
+
+  it('should return Success when row changed and count decreased (true)', () => {
+    const result = cleaner.evaluateDeletionSignals({
+      rowChanged: true,
+      countDecreased: true,
+      hasError: false
+    })
+
+    expect(result.outcome).toBe(DeletionOutcome.Success)
+    expect(result.errorCategory).toBeUndefined()
+  })
+
+  it('should return Success when row changed and count is unreadable (null)', () => {
+    const result = cleaner.evaluateDeletionSignals({
+      rowChanged: true,
+      countDecreased: null,
+      hasError: false
+    })
+
+    expect(result.outcome).toBe(DeletionOutcome.Success)
+  })
+
+  it('should return Uncertain when row changed but count did not decrease', () => {
+    const result = cleaner.evaluateDeletionSignals({
+      rowChanged: true,
+      countDecreased: false,
+      hasError: false
+    })
+
+    expect(result.outcome).toBe(DeletionOutcome.Uncertain)
+  })
+
+  it('should return Success when row did not change but count decreased', () => {
+    const result = cleaner.evaluateDeletionSignals({
+      rowChanged: false,
+      countDecreased: true,
+      hasError: false
+    })
+
+    expect(result.outcome).toBe(DeletionOutcome.Success)
+  })
+
+  it('should return FailedNoChange when nothing changed', () => {
+    const result = cleaner.evaluateDeletionSignals({
+      rowChanged: false,
+      countDecreased: false,
+      hasError: false
+    })
+
+    expect(result.outcome).toBe(DeletionOutcome.FailedNoChange)
+    expect(result.errorCategory).toBe(DeletionErrorCategory.Unknown)
+  })
+
+  it('should return FailedNoChange when row did not change and count is null', () => {
+    const result = cleaner.evaluateDeletionSignals({
+      rowChanged: false,
+      countDecreased: null,
+      hasError: false
+    })
+
+    expect(result.outcome).toBe(DeletionOutcome.FailedNoChange)
+  })
+
+  it('should prioritize error signal over all others', () => {
+    const result = cleaner.evaluateDeletionSignals({
+      rowChanged: true,
+      countDecreased: true,
+      hasError: true,
+      errorText: 'Some error'
+    })
+
+    expect(result.outcome).toBe(DeletionOutcome.FailedErpError)
   })
 })
