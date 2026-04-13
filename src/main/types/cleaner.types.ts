@@ -44,6 +44,13 @@ export interface SkippedMaterial {
   reason: string
 }
 
+export interface DeletedMaterial {
+  materialCode: string
+  materialName: string
+  rowNumber: number
+  outcome: string
+}
+
 export interface RetryAttempt {
   attempt: number
   error: string
@@ -56,6 +63,7 @@ export interface OrderCleanDetail {
   materialsSkipped: number
   errors: string[]
   skippedMaterials: SkippedMaterial[]
+  deletedMaterials: DeletedMaterial[]
   // Retry-related fields
   retryCount: number
   retryAttempts?: RetryAttempt[]

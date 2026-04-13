@@ -433,8 +433,21 @@ export class CleanerApplicationService {
           detail.errors.length > 0 ? detail.errors.join('\n') : undefined
         )
 
-        // Insert material details for skipped and failed materials
+        // Insert material details for all materials
         const materialDetails: InsertMaterialDetailInput[] = []
+
+        for (const deleted of detail.deletedMaterials) {
+          materialDetails.push({
+            orderNumber: detail.orderNumber,
+            materialCode: deleted.materialCode,
+            materialName: deleted.materialName,
+            rowNumber: deleted.rowNumber,
+            result: deleted.outcome,
+            reason: null,
+            attemptCount: 1,
+            finalErrorCategory: null
+          })
+        }
 
         for (const skipped of detail.skippedMaterials) {
           materialDetails.push({

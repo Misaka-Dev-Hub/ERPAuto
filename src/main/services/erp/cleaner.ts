@@ -758,6 +758,7 @@ export class CleanerService {
         materialsSkipped: 0,
         errors: [],
         skippedMaterials: [],
+        deletedMaterials: [],
         retryCount: 0,
         retryAttempts: [],
         retriedAt: undefined,
@@ -925,6 +926,12 @@ export class CleanerService {
                 deleteResult.outcome === DeletionOutcome.Uncertain
               ) {
                 detail.materialsDeleted += 1
+                detail.deletedMaterials.push({
+                  materialCode,
+                  materialName,
+                  rowNumber: rowNumInt,
+                  outcome: deleteResult.outcome
+                })
                 if (deleteResult.outcome === DeletionOutcome.Uncertain) {
                   detail.uncertainDeletions += 1
                 }
@@ -1106,6 +1113,7 @@ export class CleanerService {
       materialsSkipped: 0,
       errors: [message],
       skippedMaterials: [],
+      deletedMaterials: [],
       retryCount: 0,
       retryAttempts: [],
       retriedAt: undefined,
