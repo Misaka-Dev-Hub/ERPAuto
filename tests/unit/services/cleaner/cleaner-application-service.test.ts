@@ -37,6 +37,34 @@ vi.mock('../../../../src/main/services/erp/order-resolver', () => {
   }
 })
 
+// Mock CleanerOperationHistoryDAO
+vi.mock('../../../../src/main/services/database/cleaner-operation-history-dao', () => {
+  return {
+    CleanerOperationHistoryDAO: class {
+      async insertExecution() {
+        return true
+      }
+      async insertOrderRecords() {
+        return true
+      }
+      async updateOrderStatus() {
+        return true
+      }
+      async insertMaterialDetails() {
+        return true
+      }
+      async updateExecutionStatus() {
+        return true
+      }
+      async getBatchDetails() {
+        return {
+          executions: [{ attemptNumber: 1, isDryRun: false }]
+        }
+      }
+    }
+  }
+})
+
 // Control whether CleanerService.clean should throw
 let cleanerShouldThrow = false
 let cleanerError: Error = new Error('cleaner crashed')
@@ -108,6 +136,16 @@ function setupServiceMocks(service: CleanerApplicationService) {
   })
   ;(service as any).recordCleanupAudit = vi.fn().mockResolvedValue(undefined)
   ;(service as any).generateAndUploadReport = vi.fn().mockResolvedValue(undefined)
+  ;(service as any).getHistoryDao = vi.fn().mockReturnValue({
+    insertExecution: vi.fn().mockResolvedValue(true),
+    insertOrderRecords: vi.fn().mockResolvedValue(true),
+    updateOrderStatus: vi.fn().mockResolvedValue(true),
+    insertMaterialDetails: vi.fn().mockResolvedValue(true),
+    updateExecutionStatus: vi.fn().mockResolvedValue(true),
+    getBatchDetails: vi.fn().mockResolvedValue({
+      executions: [{ attemptNumber: 1, isDryRun: false }]
+    })
+  })
 }
 
 function makeInput(overrides: Record<string, any> = {}) {

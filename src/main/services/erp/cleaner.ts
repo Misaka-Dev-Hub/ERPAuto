@@ -990,11 +990,20 @@ export class CleanerService {
               })
             }
           } else {
-            log.verbose('[物料判断] 物料不在删除清单中，跳过', {
+            // 物料不在删除清单中，记录为 skipped
+            detail.materialsSkipped += 1
+            detail.skippedMaterials.push({
+              materialCode,
+              materialName,
+              rowNumber: rowNumInt,
+              reason: '不在删除清单中'
+            })
+            log.verbose('[物料跳过] 物料不在删除清单中', {
               orderNumber,
               materialIdx,
               materialCode,
-              materialName
+              materialName,
+              rowNumber: rowNumInt
             })
           }
 

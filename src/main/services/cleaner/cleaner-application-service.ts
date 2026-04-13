@@ -417,6 +417,11 @@ export class CleanerApplicationService {
     result: CleanerResult
   ): Promise<void> {
     try {
+      // Query execution record to determine if this is a dry run
+      const batchDetails = await historyDao.getBatchDetails(batchId)
+      const execution = batchDetails.executions.find((e) => e.attemptNumber === attemptNumber)
+      const isDryRun = execution?.isDryRun ?? false
+
       // Update order statuses and insert material details
       for (const detail of result.details) {
         await historyDao.updateOrderStatus(
@@ -479,7 +484,7 @@ export class CleanerApplicationService {
           })
         }
 
-        if (materialDetails.length > 0) {
+        if (materialDetails.length > 0 && !isDryRun) {
           await historyDao.insertMaterialDetails(batchId, attemptNumber, materialDetails)
         }
       }
