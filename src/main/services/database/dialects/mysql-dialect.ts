@@ -27,7 +27,7 @@ export class MySqlDialect implements SqlDialect {
   }
 
   currentTimestamp(): string {
-    return 'NOW()'
+    return 'UTC_TIMESTAMP()'
   }
 
   upsert(params: {

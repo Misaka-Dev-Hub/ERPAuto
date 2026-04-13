@@ -26,7 +26,7 @@ export class SqlServerDialect implements SqlDialect {
   }
 
   currentTimestamp(): string {
-    return 'GETDATE()'
+    return 'SYSUTCDATETIME()'
   }
 
   upsert(params: {
