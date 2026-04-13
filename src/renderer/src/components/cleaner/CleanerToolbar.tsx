@@ -6,6 +6,7 @@ import {
   FileSpreadsheet,
   FileText,
   HardDrive,
+  History,
   Search,
   Settings2,
   Square
@@ -27,6 +28,7 @@ interface CleanerToolbarProps {
   handleConfirmDeletion: () => Promise<void>
   handleExportResults: () => Promise<void>
   setIsReportViewerOpen: (open: boolean) => void
+  setShowHistoryModal: (open: boolean) => void
   typeManagementButtonRef: React.RefObject<HTMLButtonElement | null>
 }
 
@@ -44,6 +46,7 @@ export function CleanerToolbar({
   handleConfirmDeletion,
   handleExportResults,
   setIsReportViewerOpen,
+  setShowHistoryModal,
   typeManagementButtonRef
 }: CleanerToolbarProps): React.JSX.Element {
   return (
@@ -122,6 +125,12 @@ export function CleanerToolbar({
             className="text-xs bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50 flex items-center gap-1.5"
           >
             <Settings2 size={14} /> 类型管理
+          </button>
+          <button
+            onClick={() => setShowHistoryModal(true)}
+            className="text-xs bg-violet-50 border border-violet-200 text-violet-700 px-3 py-1.5 rounded shadow-sm hover:bg-violet-100 flex items-center gap-1.5 font-medium transition-colors"
+          >
+            <History size={14} /> 操作历史
           </button>
           <button
             onClick={() => void handleExportResults()}

@@ -12,6 +12,9 @@ const MaterialTypeManagementDialog = React.lazy(
 const ExecutionReportDialog = React.lazy(() => import('../components/ExecutionReportDialog'))
 const ReportViewerDialog = React.lazy(() => import('../components/ReportViewerDialog'))
 const ReportAnalysisDialog = React.lazy(() => import('../components/ReportAnalysisDialog'))
+const CleanerOperationHistoryModal = React.lazy(
+  () => import('../components/CleanerOperationHistoryModal')
+)
 
 const CleanerPage: React.FC = () => {
   const typeManagementButtonRef = React.useRef<HTMLButtonElement>(null)
@@ -68,6 +71,7 @@ const CleanerPage: React.FC = () => {
 
   const [isReportViewerOpen, setIsReportViewerOpen] = React.useState(false)
   const [isReportAnalysisOpen, setIsReportAnalysisOpen] = React.useState(false)
+  const [showHistoryModal, setShowHistoryModal] = React.useState(false)
 
   return (
     <div className="h-full flex flex-col xl:flex-row gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -97,6 +101,7 @@ const CleanerPage: React.FC = () => {
           handleConfirmDeletion={handleConfirmDeletion}
           handleExportResults={handleExportResults}
           setIsReportViewerOpen={setIsReportViewerOpen}
+          setShowHistoryModal={setShowHistoryModal}
           typeManagementButtonRef={typeManagementButtonRef}
         />
 
@@ -182,6 +187,18 @@ const CleanerPage: React.FC = () => {
           isOpen={isReportAnalysisOpen}
           onClose={() => setIsReportAnalysisOpen(false)}
           isAdmin={isAdmin}
+        />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <CleanerOperationHistoryModal
+          isOpen={showHistoryModal}
+          onClose={() => setShowHistoryModal(false)}
+          user={
+            currentUsername
+              ? { username: currentUsername, userType: isAdmin ? 'Admin' : 'User' }
+              : null
+          }
         />
       </Suspense>
 
