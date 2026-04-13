@@ -64,7 +64,12 @@ export function registerCleanerHistoryHandlers(): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.CLEANER_HISTORY_GET_BATCH_DETAILS,
-    async (_event, batchId: string): Promise<IpcResult<{ executions: CleanerExecutionRecord[]; orders: CleanerOrderRecord[] }>> => {
+    async (
+      _event,
+      batchId: string
+    ): Promise<
+      IpcResult<{ executions: CleanerExecutionRecord[]; orders: CleanerOrderRecord[] }>
+    > => {
       return withErrorHandling(async () => {
         const currentUser = SessionManager.getInstance().getUserInfo()
 
@@ -94,7 +99,12 @@ export function registerCleanerHistoryHandlers(): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.CLEANER_HISTORY_GET_MATERIAL_DETAILS,
-    async (_event, batchId: string, attemptNumber: number, orderNumber: string): Promise<IpcResult<CleanerMaterialRecord[]>> => {
+    async (
+      _event,
+      batchId: string,
+      attemptNumber: number,
+      orderNumber: string
+    ): Promise<IpcResult<CleanerMaterialRecord[]>> => {
       return withErrorHandling(async () => {
         const currentUser = SessionManager.getInstance().getUserInfo()
 

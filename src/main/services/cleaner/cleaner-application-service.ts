@@ -481,8 +481,7 @@ export class CleanerApplicationService {
             : 'success'
 
       // Build error message from execution-level errors (excluding per-order errors)
-      const execErrorMessage =
-        result.errors.length > 0 ? result.errors.join('\n') : undefined
+      const execErrorMessage = result.errors.length > 0 ? result.errors.join('\n') : undefined
 
       // Update execution status
       await historyDao.updateExecutionStatus(

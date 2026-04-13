@@ -26,7 +26,9 @@ export const cleanerApi = {
   },
 
   // Cleaner operation history
-  getHistoryBatches: (options?: GetCleanerBatchesOptions): Promise<IpcResult<CleanerBatchStats[]>> =>
+  getHistoryBatches: (
+    options?: GetCleanerBatchesOptions
+  ): Promise<IpcResult<CleanerBatchStats[]>> =>
     invokeIpc(IPC_CHANNELS.CLEANER_HISTORY_GET_BATCHES, options),
 
   getHistoryBatchDetails: (
@@ -43,7 +45,12 @@ export const cleanerApi = {
     attemptNumber: number,
     orderNumber: string
   ): Promise<IpcResult<CleanerMaterialRecord[]>> =>
-    invokeIpc(IPC_CHANNELS.CLEANER_HISTORY_GET_MATERIAL_DETAILS, batchId, attemptNumber, orderNumber),
+    invokeIpc(
+      IPC_CHANNELS.CLEANER_HISTORY_GET_MATERIAL_DETAILS,
+      batchId,
+      attemptNumber,
+      orderNumber
+    ),
 
   deleteHistoryBatch: (batchId: string): Promise<IpcResult<{ deleted: boolean }>> =>
     invokeIpc(IPC_CHANNELS.CLEANER_HISTORY_DELETE_BATCH, batchId)

@@ -98,10 +98,7 @@ const formatDateTime = (dateStr: string | Date | null | undefined): string => {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
-const formatDuration = (
-  startTime: string | Date | null,
-  endTime: string | Date | null
-) => {
+const formatDuration = (startTime: string | Date | null, endTime: string | Date | null) => {
   if (!startTime || !endTime) return '-'
   const start = typeof startTime === 'string' ? new Date(startTime) : startTime
   const end = typeof endTime === 'string' ? new Date(endTime) : endTime
@@ -130,15 +127,13 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
   const [error, setError] = useState<string | null>(null)
   const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set())
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set())
-  const [batchExecutions, setBatchExecutions] = useState<Map<string, ExecutionRecord[]>>(
-    new Map()
-  )
+  const [batchExecutions, setBatchExecutions] = useState<Map<string, ExecutionRecord[]>>(new Map())
   const [batchOrders, setBatchOrders] = useState<Map<string, CleanerHistoryOrderRecord[]>>(
     new Map()
   )
-  const [orderMaterials, setOrderMaterials] = useState<
-    Map<string, CleanerHistoryMaterialRecord[]>
-  >(new Map())
+  const [orderMaterials, setOrderMaterials] = useState<Map<string, CleanerHistoryMaterialRecord[]>>(
+    new Map()
+  )
   const [selectedAttempt, setSelectedAttempt] = useState<Map<string, number>>(new Map())
   const [deleting, setDeleting] = useState<Set<string>>(new Set())
   const [allUsers, setAllUsers] = useState<string[]>([])
@@ -545,9 +540,7 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
                         {/* Execution records */}
                         {executions.length > 0 && (
                           <div className="px-4 py-3 bg-gray-50/50 border-b border-gray-100">
-                            <div className="text-xs font-medium text-gray-500 mb-2">
-                              执行记录
-                            </div>
+                            <div className="text-xs font-medium text-gray-500 mb-2">执行记录</div>
                             {executions.length > 1 && (
                               <div className="flex gap-1 mb-2">
                                 {executions.map((exec) => (
@@ -659,153 +652,153 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
                                   const orderKey = `${batch.batchId}:${currentAttempt ?? order.attemptNumber}:${order.orderNumber}`
                                   const isOrderExpanded = expandedOrders.has(orderKey)
                                   const materials = orderMaterials.get(orderKey) || []
-                                  const isLoadingMaterials =
-                                    loadingMaterials.has(orderKey)
+                                  const isLoadingMaterials = loadingMaterials.has(orderKey)
 
                                   return (
-                                <React.Fragment key={orderKey}>
-                                  <tr
-                                    className="hover:bg-gray-50 cursor-pointer"
-                                    onClick={() =>
-                                      toggleOrderExpansion(
-                                        batch.batchId,
-                                        currentAttempt ?? order.attemptNumber,
-                                        order.orderNumber
-                                      )
-                                    }
-                                  >
-                                    <td className="px-4 py-2">
-                                      {isOrderExpanded ? (
-                                        <ChevronDown size={14} className="text-gray-400" />
-                                      ) : (
-                                        <ChevronRight size={14} className="text-gray-400" />
-                                      )}
-                                    </td>
-                                    <td className="px-4 py-2 text-gray-900 font-mono text-xs">
-                                      {order.orderNumber}
-                                    </td>
-                                    <td className="px-4 py-2">
-                                      <span
-                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-                                          statusStyles[order.status] || statusStyles.pending
-                                        }`}
+                                    <React.Fragment key={orderKey}>
+                                      <tr
+                                        className="hover:bg-gray-50 cursor-pointer"
+                                        onClick={() =>
+                                          toggleOrderExpansion(
+                                            batch.batchId,
+                                            currentAttempt ?? order.attemptNumber,
+                                            order.orderNumber
+                                          )
+                                        }
                                       >
-                                        {statusIcons[order.status]}
-                                        {statusLabels[order.status] || order.status}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-2 text-green-600">
-                                      {order.materialsDeleted}
-                                    </td>
-                                    <td className="px-4 py-2 text-gray-500">
-                                      {order.materialsSkipped}
-                                    </td>
-                                    <td className="px-4 py-2 text-red-600">
-                                      {order.materialsFailed || '-'}
-                                    </td>
-                                    <td className="px-4 py-2 text-amber-600">
-                                      {order.uncertainDeletions || '-'}
-                                    </td>
-                                    <td className="px-4 py-2 text-red-600 text-xs max-w-xs truncate">
-                                      {order.errorMessage || '-'}
-                                    </td>
-                                  </tr>
+                                        <td className="px-4 py-2">
+                                          {isOrderExpanded ? (
+                                            <ChevronDown size={14} className="text-gray-400" />
+                                          ) : (
+                                            <ChevronRight size={14} className="text-gray-400" />
+                                          )}
+                                        </td>
+                                        <td className="px-4 py-2 text-gray-900 font-mono text-xs">
+                                          {order.orderNumber}
+                                        </td>
+                                        <td className="px-4 py-2">
+                                          <span
+                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                                              statusStyles[order.status] || statusStyles.pending
+                                            }`}
+                                          >
+                                            {statusIcons[order.status]}
+                                            {statusLabels[order.status] || order.status}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-2 text-green-600">
+                                          {order.materialsDeleted}
+                                        </td>
+                                        <td className="px-4 py-2 text-gray-500">
+                                          {order.materialsSkipped}
+                                        </td>
+                                        <td className="px-4 py-2 text-red-600">
+                                          {order.materialsFailed || '-'}
+                                        </td>
+                                        <td className="px-4 py-2 text-amber-600">
+                                          {order.uncertainDeletions || '-'}
+                                        </td>
+                                        <td className="px-4 py-2 text-red-600 text-xs max-w-xs truncate">
+                                          {order.errorMessage || '-'}
+                                        </td>
+                                      </tr>
 
-                                  {/* Material details */}
-                                  {isOrderExpanded && (
-                                    <tr>
-                                      <td colSpan={8} className="bg-gray-50/50 px-8 py-3">
-                                        {isLoadingMaterials ? (
-                                          <div className="text-xs text-gray-500">
-                                            加载物料详情...
-                                          </div>
-                                        ) : materials.length > 0 ? (
-                                          <table className="w-full text-xs">
-                                            <thead>
-                                              <tr className="text-gray-500">
-                                                <th className="px-3 py-1.5 text-left font-medium">
-                                                  物料编码
-                                                </th>
-                                                <th className="px-3 py-1.5 text-left font-medium">
-                                                  物料名称
-                                                </th>
-                                                <th className="px-3 py-1.5 text-left font-medium">
-                                                  行号
-                                                </th>
-                                                <th className="px-3 py-1.5 text-left font-medium">
-                                                  结果
-                                                </th>
-                                                <th className="px-3 py-1.5 text-left font-medium">
-                                                  原因
-                                                </th>
-                                                <th className="px-3 py-1.5 text-left font-medium">
-                                                  尝试次数
-                                                </th>
-                                              </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                              {materials.map((mat, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-50">
-                                                  <td className="px-3 py-1.5 font-mono text-gray-700">
-                                                    {mat.materialCode}
-                                                  </td>
-                                                  <td className="px-3 py-1.5 text-gray-700">
-                                                    {mat.materialName}
-                                                  </td>
-                                                  <td className="px-3 py-1.5 text-gray-600">
-                                                    {mat.rowNumber}
-                                                  </td>
-                                                  <td className="px-3 py-1.5">
-                                                    <span
-                                                      className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                                                        mat.result === 'deleted'
-                                                          ? 'bg-green-100 text-green-700'
-                                                          : mat.result === 'skipped'
-                                                            ? 'bg-gray-100 text-gray-700'
-                                                            : mat.result === 'failed'
-                                                              ? 'bg-red-100 text-red-700'
-                                                              : mat.result === 'uncertain'
-                                                                ? 'bg-amber-100 text-amber-700'
-                                                                : 'bg-gray-100 text-gray-700'
-                                                      }`}
-                                                    >
-                                                      {mat.result === 'deleted'
-                                                        ? '已删除'
-                                                        : mat.result === 'skipped'
-                                                          ? '已跳过'
-                                                          : mat.result === 'failed'
-                                                            ? '失败'
-                                                            : mat.result === 'uncertain'
-                                                              ? '不确定'
-                                                              : mat.result}
-                                                    </span>
-                                                  </td>
-                                                  <td className="px-3 py-1.5 text-gray-600 max-w-xs truncate">
-                                                    {mat.reason || '-'}
-                                                  </td>
-                                                  <td className="px-3 py-1.5 text-gray-600">
-                                                    {mat.attemptCount > 1 ? (
-                                                      <span className="text-amber-600">
-                                                        {mat.attemptCount}
-                                                      </span>
-                                                    ) : (
-                                                      '1'
-                                                    )}
-                                                  </td>
-                                                </tr>
-                                              ))}
-                                            </tbody>
-                                          </table>
-                                        ) : (
-                                          <div className="text-xs text-gray-500">
-                                            暂无物料详情
-                                          </div>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  )}
-                                </React.Fragment>
-                              )})}
+                                      {/* Material details */}
+                                      {isOrderExpanded && (
+                                        <tr>
+                                          <td colSpan={8} className="bg-gray-50/50 px-8 py-3">
+                                            {isLoadingMaterials ? (
+                                              <div className="text-xs text-gray-500">
+                                                加载物料详情...
+                                              </div>
+                                            ) : materials.length > 0 ? (
+                                              <table className="w-full text-xs">
+                                                <thead>
+                                                  <tr className="text-gray-500">
+                                                    <th className="px-3 py-1.5 text-left font-medium">
+                                                      物料编码
+                                                    </th>
+                                                    <th className="px-3 py-1.5 text-left font-medium">
+                                                      物料名称
+                                                    </th>
+                                                    <th className="px-3 py-1.5 text-left font-medium">
+                                                      行号
+                                                    </th>
+                                                    <th className="px-3 py-1.5 text-left font-medium">
+                                                      结果
+                                                    </th>
+                                                    <th className="px-3 py-1.5 text-left font-medium">
+                                                      原因
+                                                    </th>
+                                                    <th className="px-3 py-1.5 text-left font-medium">
+                                                      尝试次数
+                                                    </th>
+                                                  </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                  {materials.map((mat, idx) => (
+                                                    <tr key={idx} className="hover:bg-gray-50">
+                                                      <td className="px-3 py-1.5 font-mono text-gray-700">
+                                                        {mat.materialCode}
+                                                      </td>
+                                                      <td className="px-3 py-1.5 text-gray-700">
+                                                        {mat.materialName}
+                                                      </td>
+                                                      <td className="px-3 py-1.5 text-gray-600">
+                                                        {mat.rowNumber}
+                                                      </td>
+                                                      <td className="px-3 py-1.5">
+                                                        <span
+                                                          className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                                            mat.result === 'deleted'
+                                                              ? 'bg-green-100 text-green-700'
+                                                              : mat.result === 'skipped'
+                                                                ? 'bg-gray-100 text-gray-700'
+                                                                : mat.result === 'failed'
+                                                                  ? 'bg-red-100 text-red-700'
+                                                                  : mat.result === 'uncertain'
+                                                                    ? 'bg-amber-100 text-amber-700'
+                                                                    : 'bg-gray-100 text-gray-700'
+                                                          }`}
+                                                        >
+                                                          {mat.result === 'deleted'
+                                                            ? '已删除'
+                                                            : mat.result === 'skipped'
+                                                              ? '已跳过'
+                                                              : mat.result === 'failed'
+                                                                ? '失败'
+                                                                : mat.result === 'uncertain'
+                                                                  ? '不确定'
+                                                                  : mat.result}
+                                                        </span>
+                                                      </td>
+                                                      <td className="px-3 py-1.5 text-gray-600 max-w-xs truncate">
+                                                        {mat.reason || '-'}
+                                                      </td>
+                                                      <td className="px-3 py-1.5 text-gray-600">
+                                                        {mat.attemptCount > 1 ? (
+                                                          <span className="text-amber-600">
+                                                            {mat.attemptCount}
+                                                          </span>
+                                                        ) : (
+                                                          '1'
+                                                        )}
+                                                      </td>
+                                                    </tr>
+                                                  ))}
+                                                </tbody>
+                                              </table>
+                                            ) : (
+                                              <div className="text-xs text-gray-500">
+                                                暂无物料详情
+                                              </div>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </React.Fragment>
+                                  )
+                                })}
                               </tbody>
                             </table>
                           </div>

@@ -752,8 +752,15 @@ export class CleanerOperationHistoryDAO {
         attemptNumber: row.AttemptNumber as number,
         userId: row.UserId as number,
         username: row.Username as string,
-        operationTime: row.OperationTime instanceof Date ? row.OperationTime : new Date(row.OperationTime as string),
-        endTime: row.EndTime ? (row.EndTime instanceof Date ? row.EndTime : new Date(row.EndTime as string)) : null,
+        operationTime:
+          row.OperationTime instanceof Date
+            ? row.OperationTime
+            : new Date(row.OperationTime as string),
+        endTime: row.EndTime
+          ? row.EndTime instanceof Date
+            ? row.EndTime
+            : new Date(row.EndTime as string)
+          : null,
         status: row.Status as string,
         isDryRun: !!(row.IsDryRun as number),
         totalOrders: row.TotalOrders as number,
