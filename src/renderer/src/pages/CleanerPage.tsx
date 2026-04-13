@@ -10,8 +10,6 @@ const MaterialTypeManagementDialog = React.lazy(
   () => import('../components/MaterialTypeManagementDialog')
 )
 const ExecutionReportDialog = React.lazy(() => import('../components/ExecutionReportDialog'))
-const ReportViewerDialog = React.lazy(() => import('../components/ReportViewerDialog'))
-const ReportAnalysisDialog = React.lazy(() => import('../components/ReportAnalysisDialog'))
 const CleanerOperationHistoryModal = React.lazy(
   () => import('../components/CleanerOperationHistoryModal')
 )
@@ -69,8 +67,6 @@ const CleanerPage: React.FC = () => {
     confirmDialog
   } = useCleaner()
 
-  const [isReportViewerOpen, setIsReportViewerOpen] = React.useState(false)
-  const [isReportAnalysisOpen, setIsReportAnalysisOpen] = React.useState(false)
   const [showHistoryModal, setShowHistoryModal] = React.useState(false)
 
   return (
@@ -100,7 +96,6 @@ const CleanerPage: React.FC = () => {
           handleValidation={handleValidation}
           handleConfirmDeletion={handleConfirmDeletion}
           handleExportResults={handleExportResults}
-          setIsReportViewerOpen={setIsReportViewerOpen}
           setShowHistoryModal={setShowHistoryModal}
           typeManagementButtonRef={typeManagementButtonRef}
         />
@@ -169,24 +164,6 @@ const CleanerPage: React.FC = () => {
           successfulRetries={reportData?.successfulRetries}
           materialsFailed={reportData?.materialsFailed}
           uncertainDeletions={reportData?.uncertainDeletions}
-        />
-      </Suspense>
-
-      <Suspense fallback={null}>
-        <ReportViewerDialog
-          isOpen={isReportViewerOpen}
-          onClose={() => setIsReportViewerOpen(false)}
-          isAdmin={isAdmin}
-          currentUsername={currentUsername}
-          onOpenAnalysis={() => setIsReportAnalysisOpen(true)}
-        />
-      </Suspense>
-
-      <Suspense fallback={null}>
-        <ReportAnalysisDialog
-          isOpen={isReportAnalysisOpen}
-          onClose={() => setIsReportAnalysisOpen(false)}
-          isAdmin={isAdmin}
         />
       </Suspense>
 

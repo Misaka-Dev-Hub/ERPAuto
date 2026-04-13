@@ -4,7 +4,6 @@ import {
   Eye,
   EyeOff,
   FileSpreadsheet,
-  FileText,
   HardDrive,
   History,
   Search,
@@ -27,7 +26,6 @@ interface CleanerToolbarProps {
   handleValidation: () => Promise<void>
   handleConfirmDeletion: () => Promise<void>
   handleExportResults: () => Promise<void>
-  setIsReportViewerOpen: (open: boolean) => void
   setShowHistoryModal: (open: boolean) => void
   typeManagementButtonRef: React.RefObject<HTMLButtonElement | null>
 }
@@ -45,7 +43,6 @@ export function CleanerToolbar({
   handleValidation,
   handleConfirmDeletion,
   handleExportResults,
-  setIsReportViewerOpen,
   setShowHistoryModal,
   typeManagementButtonRef
 }: CleanerToolbarProps): React.JSX.Element {
@@ -138,12 +135,6 @@ export function CleanerToolbar({
             className="text-xs bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded shadow-sm hover:bg-blue-100 flex items-center gap-1.5 font-medium disabled:opacity-50"
           >
             <FileSpreadsheet size={14} /> {isExporting ? '导出中...' : '导出结果'}
-          </button>
-          <button
-            onClick={() => setIsReportViewerOpen(true)}
-            className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1.5 rounded shadow-sm hover:bg-emerald-100 flex items-center gap-1.5 font-medium transition-colors"
-          >
-            <FileText size={14} /> 查看报告
           </button>
         </div>
       </div>
