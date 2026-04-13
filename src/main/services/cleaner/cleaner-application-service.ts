@@ -1,5 +1,4 @@
 import type { WebContents } from 'electron'
-import { app } from 'electron'
 import type { IDatabaseService } from '../../types/database.types'
 import { ErpAuthService } from '../erp/erp-auth'
 import { CleanerService } from '../erp/cleaner'
@@ -9,8 +8,6 @@ import { SqlServerService as SqlServerServiceImpl } from '../database/sql-server
 import { PostgreSqlService as PostgreSqlServiceImpl } from '../database/postgresql'
 import { ConfigManager } from '../config/config-manager'
 import { ResultExporter } from '../excel/result-exporter'
-import { CleanerReportGenerator } from '../report/cleaner-report-generator'
-import { RustfsService } from '../rustfs'
 import { SessionManager } from '../user/session-manager'
 import { UserErpConfigService } from '../user/user-erp-config-service'
 import { createLogger } from '../logger'
@@ -18,6 +15,7 @@ import { logAuditWithCurrentUser } from '../logger/audit-logger'
 import { AuditAction, AuditStatus } from '../../types/audit.types'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 import { DatabaseQueryError, ErpConnectionError, ValidationError } from '../../types/errors'
+import { CleanerOperationHistoryDAO } from '../database/cleaner-operation-history-dao'
 import type {
   CleanerInput,
   CleanerProgress,
@@ -25,25 +23,18 @@ import type {
   ExportResultItem,
   ExportResultResponse
 } from '../../types/cleaner.types'
+import type { InsertMaterialDetailInput } from '../../types/cleaner-history.types'
 
 const log = createLogger('CleanerApplicationService')
 
-function generateExecutionId(): string {
-  const now = new Date()
-  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
-  const time = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-  let suffix = ''
-  for (let i = 0; i < 4; i++) {
-    suffix += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return `CLN-${date}${time}-${suffix}`
-}
-
 export class CleanerApplicationService {
-  async runCleaner(eventSender: WebContents, input: CleanerInput): Promise<CleanerResult> {
-    const executionId = generateExecutionId()
-    const startTime = Date.now()
+  async runCleaner(
+    eventSender: WebContents,
+    input: CleanerInput,
+    batchId: string,
+    historyDao: CleanerOperationHistoryDAO,
+    appVersion: string
+  ): Promise<CleanerResult> {
     let authService: ErpAuthService | null = null
     let dbService: IDatabaseService | null = null
 
@@ -90,6 +81,25 @@ export class CleanerApplicationService {
 
       log.info('Resolved order numbers', { count: validOrderNumbers.length })
 
+      // Insert execution record and order records into database
+      const currentUser = SessionManager.getInstance().getUserInfo()
+      if (currentUser) {
+        await historyDao.insertExecution({
+          batchId,
+          attemptNumber: 1,
+          userId: currentUser.id,
+          username: currentUser.username,
+          isDryRun: input.dryRun ?? false,
+          totalOrders: validOrderNumbers.length,
+          appVersion
+        })
+        await historyDao.insertOrderRecords(
+          batchId,
+          1,
+          validOrderNumbers.map((order) => ({ orderNumber: order }))
+        )
+      }
+
       authService = new ErpAuthService({
         url: erpConfig.url,
         username: erpConfig.username,
@@ -127,7 +137,7 @@ export class CleanerApplicationService {
       }
 
       log.info('Starting cleaning', {
-        executionId,
+        batchId,
         orderCount: validOrderNumbers.length,
         queryBatchSize: input.queryBatchSize ?? 100,
         processConcurrency: input.processConcurrency ?? 1
@@ -138,7 +148,10 @@ export class CleanerApplicationService {
 
       // Outer retry: re-login and re-run all orders on fatal crash
       if (result.crashed) {
-        log.warn('检测到流程级崩溃，准备外层重试', { executionId })
+        log.warn('检测到流程级崩溃，准备外层重试', { batchId })
+
+        // Save attempt 1 result as crashed
+        await this.saveAttemptToDatabase(historyDao, batchId, 1, result)
 
         this.sendProgress(eventSender, '流程崩溃，正在重新登录并重试...', 0, {
           phase: 'retry',
@@ -164,30 +177,57 @@ export class CleanerApplicationService {
 
         try {
           await authService.login()
-          log.info('Outer retry: re-login successful', { executionId })
+          log.info('Outer retry: re-login successful', { batchId })
         } catch (loginError) {
           log.error('Outer retry: re-login failed', {
-            executionId,
+            batchId,
             error: loginError instanceof Error ? loginError.message : String(loginError)
           })
           // Return the original crash result if re-login fails
-          result.errors.push(`外层重试登录失败: ${loginError instanceof Error ? loginError.message : String(loginError)}`)
+          result.errors.push(
+            `外层重试登录失败: ${loginError instanceof Error ? loginError.message : String(loginError)}`
+          )
           if (warnings.length > 0) {
             result.errors = [...warnings, ...result.errors]
           }
           await this.recordCleanupAudit(validOrderNumbers.length, input, result)
-          await this.generateAndUploadReport(input, result, startTime, executionId)
+          // Attempt 1 already saved as crashed above
           return result
+        }
+
+        // Insert execution and order records for attempt 2
+        if (currentUser) {
+          await historyDao.insertExecution({
+            batchId,
+            attemptNumber: 2,
+            userId: currentUser.id,
+            username: currentUser.username,
+            isDryRun: input.dryRun ?? false,
+            totalOrders: validOrderNumbers.length,
+            appVersion
+          })
+          await historyDao.insertOrderRecords(
+            batchId,
+            2,
+            validOrderNumbers.map((order) => ({ orderNumber: order }))
+          )
         }
 
         cleaner = new CleanerService(authService)
         result = await cleaner.clean(modifiedInput)
+
+        // Save attempt 2 result
+        await this.saveAttemptToDatabase(historyDao, batchId, 2, result)
+
         log.info('Outer retry completed', {
-          executionId,
+          batchId,
           processedCount: result.ordersProcessed,
           errorCount: result.errors.length,
           crashed: result.crashed
         })
+      } else {
+        // No crash — save attempt 1 result
+        await this.saveAttemptToDatabase(historyDao, batchId, 1, result)
       }
 
       if (warnings.length > 0) {
@@ -203,13 +243,12 @@ export class CleanerApplicationService {
       })
 
       log.info('Cleaning completed', {
-        executionId,
+        batchId,
         processedCount: result.ordersProcessed,
         errorCount: result.errors.length
       })
 
       await this.recordCleanupAudit(validOrderNumbers.length, input, result)
-      await this.generateAndUploadReport(input, result, startTime, executionId)
 
       return result
     } finally {
@@ -367,72 +406,111 @@ export class CleanerApplicationService {
     })
   }
 
-  private async generateAndUploadReport(
-    input: CleanerInput,
-    result: CleanerResult,
-    startTime: number,
-    executionId: string
+  /**
+   * Save attempt results to database: update order statuses, insert material details,
+   * and update execution status.
+   */
+  private async saveAttemptToDatabase(
+    historyDao: CleanerOperationHistoryDAO,
+    batchId: string,
+    attemptNumber: number,
+    result: CleanerResult
   ): Promise<void> {
     try {
-      const endTime = Date.now()
-      const currentUser = SessionManager.getInstance().getUserInfo()
-      const username = currentUser?.username ?? 'unknown'
-
-      const reportGenerator = new CleanerReportGenerator()
-      const reportPath = await reportGenerator.generateReport(result, {
-        dryRun: input.dryRun ?? false,
-        username,
-        startTime,
-        endTime,
-        executionId,
-        appVersion: app.getVersion()
-      })
-      log.info('Report generated', { path: reportPath })
-
-      const configManager = ConfigManager.getInstance()
-      const config = configManager.getConfig()
-
-      if (!config.rustfs?.enabled || !config.rustfs.endpoint) {
-        log.debug('RustFS is not enabled, skipping upload')
-        return
-      }
-
-      try {
-        const rustfs = new RustfsService({ config: config.rustfs })
-        const reportFileName = reportPath.split(/[\\/]/).pop() || 'report.md'
-        const storageKey = rustfs.generateReportKey(reportFileName, username)
-
-        log.info('Uploading report to RustFS', {
-          localPath: reportPath,
-          storageKey
-        })
-
-        const uploadResult = await rustfs.uploadFile(
-          reportPath,
-          storageKey,
-          'text/markdown; charset=utf-8'
+      // Update order statuses and insert material details
+      for (const detail of result.details) {
+        await historyDao.updateOrderStatus(
+          batchId,
+          attemptNumber,
+          detail.orderNumber,
+          detail.errors.length > 0 ? 'failed' : 'success',
+          detail.materialsDeleted,
+          detail.materialsSkipped,
+          detail.materialsFailed,
+          detail.uncertainDeletions,
+          detail.retryCount,
+          detail.retrySuccess ?? false,
+          detail.errors.length > 0 ? detail.errors.join('\n') : undefined
         )
 
-        if (uploadResult.success) {
-          log.info('Report uploaded to RustFS successfully', {
-            key: storageKey,
-            etag: uploadResult.etag
-          })
-        } else {
-          log.warn('Failed to upload report to RustFS', {
-            error: uploadResult.error,
-            key: storageKey
+        // Insert material details for skipped and failed materials
+        const materialDetails: InsertMaterialDetailInput[] = []
+
+        for (const skipped of detail.skippedMaterials) {
+          materialDetails.push({
+            orderNumber: detail.orderNumber,
+            materialCode: skipped.materialCode,
+            materialName: skipped.materialName,
+            rowNumber: skipped.rowNumber,
+            result: 'skipped',
+            reason: skipped.reason,
+            attemptCount: 0,
+            finalErrorCategory: null
           })
         }
-      } catch (rustfsError) {
-        log.error('RustFS upload failed', {
-          error: rustfsError instanceof Error ? rustfsError.message : String(rustfsError)
-        })
+
+        for (const failed of detail.failedMaterials) {
+          materialDetails.push({
+            orderNumber: detail.orderNumber,
+            materialCode: failed.materialCode,
+            materialName: failed.materialName,
+            rowNumber: failed.rowNumber,
+            result: failed.finalOutcome,
+            reason:
+              failed.attempts
+                .map((a) => a.errorMessage)
+                .filter(Boolean)
+                .join('; ') || null,
+            attemptCount: failed.attempts.length,
+            finalErrorCategory: failed.finalErrorCategory ?? null
+          })
+        }
+
+        if (materialDetails.length > 0) {
+          await historyDao.insertMaterialDetails(batchId, attemptNumber, materialDetails)
+        }
       }
-    } catch (reportError) {
-      log.warn('Failed to generate report', {
-        error: reportError instanceof Error ? reportError.message : String(reportError)
+
+      // Determine execution status
+      const execStatus = result.crashed
+        ? 'crashed'
+        : result.errors.length > 0 && result.materialsDeleted > 0
+          ? 'partial'
+          : result.errors.length > 0
+            ? 'failed'
+            : 'success'
+
+      // Build error message from execution-level errors (excluding per-order errors)
+      const execErrorMessage =
+        result.errors.length > 0 ? result.errors.join('\n') : undefined
+
+      // Update execution status
+      await historyDao.updateExecutionStatus(
+        batchId,
+        attemptNumber,
+        execStatus,
+        result.ordersProcessed,
+        result.materialsDeleted,
+        result.materialsSkipped,
+        result.materialsFailed,
+        result.uncertainDeletions,
+        new Date(),
+        execErrorMessage
+      )
+
+      log.info('Attempt results saved to database', {
+        batchId,
+        attemptNumber,
+        execStatus,
+        ordersProcessed: result.ordersProcessed
       })
+    } catch (dbError) {
+      log.error('Failed to save attempt results to database', {
+        batchId,
+        attemptNumber,
+        error: dbError instanceof Error ? dbError.message : String(dbError)
+      })
+      // Don't throw — database save failure should not affect the main result
     }
   }
 }
