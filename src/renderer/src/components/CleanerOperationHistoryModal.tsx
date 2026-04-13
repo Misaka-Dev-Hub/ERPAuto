@@ -631,6 +631,9 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
                                     状态
                                   </th>
                                   <th className="px-4 py-2 text-left font-medium text-gray-600">
+                                    重试
+                                  </th>
+                                  <th className="px-4 py-2 text-left font-medium text-gray-600">
                                     已删除
                                   </th>
                                   <th className="px-4 py-2 text-left font-medium text-gray-600">
@@ -685,6 +688,30 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
                                             {statusIcons[order.status]}
                                             {statusLabels[order.status] || order.status}
                                           </span>
+                                        </td>
+                                        <td className="px-4 py-2">
+                                          {order.retryCount > 0 ? (
+                                            <div className="flex flex-col gap-1">
+                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
+                                                <RefreshCw size={10} />
+                                                重试{order.retryCount}次
+                                              </span>
+                                              {order.retrySuccess && (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                                                  <CheckCircle size={10} />
+                                                  成功
+                                                </span>
+                                              )}
+                                              {!order.retrySuccess && (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
+                                                  <XCircle size={10} />
+                                                  失败
+                                                </span>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <span className="text-gray-400 text-xs">-</span>
+                                          )}
                                         </td>
                                         <td className="px-4 py-2 text-green-600">
                                           {order.materialsDeleted}
