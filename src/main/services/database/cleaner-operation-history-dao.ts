@@ -610,7 +610,7 @@ export class CleanerOperationHistoryDAO {
           MAX(CASE WHEN e.AttemptNumber = latest.max_attempt THEN e.OrdersProcessed ELSE 0 END) as OrdersProcessed,
           MAX(CASE WHEN e.AttemptNumber = latest.max_attempt THEN e.TotalMaterialsDeleted ELSE 0 END) as TotalMaterialsDeleted,
           MAX(CASE WHEN e.AttemptNumber = latest.max_attempt THEN e.TotalMaterialsFailed ELSE 0 END) as TotalMaterialsFailed,
-          MAX(e.IsDryRun) as IsDryRun,
+          MAX(CAST(e.IsDryRun AS INT)) as IsDryRun,
           ISNULL(SUM(CASE WHEN o.Status = 'success' THEN 1 ELSE 0 END), 0) as SuccessCount,
           ISNULL(SUM(CASE WHEN o.Status = 'failed' THEN 1 ELSE 0 END), 0) as FailedCount
         FROM ${execTable} e
