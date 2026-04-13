@@ -11,6 +11,12 @@ import type {
   ExportResultItem,
   ExportResultResponse
 } from './cleaner.types'
+import type {
+  CleanerBatchStats,
+  CleanerExecutionRecord,
+  CleanerOrderRecord,
+  CleanerMaterialRecord
+} from './cleaner-history.types'
 import type { IpcResult } from './ipc.types'
 
 /**
@@ -113,6 +119,45 @@ export interface CleanerAPI {
    * @returns Unsubscribe function
    */
   onProgress: (callback: (data: CleanerProgress) => void) => () => void
+
+  /**
+   * Get cleaner operation history batches
+   * @param options - Query options (limit, offset, usernames)
+   */
+  getHistoryBatches: (options?: {
+    limit?: number
+    offset?: number
+    usernames?: string[]
+  }) => Promise<IpcResult<CleanerBatchStats[]>>
+
+  /**
+   * Get detailed execution and order records for a specific batch
+   * @param batchId - Batch ID
+   */
+  getHistoryBatchDetails: (batchId: string) => Promise<
+    IpcResult<{
+      executions: CleanerExecutionRecord[]
+      orders: CleanerOrderRecord[]
+    }>
+  >
+
+  /**
+   * Get material-level details for a specific order in a batch attempt
+   * @param batchId - Batch ID
+   * @param attemptNumber - Attempt number
+   * @param orderNumber - Order number
+   */
+  getHistoryMaterialDetails: (
+    batchId: string,
+    attemptNumber: number,
+    orderNumber: string
+  ) => Promise<IpcResult<CleanerMaterialRecord[]>>
+
+  /**
+   * Delete a cleaner history batch
+   * @param batchId - Batch ID
+   */
+  deleteHistoryBatch: (batchId: string) => Promise<IpcResult<{ deleted: boolean }>>
 }
 
 /**
