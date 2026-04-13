@@ -1,4 +1,5 @@
 import type { WebContents } from 'electron'
+import { app } from 'electron'
 import type { IDatabaseService } from '../../types/database.types'
 import { ErpAuthService } from '../erp/erp-auth'
 import { CleanerService } from '../erp/cleaner'
@@ -27,8 +28,21 @@ import type {
 
 const log = createLogger('CleanerApplicationService')
 
+function generateExecutionId(): string {
+  const now = new Date()
+  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+  const time = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  let suffix = ''
+  for (let i = 0; i < 4; i++) {
+    suffix += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return `CLN-${date}${time}-${suffix}`
+}
+
 export class CleanerApplicationService {
   async runCleaner(eventSender: WebContents, input: CleanerInput): Promise<CleanerResult> {
+    const executionId = generateExecutionId()
     const startTime = Date.now()
     let authService: ErpAuthService | null = null
     let dbService: IDatabaseService | null = null
@@ -104,7 +118,6 @@ export class CleanerApplicationService {
         totalMaterialsInOrder: 0
       })
 
-      const cleaner = new CleanerService(authService)
       const modifiedInput: CleanerInput = {
         ...input,
         orderNumbers: validOrderNumbers,
@@ -114,12 +127,68 @@ export class CleanerApplicationService {
       }
 
       log.info('Starting cleaning', {
+        executionId,
         orderCount: validOrderNumbers.length,
         queryBatchSize: input.queryBatchSize ?? 100,
         processConcurrency: input.processConcurrency ?? 1
       })
 
-      const result = await cleaner.clean(modifiedInput)
+      let cleaner = new CleanerService(authService)
+      let result = await cleaner.clean(modifiedInput)
+
+      // Outer retry: re-login and re-run all orders on fatal crash
+      if (result.crashed) {
+        log.warn('检测到流程级崩溃，准备外层重试', { executionId })
+
+        this.sendProgress(eventSender, '流程崩溃，正在重新登录并重试...', 0, {
+          phase: 'retry',
+          currentOrderIndex: 0,
+          totalOrders,
+          currentMaterialIndex: 0,
+          totalMaterialsInOrder: 0
+        })
+
+        try {
+          await authService.close()
+        } catch {
+          // Browser may already be dead, ignore close errors
+        }
+        authService = null
+
+        authService = new ErpAuthService({
+          url: erpConfig.url,
+          username: erpConfig.username,
+          password: erpConfig.password,
+          headless: input.headless ?? true
+        })
+
+        try {
+          await authService.login()
+          log.info('Outer retry: re-login successful', { executionId })
+        } catch (loginError) {
+          log.error('Outer retry: re-login failed', {
+            executionId,
+            error: loginError instanceof Error ? loginError.message : String(loginError)
+          })
+          // Return the original crash result if re-login fails
+          result.errors.push(`外层重试登录失败: ${loginError instanceof Error ? loginError.message : String(loginError)}`)
+          if (warnings.length > 0) {
+            result.errors = [...warnings, ...result.errors]
+          }
+          await this.recordCleanupAudit(validOrderNumbers.length, input, result)
+          await this.generateAndUploadReport(input, result, startTime, executionId)
+          return result
+        }
+
+        cleaner = new CleanerService(authService)
+        result = await cleaner.clean(modifiedInput)
+        log.info('Outer retry completed', {
+          executionId,
+          processedCount: result.ordersProcessed,
+          errorCount: result.errors.length,
+          crashed: result.crashed
+        })
+      }
 
       if (warnings.length > 0) {
         result.errors = [...warnings, ...result.errors]
@@ -134,12 +203,13 @@ export class CleanerApplicationService {
       })
 
       log.info('Cleaning completed', {
+        executionId,
         processedCount: result.ordersProcessed,
         errorCount: result.errors.length
       })
 
       await this.recordCleanupAudit(validOrderNumbers.length, input, result)
-      await this.generateAndUploadReport(input, result, startTime)
+      await this.generateAndUploadReport(input, result, startTime, executionId)
 
       return result
     } finally {
@@ -300,7 +370,8 @@ export class CleanerApplicationService {
   private async generateAndUploadReport(
     input: CleanerInput,
     result: CleanerResult,
-    startTime: number
+    startTime: number,
+    executionId: string
   ): Promise<void> {
     try {
       const endTime = Date.now()
@@ -312,7 +383,9 @@ export class CleanerApplicationService {
         dryRun: input.dryRun ?? false,
         username,
         startTime,
-        endTime
+        endTime,
+        executionId,
+        appVersion: app.getVersion()
       })
       log.info('Report generated', { path: reportPath })
 

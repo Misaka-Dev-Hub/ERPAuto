@@ -35,7 +35,7 @@ export interface CleanerProgress {
   currentMaterialIndex: number
   totalMaterialsInOrder: number
   currentOrderNumber?: string
-  phase: 'login' | 'processing' | 'complete'
+  phase: 'login' | 'processing' | 'complete' | 'retry'
 }
 
 export interface CleanerReportData {
@@ -47,6 +47,7 @@ export interface CleanerReportData {
   successfulRetries?: number
   materialsFailed?: number
   uncertainDeletions?: number
+  crashed?: boolean
 }
 
 export interface CleanerInitializationResult {

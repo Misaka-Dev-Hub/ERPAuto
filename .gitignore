@@ -45,3 +45,7 @@ nul
 
 # TypeScript incremental compilation cache
 *.tsbuildinfo
+
+# temporary files
+tmp/
+temp/

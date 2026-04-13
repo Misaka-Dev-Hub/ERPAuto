@@ -384,6 +384,7 @@ export class CleanerService {
         ...(popupPage ? await capturePageContext(popupPage, undefined, 'cleaner.outerCatch') : {})
       })
       result.errors.push(`Clean failed: ${message}`)
+      result.crashed = true
     } finally {
       if (popupPage) {
         try {

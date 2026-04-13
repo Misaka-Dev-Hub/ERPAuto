@@ -16,6 +16,8 @@ export interface ReportOptions {
   username: string
   startTime: number
   endTime: number
+  executionId: string
+  appVersion: string
 }
 
 interface OrderStats {
@@ -41,7 +43,7 @@ export class CleanerReportGenerator {
   }
 
   async generateReport(result: CleanerResult, options: ReportOptions): Promise<string> {
-    const filePath = this.getReportFilePath()
+    const filePath = this.getReportFilePath(options.executionId)
     log.info('Generating cleaner report', { path: filePath })
 
     const stats = this.calculateOrderStats(result)
@@ -53,10 +55,8 @@ export class CleanerReportGenerator {
     return filePath
   }
 
-  private getReportFilePath(): string {
-    const now = new Date()
-    const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5).replace('T', '-')
-    const fileName = `cleaner-report-${timestamp}.md`
+  private getReportFilePath(executionId: string): string {
+    const fileName = `cleaner-report-${executionId}.md`
     return path.join(this.reportDir, fileName)
   }
 
@@ -87,6 +87,8 @@ export class CleanerReportGenerator {
     lines.push('')
     lines.push('| 项目           | 值                                |')
     lines.push('| -------------- | --------------------------------- |')
+    lines.push(`| **执行 ID**    | \`${options.executionId}\``)
+    lines.push(`| **应用版本**   | \`${options.appVersion}\``)
     lines.push(`| **执行时间**   | \`${this.formatDateTime(options.endTime)}\``)
     lines.push(`| **执行模式**   | \`${options.dryRun ? '模拟运行 (Dry Run)' : '正式执行'}\``)
     lines.push(`| **操作用户**   | \`${options.username}\``)

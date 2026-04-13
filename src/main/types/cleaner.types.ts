@@ -1,4 +1,4 @@
-export type CleanerPhase = 'login' | 'processing' | 'complete'
+export type CleanerPhase = 'login' | 'processing' | 'complete' | 'retry'
 
 export interface CleanerProgress {
   message: string
@@ -33,6 +33,8 @@ export interface CleanerResult {
   // Deletion verification statistics
   materialsFailed: number
   uncertainDeletions: number
+  // Outer retry: true when outer catch triggered (browser crash / fatal timeout)
+  crashed?: boolean
 }
 
 export interface SkippedMaterial {
