@@ -270,9 +270,7 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
   }
 
   const filteredOrders =
-    currentAttempt !== undefined
-      ? orders.filter((o) => o.attemptNumber === currentAttempt)
-      : orders
+    currentAttempt !== undefined ? orders.filter((o) => o.attemptNumber === currentAttempt) : orders
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -291,9 +289,7 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
           <div className="flex-1 grid grid-cols-7 gap-3 text-sm">
             <div>
               <div className="text-gray-500 text-xs">操作时间</div>
-              <div className="font-medium text-gray-900">
-                {formatDateTime(batch.operationTime)}
-              </div>
+              <div className="font-medium text-gray-900">{formatDateTime(batch.operationTime)}</div>
             </div>
             <div>
               <div className="text-gray-500 text-xs">操作用户</div>
@@ -318,9 +314,7 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
             </div>
             <div>
               <div className="text-gray-500 text-xs">已删除</div>
-              <div className="font-medium text-green-600">
-                {batch.totalMaterialsDeleted}
-              </div>
+              <div className="font-medium text-green-600">{batch.totalMaterialsDeleted}</div>
             </div>
             <div>
               <div className="text-gray-500 text-xs">失败</div>
@@ -389,24 +383,16 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
               )}
               <div className="flex flex-wrap gap-4 text-xs text-gray-600">
                 {executions
-                  .filter(
-                    (e) =>
-                      currentAttempt === undefined ||
-                      e.attemptNumber === currentAttempt
-                  )
+                  .filter((e) => currentAttempt === undefined || e.attemptNumber === currentAttempt)
                   .map((exec) => (
                     <React.Fragment key={exec.attemptNumber}>
-                      <span>
-                        耗时：{formatDuration(exec.operationTime, exec.endTime)}
-                      </span>
+                      <span>耗时：{formatDuration(exec.operationTime, exec.endTime)}</span>
                       <span>
                         订单：{exec.ordersProcessed}/{exec.totalOrders}
                       </span>
                       <span>删除：{exec.totalMaterialsDeleted}</span>
                       {exec.totalMaterialsFailed > 0 && (
-                        <span className="text-red-600">
-                          失败：{exec.totalMaterialsFailed}
-                        </span>
+                        <span className="text-red-600">失败：{exec.totalMaterialsFailed}</span>
                       )}
                       {exec.totalUncertainDeletions > 0 && (
                         <span className="text-amber-600">
@@ -419,9 +405,7 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                           {exec.errorMessage.length > 80 ? '...' : ''}
                         </span>
                       )}
-                      {exec.appVersion && (
-                        <span className="text-gray-400">v{exec.appVersion}</span>
-                      )}
+                      {exec.appVersion && <span className="text-gray-400">v{exec.appVersion}</span>}
                     </React.Fragment>
                   ))}
               </div>
@@ -435,9 +419,10 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-2 text-left font-medium text-gray-600 w-8" />
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">
-                      总排号
+                    <th className="px-4 py-2 text-left font-medium text-gray-600 w-12 text-center">
+                      序号
                     </th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-600">总排号</th>
                     <th className="px-4 py-2 text-left font-medium text-gray-600">
                       <div className="flex items-center gap-2">
                         订单号
@@ -446,38 +431,21 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                           onClick={() => handleCopyColumn('orderNumber')}
                           title="复制所有订单号"
                         >
-                          <Copy
-                            size={14}
-                            className="text-gray-500 hover:text-gray-700"
-                          />
+                          <Copy size={14} className="text-gray-500 hover:text-gray-700" />
                         </button>
                       </div>
                     </th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">
-                      状态
-                    </th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">
-                      重试
-                    </th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">
-                      已删除
-                    </th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">
-                      已跳过
-                    </th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">
-                      失败
-                    </th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">
-                      不确定
-                    </th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">
-                      错误信息
-                    </th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-600">状态</th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-600">重试</th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-600">已删除</th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-600">已跳过</th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-600">失败</th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-600">不确定</th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-600">错误信息</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredOrders.map((order) => {
+                  {filteredOrders.map((order, index) => {
                     const orderKey = `${currentAttempt ?? order.attemptNumber}:${order.orderNumber}`
                     const isOrderExpanded = expandedOrders.has(orderKey)
                     const materials = orderMaterials.get(orderKey) || []
@@ -500,6 +468,9 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                             ) : (
                               <ChevronRight size={14} className="text-gray-400" />
                             )}
+                          </td>
+                          <td className="px-4 py-2 text-gray-500 font-medium text-xs text-center">
+                            {index + 1}
                           </td>
                           <td className="px-4 py-2 text-gray-900 font-mono text-xs">
                             {order.productionId || '-'}
@@ -541,15 +512,9 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                               <span className="text-gray-400 text-xs">-</span>
                             )}
                           </td>
-                          <td className="px-4 py-2 text-green-600">
-                            {order.materialsDeleted}
-                          </td>
-                          <td className="px-4 py-2 text-gray-500">
-                            {order.materialsSkipped}
-                          </td>
-                          <td className="px-4 py-2 text-red-600">
-                            {order.materialsFailed || '-'}
-                          </td>
+                          <td className="px-4 py-2 text-green-600">{order.materialsDeleted}</td>
+                          <td className="px-4 py-2 text-gray-500">{order.materialsSkipped}</td>
+                          <td className="px-4 py-2 text-red-600">{order.materialsFailed || '-'}</td>
                           <td className="px-4 py-2 text-amber-600">
                             {order.uncertainDeletions || '-'}
                           </td>
@@ -561,30 +526,25 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                         {/* Material details */}
                         {isOrderExpanded && (
                           <tr>
-                            <td colSpan={10} className="bg-gray-50/50 px-8 py-3">
+                            <td colSpan={11} className="bg-gray-50/50 px-8 py-3">
                               {isLoadingMaterials ? (
-                                <div className="text-xs text-gray-500">
-                                  加载物料详情...
-                                </div>
+                                <div className="text-xs text-gray-500">加载物料详情...</div>
                               ) : materials.length > 0 ? (
                                 <table className="w-full text-xs">
                                   <thead>
                                     <tr className="text-gray-500">
+                                      <th className="px-3 py-1.5 text-left font-medium w-12 text-center">
+                                        序号
+                                      </th>
                                       <th className="px-3 py-1.5 text-left font-medium">
                                         物料编码
                                       </th>
                                       <th className="px-3 py-1.5 text-left font-medium">
                                         物料名称
                                       </th>
-                                      <th className="px-3 py-1.5 text-left font-medium">
-                                        行号
-                                      </th>
-                                      <th className="px-3 py-1.5 text-left font-medium">
-                                        结果
-                                      </th>
-                                      <th className="px-3 py-1.5 text-left font-medium">
-                                        原因
-                                      </th>
+                                      <th className="px-3 py-1.5 text-left font-medium">行号</th>
+                                      <th className="px-3 py-1.5 text-left font-medium">结果</th>
+                                      <th className="px-3 py-1.5 text-left font-medium">原因</th>
                                       <th className="px-3 py-1.5 text-left font-medium">
                                         尝试次数
                                       </th>
@@ -593,6 +553,9 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                                   <tbody className="divide-y divide-gray-100">
                                     {materials.map((mat, idx) => (
                                       <tr key={idx} className="hover:bg-gray-50">
+                                        <td className="px-3 py-1.5 text-gray-500 font-medium text-xs text-center">
+                                          {idx + 1}
+                                        </td>
                                         <td className="px-3 py-1.5 font-mono text-gray-700">
                                           {mat.materialCode}
                                         </td>
@@ -644,9 +607,7 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                                   </tbody>
                                 </table>
                               ) : (
-                                <div className="text-xs text-gray-500">
-                                  暂无物料详情
-                                </div>
+                                <div className="text-xs text-gray-500">暂无物料详情</div>
                               )}
                             </td>
                           </tr>
@@ -658,9 +619,7 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
               </table>
             </div>
           ) : (
-            <div className="px-4 py-6 text-center text-sm text-gray-500">
-              暂无订单记录
-            </div>
+            <div className="px-4 py-6 text-center text-sm text-gray-500">暂无订单记录</div>
           )}
         </div>
       )}
@@ -721,8 +680,6 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
     }
   }, [logger])
 
-
-
   useEffect(() => {
     if (isOpen) {
       void fetchBatches()
@@ -749,7 +706,13 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
   if (!isOpen) return null
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="清理操作历史" size="3xl" className="!max-w-[68rem]">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="清理操作历史"
+      size="3xl"
+      className="!max-w-[68rem]"
+    >
       <div className="flex flex-col h-[70vh]">
         {/* Toolbar */}
         <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
