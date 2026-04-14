@@ -16,9 +16,6 @@ import {
   ChevronRight,
   CheckCircle,
   XCircle,
-  CircleMinus,
-  AlertTriangle,
-  Clock,
   Copy,
   FlaskConical
 } from 'lucide-react'
@@ -33,6 +30,10 @@ import {
   getNextHistoryLoadState,
   type HistoryLoadState
 } from './cleaner-history-load-state'
+import {
+  getCleanerHistoryStatusDisplay,
+  getCleanerMaterialResultDisplay
+} from './cleaner-history-status'
 
 // The preload API returns Date for time fields, but IPC serialization converts them to strings.
 // Use a local type that accommodates both to satisfy TypeScript.
@@ -70,36 +71,6 @@ interface BatchItemProps {
 }
 
 const BATCH_PAGE_SIZE = 5
-
-const statusStyles: Record<string, string> = {
-  success: 'bg-green-100 text-green-700',
-  partial: 'bg-amber-100 text-amber-700',
-  failed: 'bg-red-100 text-red-700',
-  crashed: 'bg-red-100 text-red-700',
-  pending: 'bg-gray-100 text-gray-700',
-  not_found: 'bg-orange-100 text-orange-700',
-  erp_not_found: 'bg-orange-100 text-orange-700'
-}
-
-const statusLabels: Record<string, string> = {
-  success: '成功',
-  partial: '部分成功',
-  failed: '失败',
-  crashed: '崩溃',
-  pending: '进行中',
-  not_found: '未找到',
-  erp_not_found: 'ERP不存在'
-}
-
-const statusIcons: Record<string, React.ReactNode> = {
-  success: <CheckCircle size={16} className="text-green-600" />,
-  partial: <Clock size={16} className="text-amber-600" />,
-  failed: <XCircle size={16} className="text-red-600" />,
-  crashed: <XCircle size={16} className="text-red-600" />,
-  pending: <Clock size={16} className="text-gray-500" />,
-  not_found: <XCircle size={16} className="text-orange-600" />,
-  erp_not_found: <XCircle size={16} className="text-orange-600" />
-}
 
 const formatDateTime = (dateStr: string | Date | null | undefined): string => {
   if (!dateStr) return '-'
@@ -294,6 +265,7 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
     currentAttempt !== undefined
       ? executions.filter((execution) => execution.attemptNumber === currentAttempt)
       : executions
+  const batchStatusDisplay = getCleanerHistoryStatusDisplay(batch.status)
 
   const handleCopyColumn = (field: keyof CleanerHistoryOrderRecord) => {
     const values = filteredOrders
@@ -338,13 +310,11 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
             <div>
               <div className="text-gray-500 text-xs">状态</div>
               <div className="flex items-center gap-1">
-                {statusIcons[batch.status] || statusIcons.pending}
+                {batchStatusDisplay.icon}
                 <span
-                  className={`px-2 py-0.5 rounded text-xs font-medium ${
-                    statusStyles[batch.status] || statusStyles.pending
-                  }`}
+                  className={`px-2 py-0.5 rounded text-xs font-medium ${batchStatusDisplay.badgeClassName}`}
                 >
-                  {statusLabels[batch.status] || batch.status}
+                  {batchStatusDisplay.label}
                 </span>
               </div>
             </div>
@@ -495,6 +465,7 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                     const materials = orderMaterials.get(orderKey) || []
                     const isLoadingMaterials = loadingMaterials.has(orderKey)
                     const materialLoadState = materialLoadStates.get(orderKey) ?? 'idle'
+                    const orderStatusDisplay = getCleanerHistoryStatusDisplay(order.status)
 
                     return (
                       <React.Fragment key={orderKey}>
@@ -525,12 +496,10 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                           </td>
                           <td className="px-4 py-2">
                             <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-                                statusStyles[order.status] || statusStyles.pending
-                              }`}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${orderStatusDisplay.badgeClassName}`}
                             >
-                              {statusIcons[order.status]}
-                              {statusLabels[order.status] || order.status}
+                              {orderStatusDisplay.icon}
+                              {orderStatusDisplay.label}
                             </span>
                           </td>
                           <td className="px-4 py-2">
@@ -601,79 +570,7 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                                   </thead>
                                   <tbody className="divide-y divide-gray-100">
                                     {materials.map((mat, idx) => (
-                                      <tr key={idx} className="hover:bg-gray-50">
-                                        <td className="px-3 py-1.5 text-gray-500 font-medium text-xs text-center">
-                                          {idx + 1}
-                                        </td>
-                                        <td className="px-3 py-1.5 font-mono text-gray-700">
-                                          {mat.materialCode}
-                                        </td>
-                                        <td className="px-3 py-1.5 text-gray-700">
-                                          {mat.materialName}
-                                        </td>
-                                        <td className="px-3 py-1.5 text-gray-600">
-                                          {mat.rowNumber}
-                                        </td>
-                                        <td className="px-3 py-1.5">
-                                          {mat.result === 'success' || mat.result === 'deleted' ? (
-                                            <span
-                                              className="inline-block cursor-help"
-                                              title="Deleted"
-                                            >
-                                              <CheckCircle
-                                                size={16}
-                                                className="text-green-600 flex-shrink-0"
-                                                aria-label="Deleted"
-                                              />
-                                            </span>
-                                          ) : mat.result === 'skipped' ? (
-                                            <span
-                                              className="inline-block cursor-help"
-                                              title="Skipped"
-                                            >
-                                              <CircleMinus
-                                                size={16}
-                                                className="text-gray-400 flex-shrink-0"
-                                                aria-label="Skipped"
-                                              />
-                                            </span>
-                                          ) : mat.result === 'uncertain' ? (
-                                            <span
-                                              className="inline-block cursor-help"
-                                              title="Uncertain"
-                                            >
-                                              <AlertTriangle
-                                                size={16}
-                                                className="text-amber-600 flex-shrink-0"
-                                                aria-label="Uncertain"
-                                              />
-                                            </span>
-                                          ) : mat.result?.startsWith('failed') ? (
-                                            <span
-                                              className="inline-block cursor-help"
-                                              title="Failed"
-                                            >
-                                              <XCircle
-                                                size={16}
-                                                className="text-red-600 flex-shrink-0"
-                                                aria-label="Failed"
-                                              />
-                                            </span>
-                                          ) : null}
-                                        </td>
-                                        <td className="px-3 py-1.5 text-gray-600 max-w-xs truncate">
-                                          {mat.reason || '-'}
-                                        </td>
-                                        <td className="px-3 py-1.5 text-gray-600">
-                                          {mat.attemptCount > 1 ? (
-                                            <span className="text-amber-600">
-                                              {mat.attemptCount}
-                                            </span>
-                                          ) : (
-                                            '1'
-                                          )}
-                                        </td>
-                                      </tr>
+                                      <MaterialDetailRow key={idx} index={idx} material={mat} />
                                     ))}
                                   </tbody>
                                 </table>
@@ -699,6 +596,41 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
 })
 
 BatchItem.displayName = 'BatchItem'
+
+interface MaterialDetailRowProps {
+  index: number
+  material: CleanerHistoryMaterialRecord
+}
+
+const MaterialDetailRow = ({ index, material }: MaterialDetailRowProps): React.JSX.Element => {
+  const resultDisplay = getCleanerMaterialResultDisplay(material.result)
+
+  return (
+    <tr className="hover:bg-gray-50">
+      <td className="px-3 py-1.5 text-gray-500 font-medium text-xs text-center">{index + 1}</td>
+      <td className="px-3 py-1.5 font-mono text-gray-700">{material.materialCode}</td>
+      <td className="px-3 py-1.5 text-gray-700">{material.materialName}</td>
+      <td className="px-3 py-1.5 text-gray-600">{material.rowNumber}</td>
+      <td className="px-3 py-1.5">
+        {resultDisplay.icon ? (
+          <span className="inline-block cursor-help" title={resultDisplay.title}>
+            {resultDisplay.icon}
+          </span>
+        ) : (
+          <span className="text-gray-500">{resultDisplay.title}</span>
+        )}
+      </td>
+      <td className="px-3 py-1.5 text-gray-600 max-w-xs truncate">{material.reason || '-'}</td>
+      <td className="px-3 py-1.5 text-gray-600">
+        {material.attemptCount > 1 ? (
+          <span className="text-amber-600">{material.attemptCount}</span>
+        ) : (
+          '1'
+        )}
+      </td>
+    </tr>
+  )
+}
 
 // ====== Main Modal Component ======
 export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModalProps> = ({
