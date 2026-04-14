@@ -749,7 +749,7 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
   if (!isOpen) return null
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="清理操作历史" size="3xl">
+    <Modal isOpen={isOpen} onClose={onClose} title="清理操作历史" size="3xl" className="!max-w-[68rem]">
       <div className="flex flex-col h-[70vh]">
         {/* Toolbar */}
         <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">

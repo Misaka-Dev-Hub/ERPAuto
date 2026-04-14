@@ -15,6 +15,8 @@ interface ModalProps {
   title?: string
   children: React.ReactNode
   size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl'
+  /** Additional CSS classes for the modal panel */
+  className?: string
   showCloseButton?: boolean
   /** Ref to the element that triggered opening the modal (for focus restoration) */
   triggerRef?: React.RefObject<HTMLElement | null>
@@ -47,6 +49,7 @@ export function Modal({
   title,
   children,
   size = 'md',
+  className,
   showCloseButton = true,
   triggerRef,
   titleId,
@@ -98,7 +101,7 @@ export function Modal({
         <div className="flex min-h-full items-center justify-center p-4">
           <div
             ref={dialogRef}
-            className={`relative w-full ${sizeStyles[size]} bg-white rounded-lg shadow-xl transform transition-all`}
+            className={`relative w-full ${sizeStyles[size]} bg-white rounded-lg shadow-xl transform transition-all ${className || ''}`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
