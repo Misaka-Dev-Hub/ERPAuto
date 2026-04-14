@@ -6,7 +6,7 @@
  * Admin users see all users' records, regular users see only their own.
  */
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useTransition } from 'react'
 import { Modal } from './ui/Modal'
 import { useLogger } from '../hooks/useLogger'
 import {
@@ -68,6 +68,8 @@ interface BatchItemProps {
   isAdmin: boolean
   onDelete: (batchId: string) => void
 }
+
+const BATCH_PAGE_SIZE = 5
 
 const statusStyles: Record<string, string> = {
   success: 'bg-green-100 text-green-700',
@@ -286,12 +288,15 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
     }
   }
 
+  const filteredOrders =
+    currentAttempt !== undefined ? orders.filter((order) => order.attemptNumber === currentAttempt) : orders
+  const visibleExecutions =
+    currentAttempt !== undefined
+      ? executions.filter((execution) => execution.attemptNumber === currentAttempt)
+      : executions
+
   const handleCopyColumn = (field: keyof CleanerHistoryOrderRecord) => {
-    const filtered =
-      currentAttempt !== undefined
-        ? orders.filter((o) => o.attemptNumber === currentAttempt)
-        : orders
-    const values = filtered
+    const values = filteredOrders
       .map((o) => String(o[field] ?? ''))
       .filter((v) => v && v !== '-')
       .join('\n')
@@ -306,9 +311,6 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
       .then(() => showSuccess(`已复制 ${values.split('\n').length} 条数据`))
       .catch(() => showError('复制失败，请手动复制'))
   }
-
-  const filteredOrders =
-    currentAttempt !== undefined ? orders.filter((o) => o.attemptNumber === currentAttempt) : orders
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -420,32 +422,30 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                 </div>
               )}
               <div className="flex flex-wrap gap-4 text-xs text-gray-600">
-                {executions
-                  .filter((e) => currentAttempt === undefined || e.attemptNumber === currentAttempt)
-                  .map((exec) => (
-                    <React.Fragment key={exec.attemptNumber}>
-                      <span>耗时：{formatDuration(exec.operationTime, exec.endTime)}</span>
-                      <span>
-                        订单：{exec.ordersProcessed}/{exec.totalOrders}
+                {visibleExecutions.map((exec) => (
+                  <React.Fragment key={exec.attemptNumber}>
+                    <span>耗时：{formatDuration(exec.operationTime, exec.endTime)}</span>
+                    <span>
+                      订单：{exec.ordersProcessed}/{exec.totalOrders}
+                    </span>
+                    <span>删除：{exec.totalMaterialsDeleted}</span>
+                    {exec.totalMaterialsFailed > 0 && (
+                      <span className="text-red-600">失败：{exec.totalMaterialsFailed}</span>
+                    )}
+                    {exec.totalUncertainDeletions > 0 && (
+                      <span className="text-amber-600">
+                        不确定：{exec.totalUncertainDeletions}
                       </span>
-                      <span>删除：{exec.totalMaterialsDeleted}</span>
-                      {exec.totalMaterialsFailed > 0 && (
-                        <span className="text-red-600">失败：{exec.totalMaterialsFailed}</span>
-                      )}
-                      {exec.totalUncertainDeletions > 0 && (
-                        <span className="text-amber-600">
-                          不确定：{exec.totalUncertainDeletions}
-                        </span>
-                      )}
-                      {exec.errorMessage && (
-                        <span className="text-red-600" title={exec.errorMessage}>
-                          错误：{exec.errorMessage.substring(0, 80)}
-                          {exec.errorMessage.length > 80 ? '...' : ''}
-                        </span>
-                      )}
-                      {exec.appVersion && <span className="text-gray-400">v{exec.appVersion}</span>}
-                    </React.Fragment>
-                  ))}
+                    )}
+                    {exec.errorMessage && (
+                      <span className="text-red-600" title={exec.errorMessage}>
+                        错误：{exec.errorMessage.substring(0, 80)}
+                        {exec.errorMessage.length > 80 ? '...' : ''}
+                      </span>
+                    )}
+                    {exec.appVersion && <span className="text-gray-400">v{exec.appVersion}</span>}
+                  </React.Fragment>
+                ))}
               </div>
             </div>
           )}
@@ -711,9 +711,13 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
   const [error, setError] = useState<string | null>(null)
   const [allUsers, setAllUsers] = useState<string[]>([])
   const [selectedUsers, setSelectedUsers] = useState<string[]>([])
+  const [currentPage, setCurrentPage] = useState(0)
+  const [isFilterPending, startFilterTransition] = useTransition()
   const logger = useLogger('CleanerOperationHistory')
 
   const isAdmin = user?.userType === 'Admin'
+  const hasPreviousPage = currentPage > 0
+  const hasNextPage = batches.length === BATCH_PAGE_SIZE
 
   const fetchBatches = useCallback(async () => {
     setLoading(true)
@@ -721,8 +725,12 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
     try {
       const options =
         isAdmin && selectedUsers.length > 0
-          ? { limit: 100, usernames: selectedUsers }
-          : { limit: 100 }
+          ? {
+              limit: BATCH_PAGE_SIZE,
+              offset: currentPage * BATCH_PAGE_SIZE,
+              usernames: selectedUsers
+            }
+          : { limit: BATCH_PAGE_SIZE, offset: currentPage * BATCH_PAGE_SIZE }
 
       const result = await window.electron.cleaner.getHistoryBatches(options)
       if (result.success && result.data) {
@@ -735,7 +743,7 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
     } finally {
       setLoading(false)
     }
-  }, [isAdmin, selectedUsers])
+  }, [currentPage, isAdmin, selectedUsers])
 
   const fetchAllUsers = useCallback(async () => {
     try {
@@ -765,13 +773,28 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
   }, [])
 
   const toggleUserFilter = (username: string) => {
-    setSelectedUsers((prev) =>
-      prev.includes(username) ? prev.filter((u) => u !== username) : [...prev, username]
-    )
+    startFilterTransition(() => {
+      setCurrentPage(0)
+      setSelectedUsers((prev) =>
+        prev.includes(username) ? prev.filter((u) => u !== username) : [...prev, username]
+      )
+    })
   }
 
   const clearUserFilters = () => {
-    setSelectedUsers([])
+    startFilterTransition(() => {
+      setCurrentPage(0)
+      setSelectedUsers([])
+    })
+  }
+
+  const goToPreviousPage = () => {
+    setCurrentPage((prev) => Math.max(0, prev - 1))
+  }
+
+  const goToNextPage = () => {
+    if (!hasNextPage) return
+    setCurrentPage((prev) => prev + 1)
   }
 
   if (!isOpen) return null
@@ -833,8 +856,9 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
                 )}
               </span>
               {batches.length > 0 && (
-                <span className="text-sm text-gray-500">共 {batches.length} 条批次</span>
+                <span className="text-sm text-gray-500">本页 {batches.length} 条批次</span>
               )}
+              {isFilterPending && <span className="text-sm text-blue-600">正在更新筛选...</span>}
             </div>
           </div>
           <button
@@ -875,14 +899,26 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
         </div>
 
         {/* Footer */}
-        {/* Footer */}
-        <div className="pt-4 border-t border-gray-200 flex justify-end">
-          <button
-            className="px-6 py-2 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
-            onClick={onClose}
-          >
-            关闭
-          </button>
+        <div className="pt-4 border-t border-gray-200 flex justify-center">
+          <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-1 shadow-sm">
+            <button
+              className="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+              onClick={goToPreviousPage}
+              disabled={loading || !hasPreviousPage}
+            >
+              上一页
+            </button>
+            <div className="mx-1 min-w-[5.5rem] rounded-full bg-slate-900 px-4 py-2 text-center text-sm font-semibold text-white">
+              第 {currentPage + 1} 页
+            </div>
+            <button
+              className="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+              onClick={goToNextPage}
+              disabled={loading || !hasNextPage}
+            >
+              下一页
+            </button>
+          </div>
         </div>
       </div>
     </Modal>

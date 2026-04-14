@@ -11,6 +11,7 @@ import React from 'react'
 import { CheckCircle, XCircle, SkipForward, Package, Loader2, AlertTriangle } from 'lucide-react'
 import { Modal } from './ui/Modal'
 import type { CleanerProgress } from '../hooks/cleaner/types'
+import { getExecutionReportState } from './execution-report-state'
 
 interface ExecutionReportDialogProps {
   isOpen: boolean
@@ -56,6 +57,12 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
   const hasFailedMaterials = materialsFailed > 0 || uncertainDeletions > 0
   const showProgress = isExecuting && progress
   const isProgressing = !!showProgress
+  const reportState = getExecutionReportState({
+    dryRun,
+    errors,
+    materialsFailed,
+    uncertainDeletions
+  })
 
   // Update timer during progress
   React.useEffect(() => {
@@ -123,11 +130,7 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
       title={
         isProgressing
           ? '正在执行清理...'
-          : dryRun
-            ? '预览执行报告'
-            : hasErrors
-              ? '执行完成 (有错误)'
-              : '执行完成'
+          : reportState.title
       }
       size={isProgressing ? 'lg' : 'md'}
       showCloseButton={!isExecuting}
@@ -161,19 +164,17 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
           <div className="flex justify-center mb-4">
             {dryRun ? (
               <Package className="w-12 h-12 text-amber-500" />
-            ) : hasErrors ? (
+            ) : reportState.state === 'failure' ? (
               <XCircle className="w-12 h-12 text-red-500" />
+            ) : reportState.state === 'partial_success' ? (
+              <AlertTriangle className="w-12 h-12 text-amber-500" />
+            ) : reportState.state === 'manual_review' ? (
+              <AlertTriangle className="w-12 h-12 text-yellow-500" />
             ) : (
               <CheckCircle className="w-12 h-12 text-green-500" />
             )}
           </div>
-          <p className="text-sm text-gray-600">
-            {dryRun
-              ? '预览模式 - 未实际删除数据'
-              : hasErrors
-                ? '部分操作未能完成，请查看下方错误信息'
-                : '所有操作已成功完成'}
-          </p>
+          <p className="text-sm text-gray-600">{reportState.summary}</p>
         </div>
       )}
 
@@ -405,17 +406,31 @@ export const ExecutionReportDialog: React.FC<ExecutionReportDialogProps> = ({
             </div>
           )}
 
-          {!hasErrors && !dryRun && (
+          {reportState.showSuccessBanner && (
             <div className="flex items-center justify-center gap-2 p-3 bg-green-50 rounded-lg border border-green-200 text-green-700 text-sm">
               <CheckCircle size={16} className="flex-shrink-0" />
               <span>操作已成功完成，数据已同步到 ERP 系统</span>
             </div>
           )}
 
-          {!hasErrors && dryRun && (
+          {reportState.showPreviewBanner && (
             <div className="flex items-center justify-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200 text-amber-700 text-sm">
               <Package size={16} className="flex-shrink-0" />
               <span>预览模式结束，数据未实际修改。确认无误后可正式执行。</span>
+            </div>
+          )}
+
+          {reportState.state === 'partial_success' && (
+            <div className="flex items-center justify-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200 text-amber-700 text-sm">
+              <AlertTriangle size={16} className="flex-shrink-0" />
+              <span>存在删除失败的物料，本次执行未完全成功，建议结合历史记录继续排查。</span>
+            </div>
+          )}
+
+          {reportState.state === 'manual_review' && (
+            <div className="flex items-center justify-center gap-2 p-3 bg-yellow-50 rounded-lg border border-yellow-200 text-yellow-700 text-sm">
+              <AlertTriangle size={16} className="flex-shrink-0" />
+              <span>存在不确定删除结果，请人工确认 ERP 中的最终状态后再继续后续操作。</span>
             </div>
           )}
         </>
