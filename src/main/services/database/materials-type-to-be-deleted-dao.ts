@@ -210,6 +210,58 @@ export class MaterialsTypeToBeDeletedDAO {
       const manager = managerName?.trim() || null
       const dialect = this.getDialect()
 
+      if (dbService.type === 'postgresql') {
+        const updateSql = `
+          UPDATE ${tableName}
+          SET ManagerName = ${dialect.param(0)}
+          WHERE MaterialName = ${dialect.param(1)}
+        `
+
+        const updateResult = await trackDuration(
+          async () => await dbService.query(updateSql, [manager, name]),
+          {
+            operationName: 'MaterialsTypeToBeDeletedDAO.upsertMaterial',
+            context: { tableName, operationType: 'UPSERT_UPDATE_FIRST' }
+          }
+        )
+
+        if (updateResult.result.rowCount > 0) {
+          return true
+        }
+
+        const insertSql = `
+          INSERT INTO ${tableName} (MaterialName, ManagerName)
+          SELECT ${dialect.param(0)}, ${dialect.param(1)}
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM ${tableName}
+            WHERE MaterialName = ${dialect.param(0)}
+          )
+        `
+
+        const insertResult = await trackDuration(
+          async () => await dbService.query(insertSql, [name, manager]),
+          {
+            operationName: 'MaterialsTypeToBeDeletedDAO.upsertMaterial',
+            context: { tableName, operationType: 'UPSERT_INSERT_FALLBACK' }
+          }
+        )
+
+        if (insertResult.result.rowCount > 0) {
+          return true
+        }
+
+        const retryUpdateResult = await trackDuration(
+          async () => await dbService.query(updateSql, [manager, name]),
+          {
+            operationName: 'MaterialsTypeToBeDeletedDAO.upsertMaterial',
+            context: { tableName, operationType: 'UPSERT_UPDATE_RETRY' }
+          }
+        )
+
+        return retryUpdateResult.result.rowCount > 0
+      }
+
       const { sql: sqlString } = dialect.upsert({
         table: tableName,
         keyColumns: ['MaterialName'],
