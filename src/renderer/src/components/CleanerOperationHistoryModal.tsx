@@ -16,6 +16,8 @@ import {
   ChevronRight,
   CheckCircle,
   XCircle,
+  CircleMinus,
+  AlertTriangle,
   Clock,
   Copy,
   FlaskConical
@@ -566,29 +568,51 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                                           {mat.rowNumber}
                                         </td>
                                         <td className="px-3 py-1.5">
-                                          <span
-                                            className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                                              mat.result === 'deleted'
-                                                ? 'bg-green-100 text-green-700'
-                                                : mat.result === 'skipped'
-                                                  ? 'bg-gray-100 text-gray-700'
-                                                  : mat.result === 'failed'
-                                                    ? 'bg-red-100 text-red-700'
-                                                    : mat.result === 'uncertain'
-                                                      ? 'bg-amber-100 text-amber-700'
-                                                      : 'bg-gray-100 text-gray-700'
-                                            }`}
-                                          >
-                                            {mat.result === 'deleted'
-                                              ? '已删除'
-                                              : mat.result === 'skipped'
-                                                ? '已跳过'
-                                                : mat.result === 'failed'
-                                                  ? '失败'
-                                                  : mat.result === 'uncertain'
-                                                    ? '不确定'
-                                                    : mat.result}
-                                          </span>
+                                          {mat.result === 'success' || mat.result === 'deleted' ? (
+                                            <span
+                                              className="inline-block cursor-help"
+                                              title="Deleted"
+                                            >
+                                              <CheckCircle
+                                                size={16}
+                                                className="text-green-600 flex-shrink-0"
+                                                aria-label="Deleted"
+                                              />
+                                            </span>
+                                          ) : mat.result === 'skipped' ? (
+                                            <span
+                                              className="inline-block cursor-help"
+                                              title="Skipped"
+                                            >
+                                              <CircleMinus
+                                                size={16}
+                                                className="text-gray-400 flex-shrink-0"
+                                                aria-label="Skipped"
+                                              />
+                                            </span>
+                                          ) : mat.result === 'uncertain' ? (
+                                            <span
+                                              className="inline-block cursor-help"
+                                              title="Uncertain"
+                                            >
+                                              <AlertTriangle
+                                                size={16}
+                                                className="text-amber-600 flex-shrink-0"
+                                                aria-label="Uncertain"
+                                              />
+                                            </span>
+                                          ) : mat.result?.startsWith('failed') ? (
+                                            <span
+                                              className="inline-block cursor-help"
+                                              title="Failed"
+                                            >
+                                              <XCircle
+                                                size={16}
+                                                className="text-red-600 flex-shrink-0"
+                                                aria-label="Failed"
+                                              />
+                                            </span>
+                                          ) : null}
                                         </td>
                                         <td className="px-3 py-1.5 text-gray-600 max-w-xs truncate">
                                           {mat.reason || '-'}
