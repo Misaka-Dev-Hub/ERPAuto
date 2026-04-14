@@ -6,7 +6,7 @@
  * Admin users see all users' records, regular users see only their own.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Modal } from './ui/Modal'
 import { useLogger } from '../hooks/useLogger'
 import {
@@ -28,6 +28,11 @@ import type {
   CleanerHistoryOrderRecord,
   CleanerHistoryMaterialRecord
 } from '../hooks/cleaner/types'
+import {
+  canStartHistoryLoad,
+  getNextHistoryLoadState,
+  type HistoryLoadState
+} from './cleaner-history-load-state'
 
 // The preload API returns Date for time fields, but IPC serialization converts them to strings.
 // Use a local type that accommodates both to satisfy TypeScript.
@@ -145,46 +150,53 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
     () => new Map()
   )
   const [loadingMaterials, setLoadingMaterials] = useState<Set<string>>(() => new Set())
+  const [materialLoadStates, setMaterialLoadStates] = useState<Map<string, HistoryLoadState>>(
+    () => new Map()
+  )
+  const [detailsLoadState, setDetailsLoadState] = useState<HistoryLoadState>('idle')
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const detailsLoadedRef = useRef(false)
-  const loadedMaterialsRef = useRef<Set<string>>(new Set())
   const logger = useLogger('BatchItem')
 
-  // Fetch batch details when first expanded
-  useEffect(() => {
-    if (!isExpanded || detailsLoadedRef.current) return
-    detailsLoadedRef.current = true
+  const fetchDetails = useCallback(async () => {
+    if (!canStartHistoryLoad(detailsLoadState)) return
 
-    const fetchDetails = async () => {
-      try {
-        const result = await window.electron.cleaner.getHistoryBatchDetails(batch.batchId)
-        if (result.success && result.data) {
-          setExecutions(result.data.executions)
-          setOrders(result.data.orders)
+    setDetailsLoadState((prev) => getNextHistoryLoadState(prev, 'start'))
+    try {
+      const result = await window.electron.cleaner.getHistoryBatchDetails(batch.batchId)
+      if (result.success && result.data) {
+        setExecutions(result.data.executions)
+        setOrders(result.data.orders)
 
-          const execs = result.data.executions
-          if (execs.length > 0) {
-            setCurrentAttempt(Math.max(...execs.map((e) => e.attemptNumber)))
-          }
+        const execs = result.data.executions
+        if (execs.length > 0) {
+          setCurrentAttempt(Math.max(...execs.map((e) => e.attemptNumber)))
         }
-      } catch (err) {
-        logger.error('Failed to fetch batch details', {
-          error: err instanceof Error ? err.message : String(err),
-          batchId: batch.batchId
-        })
-      }
-    }
 
-    void fetchDetails()
-  }, [isExpanded, batch.batchId, logger])
+        setDetailsLoadState('success')
+      } else {
+        setDetailsLoadState('error')
+      }
+    } catch (err) {
+      setDetailsLoadState('error')
+      logger.error('Failed to fetch batch details', {
+        error: err instanceof Error ? err.message : String(err),
+        batchId: batch.batchId
+      })
+    }
+  }, [batch.batchId, detailsLoadState, logger])
 
   const fetchMaterials = useCallback(
     async (attemptNumber: number, orderNumber: string) => {
       const cacheKey = `${attemptNumber}:${orderNumber}`
-      if (loadedMaterialsRef.current.has(cacheKey)) return
-      loadedMaterialsRef.current.add(cacheKey)
+      const loadState = materialLoadStates.get(cacheKey) ?? 'idle'
+      if (!canStartHistoryLoad(loadState)) return
 
+      setMaterialLoadStates((prev) => {
+        const next = new Map(prev)
+        next.set(cacheKey, getNextHistoryLoadState(prev.get(cacheKey) ?? 'idle', 'start'))
+        return next
+      })
       setLoadingMaterials((prev) => new Set(prev).add(cacheKey))
       try {
         const result = await window.electron.cleaner.getHistoryMaterialDetails(
@@ -194,8 +206,24 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
         )
         if (result.success && result.data) {
           setOrderMaterials((prev) => new Map(prev).set(cacheKey, result.data!))
+          setMaterialLoadStates((prev) => {
+            const next = new Map(prev)
+            next.set(cacheKey, 'success')
+            return next
+          })
+        } else {
+          setMaterialLoadStates((prev) => {
+            const next = new Map(prev)
+            next.set(cacheKey, 'error')
+            return next
+          })
         }
       } catch (err) {
+        setMaterialLoadStates((prev) => {
+          const next = new Map(prev)
+          next.set(cacheKey, 'error')
+          return next
+        })
         logger.error('Failed to fetch material details', {
           error: err instanceof Error ? err.message : String(err),
           batchId: batch.batchId,
@@ -210,8 +238,16 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
         })
       }
     },
-    [batch.batchId, logger]
+    [batch.batchId, logger, materialLoadStates]
   )
+
+  const toggleBatchExpansion = () => {
+    const nextExpanded = !isExpanded
+    setIsExpanded(nextExpanded)
+    if (nextExpanded) {
+      void fetchDetails()
+    }
+  }
 
   const toggleOrderExpansion = (attemptNumber: number, orderNumber: string) => {
     const cacheKey = `${attemptNumber}:${orderNumber}`
@@ -281,7 +317,7 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
         className={`flex items-center justify-between p-4 cursor-pointer transition-colors ${
           isExpanded ? 'bg-gray-50' : 'hover:bg-gray-50'
         }`}
-        onClick={() => setIsExpanded((prev) => !prev)}
+        onClick={toggleBatchExpansion}
       >
         <div className="flex items-center gap-4 flex-1">
           <button className="p-1 hover:bg-gray-200 rounded">
@@ -415,7 +451,13 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
           )}
 
           {/* Order table */}
-          {filteredOrders.length > 0 ? (
+          {detailsLoadState === 'loading' && executions.length === 0 && orders.length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-gray-500">加载详情中...</div>
+          ) : detailsLoadState === 'error' && executions.length === 0 && orders.length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-red-600">
+              加载详情失败，请折叠后重新展开重试
+            </div>
+          ) : filteredOrders.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
@@ -452,6 +494,7 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                     const isOrderExpanded = expandedOrders.has(orderKey)
                     const materials = orderMaterials.get(orderKey) || []
                     const isLoadingMaterials = loadingMaterials.has(orderKey)
+                    const materialLoadState = materialLoadStates.get(orderKey) ?? 'idle'
 
                     return (
                       <React.Fragment key={orderKey}>
@@ -531,6 +574,10 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                             <td colSpan={11} className="bg-gray-50/50 px-8 py-3">
                               {isLoadingMaterials ? (
                                 <div className="text-xs text-gray-500">加载物料详情...</div>
+                              ) : materialLoadState === 'error' ? (
+                                <div className="text-xs text-red-600">
+                                  加载物料详情失败，请折叠后重新展开重试
+                                </div>
                               ) : materials.length > 0 ? (
                                 <table className="w-full text-xs">
                                   <thead>

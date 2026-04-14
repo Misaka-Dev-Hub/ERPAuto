@@ -167,17 +167,19 @@ const CleanerPage: React.FC = () => {
         />
       </Suspense>
 
-      <Suspense fallback={null}>
-        <CleanerOperationHistoryModal
-          isOpen={showHistoryModal}
-          onClose={() => setShowHistoryModal(false)}
-          user={
-            currentUsername
-              ? { username: currentUsername, userType: isAdmin ? 'Admin' : 'User' }
-              : null
-          }
-        />
-      </Suspense>
+      {showHistoryModal ? (
+        <Suspense fallback={null}>
+          <CleanerOperationHistoryModal
+            isOpen={showHistoryModal}
+            onClose={() => setShowHistoryModal(false)}
+            user={
+              currentUsername
+                ? { username: currentUsername, userType: isAdmin ? 'Admin' : 'User' }
+                : null
+            }
+          />
+        </Suspense>
+      ) : null}
 
       {/* Confirmation Dialog */}
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}

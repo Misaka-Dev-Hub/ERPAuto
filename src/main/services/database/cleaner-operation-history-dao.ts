@@ -122,6 +122,15 @@ export class CleanerOperationHistoryDAO {
     return this.getDialect().quoteTableName('ERPAuto', 'CleanerMaterialDetail')
   }
 
+  private getIsDryRunAggregateSql(): string {
+    const dialect = this.getDialect()
+    if (dialect.dbType === 'postgresql') {
+      return `MAX(CASE WHEN e.IsDryRun THEN 1 ELSE 0 END)`
+    }
+
+    return `MAX(CAST(e.IsDryRun AS INT))`
+  }
+
   /**
    * Get database service instance using DatabaseFactory
    */
@@ -619,9 +628,9 @@ export class CleanerOperationHistoryDAO {
           MAX(CASE WHEN e.AttemptNumber = latest.max_attempt THEN e.OrdersProcessed ELSE 0 END) as OrdersProcessed,
           MAX(CASE WHEN e.AttemptNumber = latest.max_attempt THEN e.TotalMaterialsDeleted ELSE 0 END) as TotalMaterialsDeleted,
           MAX(CASE WHEN e.AttemptNumber = latest.max_attempt THEN e.TotalMaterialsFailed ELSE 0 END) as TotalMaterialsFailed,
-          MAX(CAST(e.IsDryRun AS INT)) as IsDryRun,
-          ISNULL(SUM(CASE WHEN o.Status = 'success' THEN 1 ELSE 0 END), 0) as SuccessCount,
-          ISNULL(SUM(CASE WHEN o.Status = 'failed' THEN 1 ELSE 0 END), 0) as FailedCount
+          ${this.getIsDryRunAggregateSql()} as IsDryRun,
+          COALESCE(SUM(CASE WHEN o.Status = 'success' THEN 1 ELSE 0 END), 0) as SuccessCount,
+          COALESCE(SUM(CASE WHEN o.Status = 'failed' THEN 1 ELSE 0 END), 0) as FailedCount
         FROM ${execTable} e
         INNER JOIN (
           SELECT BatchId, MAX(AttemptNumber) as max_attempt
@@ -906,27 +915,13 @@ export class CleanerOperationHistoryDAO {
       const materialTable = this.getMaterialTableName()
       const dialect = this.getDialect()
 
-      // Check if batch exists
-      const checkSql = `
-        SELECT TOP 1 UserId
-        FROM ${execTable}
-        WHERE BatchId = ${dialect.param(0)}
-      `
-
-      const checkResult = await trackDuration(
-        async () => await dbService.query(checkSql, [batchId]),
-        {
-          operationName: 'CleanerOperationHistoryDAO.deleteBatch.check',
-          context: { operationType: 'SELECT', batchId }
-        }
-      )
-
-      if (checkResult.result.rows.length === 0) {
+      const details = await this.getBatchDetails(batchId)
+      if (details.executions.length === 0) {
         return { success: false, error: '批次不存在' }
       }
 
       // Permission check: non-admin can only delete own batches
-      const batchUserId = checkResult.result.rows[0].UserId as number
+      const batchUserId = details.executions[0].userId
       if (!isAdmin && batchUserId !== requestingUserId) {
         return { success: false, error: '没有权限删除此批次' }
       }
