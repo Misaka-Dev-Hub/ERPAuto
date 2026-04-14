@@ -67,7 +67,9 @@ const statusStyles: Record<string, string> = {
   partial: 'bg-amber-100 text-amber-700',
   failed: 'bg-red-100 text-red-700',
   crashed: 'bg-red-100 text-red-700',
-  pending: 'bg-gray-100 text-gray-700'
+  pending: 'bg-gray-100 text-gray-700',
+  not_found: 'bg-orange-100 text-orange-700',
+  erp_not_found: 'bg-orange-100 text-orange-700'
 }
 
 const statusLabels: Record<string, string> = {
@@ -75,7 +77,9 @@ const statusLabels: Record<string, string> = {
   partial: '部分成功',
   failed: '失败',
   crashed: '崩溃',
-  pending: '进行中'
+  pending: '进行中',
+  not_found: '未找到',
+  erp_not_found: 'ERP不存在'
 }
 
 const statusIcons: Record<string, React.ReactNode> = {
@@ -83,7 +87,9 @@ const statusIcons: Record<string, React.ReactNode> = {
   partial: <Clock size={16} className="text-amber-600" />,
   failed: <XCircle size={16} className="text-red-600" />,
   crashed: <XCircle size={16} className="text-red-600" />,
-  pending: <Clock size={16} className="text-gray-500" />
+  pending: <Clock size={16} className="text-gray-500" />,
+  not_found: <XCircle size={16} className="text-orange-600" />,
+  erp_not_found: <XCircle size={16} className="text-orange-600" />
 }
 
 const formatDateTime = (dateStr: string | Date | null | undefined): string => {
@@ -430,6 +436,9 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                   <tr>
                     <th className="px-4 py-2 text-left font-medium text-gray-600 w-8" />
                     <th className="px-4 py-2 text-left font-medium text-gray-600">
+                      总排号
+                    </th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-600">
                       <div className="flex items-center gap-2">
                         订单号
                         <button
@@ -493,7 +502,10 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                             )}
                           </td>
                           <td className="px-4 py-2 text-gray-900 font-mono text-xs">
-                            {order.orderNumber}
+                            {order.productionId || '-'}
+                          </td>
+                          <td className="px-4 py-2 text-gray-900 font-mono text-xs">
+                            {order.status === 'not_found' ? '-' : order.orderNumber}
                           </td>
                           <td className="px-4 py-2">
                             <span
@@ -549,7 +561,7 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
                         {/* Material details */}
                         {isOrderExpanded && (
                           <tr>
-                            <td colSpan={9} className="bg-gray-50/50 px-8 py-3">
+                            <td colSpan={10} className="bg-gray-50/50 px-8 py-3">
                               {isLoadingMaterials ? (
                                 <div className="text-xs text-gray-500">
                                   加载物料详情...
@@ -709,6 +721,8 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
     }
   }, [logger])
 
+
+
   useEffect(() => {
     if (isOpen) {
       void fetchBatches()
@@ -826,6 +840,7 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
           )}
         </div>
 
+        {/* Footer */}
         {/* Footer */}
         <div className="pt-4 border-t border-gray-200 flex justify-end">
           <button

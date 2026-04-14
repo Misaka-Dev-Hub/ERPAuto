@@ -65,6 +65,7 @@ export const CLEANER_ORDER_CONFIG = {
     BATCH_ID: 'BatchId',
     ATTEMPT_NUMBER: 'AttemptNumber',
     ORDER_NUMBER: 'OrderNumber',
+    PRODUCTION_ID: 'ProductionId',
     STATUS: 'Status',
     MATERIALS_DELETED: 'MaterialsDeleted',
     MATERIALS_SKIPPED: 'MaterialsSkipped',
@@ -324,18 +325,26 @@ export class CleanerOperationHistoryDAO {
 
       for (const order of orders) {
         try {
+          const status = order.initialStatus || 'pending'
           const sqlString = `
             INSERT INTO ${tableName}
-              (BatchId, AttemptNumber, OrderNumber, Status,
+              (BatchId, AttemptNumber, OrderNumber, ProductionId, Status,
                MaterialsDeleted, MaterialsSkipped, MaterialsFailed,
                UncertainDeletions, RetryCount, RetrySuccess, ErrorMessage)
             VALUES
-              (${dialect.param(0)}, ${dialect.param(1)}, ${dialect.param(2)}, 'pending',
-               0, 0, 0, 0, 0, 0, NULL)
+              (${dialect.param(0)}, ${dialect.param(1)}, ${dialect.param(2)}, ${dialect.param(3)}, ${dialect.param(4)},
+               0, 0, 0, 0, 0, 0, ${dialect.param(5)})
           `
           await trackDuration(
             async () =>
-              await dbService.query(sqlString, [batchId, attemptNumber, order.orderNumber]),
+              await dbService.query(sqlString, [
+                batchId,
+                attemptNumber,
+                order.orderNumber,
+                order.productionId || null,
+                status,
+                order.errorMessage || null
+              ]),
             {
               operationName: 'CleanerOperationHistoryDAO.insertOrderRecords',
               context: { tableName, operationType: 'INSERT', batchId, attemptNumber }
@@ -730,7 +739,7 @@ export class CleanerOperationHistoryDAO {
       // Query orders
       const orderSql = `
         SELECT
-          ID, BatchId, AttemptNumber, OrderNumber, Status,
+          ID, BatchId, AttemptNumber, OrderNumber, ProductionId, Status,
           MaterialsDeleted, MaterialsSkipped, MaterialsFailed,
           UncertainDeletions, RetryCount, RetrySuccess, ErrorMessage
         FROM ${orderTable}
@@ -778,6 +787,7 @@ export class CleanerOperationHistoryDAO {
         batchId: row.BatchId as string,
         attemptNumber: row.AttemptNumber as number,
         orderNumber: row.OrderNumber as string,
+        productionId: (row.ProductionId as string) || null,
         status: row.Status as string,
         materialsDeleted: row.MaterialsDeleted as number,
         materialsSkipped: row.MaterialsSkipped as number,

@@ -242,7 +242,7 @@ describe('CleanerApplicationService', () => {
       ).rejects.toBeInstanceOf(DatabaseQueryError)
     })
 
-    it('should reject with ValidationError when no valid order numbers are provided', async () => {
+    it('should return empty result when no valid order numbers are provided', async () => {
       ;(service as any).getErpConfig = vi
         .fn()
         .mockResolvedValue({ url: 'u', username: 'x', password: 'p' })
@@ -250,9 +250,13 @@ describe('CleanerApplicationService', () => {
         disconnect: vi.fn().mockResolvedValue(undefined)
       })
 
-      await expect(
-        service.runCleaner({ send: vi.fn() } as any, makeInput({ orderNumbers: [] }))
-      ).rejects.toThrow('没有有效的生产订单号可处理')
+      const result = await service.runCleaner(
+        { send: vi.fn() } as any,
+        makeInput({ orderNumbers: [] })
+      )
+      expect(result.ordersProcessed).toBe(0)
+      expect(result.materialsDeleted).toBe(0)
+      expect(result.details).toEqual([])
     })
 
     it('should process orders containing empty strings without crashing', async () => {

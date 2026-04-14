@@ -23,7 +23,8 @@ import type {
   ExportResultItem,
   ExportResultResponse
 } from '../../types/cleaner.types'
-import type { InsertMaterialDetailInput } from '../../types/cleaner-history.types'
+import type { InsertMaterialDetailInput, InsertOrderInput } from '../../types/cleaner-history.types'
+import type { OrderMapping } from '../../types/order-resolver.types'
 
 const log = createLogger('CleanerApplicationService')
 
@@ -72,16 +73,16 @@ export class CleanerApplicationService {
         log.warn('Resolution warnings', { warnings })
       }
 
-      if (validOrderNumbers.length === 0) {
-        throw new ValidationError(
-          '没有有效的生产订单号可处理。请检查输入的格式或数据库连接。',
-          'VAL_INVALID_INPUT'
-        )
-      }
+      // Build order inputs from ALL mappings (including resolution failures)
+      const orderInputs = this.buildOrderInputs(mappings)
 
-      log.info('Resolved order numbers', { count: validOrderNumbers.length })
+      log.info('Resolved order numbers', {
+        total: mappings.length,
+        resolved: validOrderNumbers.length,
+        failed: mappings.length - validOrderNumbers.length
+      })
 
-      // Insert execution record and order records into database
+      // Insert execution record and ALL order records into database
       const currentUser = SessionManager.getInstance().getUserInfo()
       if (currentUser) {
         await historyDao.insertExecution({
@@ -90,14 +91,41 @@ export class CleanerApplicationService {
           userId: currentUser.id,
           username: currentUser.username,
           isDryRun: input.dryRun ?? false,
-          totalOrders: validOrderNumbers.length,
+          totalOrders: orderInputs.length,
           appVersion
         })
-        await historyDao.insertOrderRecords(
-          batchId,
-          1,
-          validOrderNumbers.map((order) => ({ orderNumber: order }))
-        )
+        await historyDao.insertOrderRecords(batchId, 1, orderInputs)
+      }
+
+      // If no valid order numbers, update execution to failed and return early
+      if (validOrderNumbers.length === 0) {
+        if (currentUser) {
+          await historyDao.updateExecutionStatus(
+            batchId,
+            1,
+            'failed',
+            0,
+            0,
+            0,
+            0,
+            0,
+            new Date(),
+            warnings.join('\n') || '没有有效的生产订单号可处理'
+          )
+        }
+        const emptyResult: CleanerResult = {
+          ordersProcessed: 0,
+          materialsDeleted: 0,
+          materialsSkipped: 0,
+          errors: [...warnings],
+          details: [],
+          retriedOrders: 0,
+          successfulRetries: 0,
+          materialsFailed: 0,
+          uncertainDeletions: 0
+        }
+        await this.recordCleanupAudit(0, input, emptyResult)
+        return emptyResult
       }
 
       authService = new ErpAuthService({
@@ -203,14 +231,10 @@ export class CleanerApplicationService {
             userId: currentUser.id,
             username: currentUser.username,
             isDryRun: input.dryRun ?? false,
-            totalOrders: validOrderNumbers.length,
+            totalOrders: orderInputs.length,
             appVersion
           })
-          await historyDao.insertOrderRecords(
-            batchId,
-            2,
-            validOrderNumbers.map((order) => ({ orderNumber: order }))
-          )
+          await historyDao.insertOrderRecords(batchId, 2, orderInputs)
         }
 
         cleaner = new CleanerService(authService)
@@ -378,6 +402,38 @@ export class CleanerApplicationService {
     }
   }
 
+  /**
+   * Build order inputs from ALL mappings, including resolution failures.
+   * Deduplicates by orderNumber for resolved mappings, includes all failed mappings.
+   */
+  private buildOrderInputs(mappings: OrderMapping[]): InsertOrderInput[] {
+    const inputs: InsertOrderInput[] = []
+    const seenOrderNumbers = new Set<string>()
+
+    for (const mapping of mappings) {
+      if (mapping.resolved && mapping.orderNumber) {
+        // Deduplicate resolved mappings by order number
+        if (!seenOrderNumbers.has(mapping.orderNumber)) {
+          seenOrderNumbers.add(mapping.orderNumber)
+          inputs.push({
+            orderNumber: mapping.orderNumber,
+            productionId: mapping.productionId
+          })
+        }
+      } else {
+        // Resolution failure: use original input as orderNumber identifier
+        inputs.push({
+          orderNumber: mapping.input,
+          productionId: mapping.productionId,
+          initialStatus: 'not_found',
+          errorMessage: mapping.error || '未在数据库中找到对应的订单号'
+        })
+      }
+    }
+
+    return inputs
+  }
+
   private async recordCleanupAudit(
     orderCount: number,
     input: CleanerInput,
@@ -428,7 +484,11 @@ export class CleanerApplicationService {
           batchId,
           attemptNumber,
           detail.orderNumber,
-          detail.errors.length > 0 ? 'failed' : 'success',
+          detail.notFound
+            ? 'erp_not_found'
+            : detail.errors.length > 0
+              ? 'failed'
+              : 'success',
           detail.materialsDeleted,
           detail.materialsSkipped,
           detail.materialsFailed,

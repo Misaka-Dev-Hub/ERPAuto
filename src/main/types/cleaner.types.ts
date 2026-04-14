@@ -73,6 +73,8 @@ export interface OrderCleanDetail {
   materialsFailed: number
   failedMaterials: FailedMaterial[]
   uncertainDeletions: number
+  // Missing order flag: true when order not found in ERP query results
+  notFound?: boolean
 }
 
 export enum DeletionOutcome {

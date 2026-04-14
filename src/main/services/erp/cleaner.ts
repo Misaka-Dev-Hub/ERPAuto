@@ -307,7 +307,7 @@ export class CleanerService {
             for (const missingOrder of missingOrders) {
               const missingMessage = '订单未出现在查询结果中'
               result.errors.push(`Order ${missingOrder}: ${missingMessage}`)
-              result.details.push(this.createErrorDetail(missingOrder, missingMessage))
+              result.details.push(this.createErrorDetail(missingOrder, missingMessage, true))
             }
           },
           {
@@ -1115,7 +1115,7 @@ export class CleanerService {
     return /^SC\d{14}$/.test(value)
   }
 
-  private createErrorDetail(orderNumber: string, message: string): OrderCleanDetail {
+  private createErrorDetail(orderNumber: string, message: string, notFound: boolean = false): OrderCleanDetail {
     return {
       orderNumber,
       materialsDeleted: 0,
@@ -1129,7 +1129,8 @@ export class CleanerService {
       retrySuccess: false,
       materialsFailed: 0,
       failedMaterials: [],
-      uncertainDeletions: 0
+      uncertainDeletions: 0,
+      notFound
     }
   }
 

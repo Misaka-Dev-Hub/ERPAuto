@@ -105,6 +105,7 @@ export interface CleanerHistoryOrderRecord {
   batchId: string
   attemptNumber: number
   orderNumber: string
+  productionId: string | null
   status: string
   materialsDeleted: number
   materialsSkipped: number

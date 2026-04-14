@@ -31,6 +31,7 @@ export interface CleanerOrderRecord {
   batchId: string
   attemptNumber: number
   orderNumber: string
+  productionId: string | null
   status: string
   materialsDeleted: number
   materialsSkipped: number
@@ -87,6 +88,9 @@ export interface InsertCleanerExecutionInput {
 /** 插入订单记录的输入 */
 export interface InsertOrderInput {
   orderNumber: string
+  productionId?: string
+  initialStatus?: string
+  errorMessage?: string
 }
 
 /** 插入物料明细的输入 */
