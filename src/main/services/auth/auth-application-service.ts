@@ -215,6 +215,7 @@ export class AuthApplicationService {
         }
 
         this.sessionManager.logout()
+        this.silentLoginPromise = null
         await this.updateService.setUserContext(null)
       },
       { operation: 'logout' }
