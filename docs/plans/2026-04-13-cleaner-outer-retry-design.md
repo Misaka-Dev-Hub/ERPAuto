@@ -8,13 +8,13 @@
 
 ## 设计决策
 
-| 决策项 | 选择 | 理由 |
-|---|---|---|
-| 重试层级 | CleanerApplicationService | 崩溃后浏览器不可用，必须重新登录 |
-| 重试范围 | 全部订单重新跑 | 简单可靠，物料删除是幂等操作 |
-| 最大重试次数 | 1 次 | 覆盖瞬态故障，不过度消耗时间 |
-| 触发条件 | result.crashed === true | 仅 outer catch 触发时才重试 |
-| 报告去重 | 执行 ID | 用户点击执行时生成，重试不变 |
+| 决策项       | 选择                      | 理由                             |
+| ------------ | ------------------------- | -------------------------------- |
+| 重试层级     | CleanerApplicationService | 崩溃后浏览器不可用，必须重新登录 |
+| 重试范围     | 全部订单重新跑            | 简单可靠，物料删除是幂等操作     |
+| 最大重试次数 | 1 次                      | 覆盖瞬态故障，不过度消耗时间     |
+| 触发条件     | result.crashed === true   | 仅 outer catch 触发时才重试      |
+| 报告去重     | 执行 ID                   | 用户点击执行时生成，重试不变     |
 
 ## 变更清单
 
@@ -25,7 +25,7 @@
 ```typescript
 export interface CleanerResult {
   // ... 现有字段
-  crashed?: boolean  // true = outer catch triggered, 流程级崩溃
+  crashed?: boolean // true = outer catch triggered, 流程级崩溃
 }
 ```
 
@@ -87,6 +87,7 @@ runCleaner(eventSender, input) {
 生成时机: `runCleaner()` 入口处，在 ERP 登录之前。重试时同一个 executionId 不变。
 
 用途:
+
 - 报告文件名: `cleaner-report-CLN-20260410112930-A7FK.md`
 - RustFS 存储路径中包含该 ID，重试时覆盖同一文件
 - 报告内容中显示该 ID
@@ -98,13 +99,13 @@ runCleaner(eventSender, input) {
 在执行摘要表格中新增字段:
 
 ```markdown
-| 项目             | 值                                |
-| ---------------- | --------------------------------- |
-| **执行 ID**      | `CLN-20260410112930-A7FK`         |  ← 新增
-| **应用版本**     | `1.11.1`                          |  ← 新增
-| **执行时间**     | `2026-04-10 11:29:30`             |
-| **执行模式**     | `正式执行`                        |
-| ...              | ...                               |
+| 项目         | 值                        |
+| ------------ | ------------------------- | ------ |
+| **执行 ID**  | `CLN-20260410112930-A7FK` | ← 新增 |
+| **应用版本** | `1.11.1`                  | ← 新增 |
+| **执行时间** | `2026-04-10 11:29:30`     |
+| **执行模式** | `正式执行`                |
+| ...          | ...                       |
 ```
 
 - **执行 ID**: 从 ReportOptions 传入
@@ -118,8 +119,8 @@ export interface ReportOptions {
   username: string
   startTime: number
   endTime: number
-  executionId: string   // ← 新增
-  appVersion: string    // ← 新增
+  executionId: string // ← 新增
+  appVersion: string // ← 新增
 }
 ```
 

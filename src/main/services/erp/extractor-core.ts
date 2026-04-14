@@ -116,7 +116,14 @@ export class ExtractorCore {
 
     if (!fFrame) {
       log.error('Failed to access popup forward frame', {
-        ...(await capturePageContext(popupPage, undefined, 'navigate.forwardFrame'))
+        ...(await capturePageContext(
+          popupPage,
+          undefined,
+          'navigate.forwardFrame',
+          undefined,
+          undefined,
+          'navigate_forward_frame'
+        ))
       })
       throw new Error('Failed to access popup forward frame')
     }
@@ -128,7 +135,14 @@ export class ExtractorCore {
 
     if (!workFrame) {
       log.error('Failed to access inner work frame', {
-        ...(await capturePageContext(popupPage, undefined, 'navigate.innerFrame'))
+        ...(await capturePageContext(
+          popupPage,
+          undefined,
+          'navigate.innerFrame',
+          undefined,
+          undefined,
+          'navigate_inner_frame'
+        ))
       })
       throw new Error('Failed to access inner work frame')
     }

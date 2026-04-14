@@ -26,8 +26,12 @@ interface RetryResult {
 }
 
 interface ProgressState {
-  completedOrders: number
+  ordersStarted: number // 开始处理的订单数
+  ordersCompleted: number // 已完成订单数
   totalOrders: number
+  progressText?: string // "ordersCompleted/totalOrders (xx%)"
+  lastCompletedOrder?: string // 最后完成的订单号
+  lastActivityTime?: number // 最后活动时间戳（健康检查用）
 }
 
 interface QueryResultRow {
@@ -53,6 +57,48 @@ class AsyncMutex {
     } finally {
       release()
     }
+  }
+}
+
+/**
+ * 并发追踪器 - 监控 worker 状态和 mutex 等待情况
+ */
+class ConcurrencyTracker {
+  private activeWorkers = 0
+  private waitQueue = 0
+  private mutexWaitCount = 0
+
+  workerStarted() {
+    this.activeWorkers++
+    log.verbose('[CONCURRENCY] Worker started', {
+      activeWorkers: this.activeWorkers,
+      waitQueue: this.waitQueue,
+      waitingForPopupMutex: this.mutexWaitCount > 0
+    })
+  }
+
+  workerCompleted() {
+    this.activeWorkers--
+    log.verbose('[CONCURRENCY] Worker completed', {
+      activeWorkers: this.activeWorkers,
+      queueRemaining: this.waitQueue
+    })
+  }
+
+  waitingForMutex() {
+    this.mutexWaitCount++
+    log.warn('[CONCURRENCY] Worker waiting for popup mutex', {
+      mutexWaitCount: this.mutexWaitCount,
+      activeWorkers: this.activeWorkers
+    })
+  }
+
+  acquiredMutex() {
+    this.mutexWaitCount--
+    log.verbose('[CONCURRENCY] Worker acquired popup mutex', {
+      mutexWaitCount: this.mutexWaitCount,
+      activeWorkers: this.activeWorkers
+    })
   }
 }
 
@@ -242,7 +288,8 @@ export class CleanerService {
       const orderBatches = createBatches(input.orderNumbers, queryBatchSize)
       const popupMutex = new AsyncMutex()
       const progressState: ProgressState = {
-        completedOrders: 0,
+        ordersStarted: 0,
+        ordersCompleted: 0,
         totalOrders
       }
 
@@ -257,58 +304,131 @@ export class CleanerService {
           totalMaterials
         })
 
+        // [新增] 健康检查定时器 - 检测长时间无进展
+        let lastActivityTime = Date.now()
+        progressState.lastActivityTime = lastActivityTime
+        const healthCheckInterval = setInterval(() => {
+          const secondsSinceLastActivity = (Date.now() - lastActivityTime) / 1000
+
+          if (secondsSinceLastActivity > 60) {
+            log.warn('[HEALTH_CHECK] 长时间无进展', {
+              ordersCompleted: progressState.ordersCompleted,
+              totalOrders: progressState.totalOrders,
+              lastCompletedOrder: progressState.lastCompletedOrder,
+              noProgressSeconds: secondsSinceLastActivity,
+              suspectedStuck: secondsSinceLastActivity > 180,
+              healthStatus: secondsSinceLastActivity > 180 ? 'critical' : 'warning'
+            })
+          }
+        }, 30000) // 每 30 秒检查一次
+
+        // [新增] 为每个 batch 创建并发追踪器
+        const tracker = new ConcurrencyTracker()
+
         // Track batch processing duration with 5s slow threshold
         await trackDuration(
           async () => {
-            await this.queryOrders(workFrame, batchOrders)
-            await this.waitForLoading(workFrame)
-
-            const queriedRows = await this.collectQueryResultRows(workFrame)
-            const queriedOrderNumbersInBatch = new Set(queriedRows.map((row) => row.orderNumber))
-
-            await runWithConcurrency(queriedRows, processConcurrency, async (row) => {
-              const { rowIndex, orderNumber } = row
-              const openedDetailPage = await popupMutex.runExclusive(async () => {
-                return await this.openDetailPageFromRow(workFrame, popupPage!, rowIndex)
-              })
-
-              let detail: OrderCleanDetail
-              try {
-                detail = await this.processDetailPage({
-                  detailPage: openedDetailPage,
-                  deleteSet,
-                  dryRun,
-                  expectedOrderNumber: orderNumber,
-                  progressState,
-                  onProgress: input.onProgress
-                })
-              } catch (error) {
-                const message = error instanceof Error ? error.message : 'Unknown error'
-                detail = this.createErrorDetail(orderNumber, message)
-              } finally {
-                progressState.completedOrders += 1
-              }
-
-              result.details.push(detail)
-
-              if (detail.errors.length > 0) {
-                result.errors.push(`Order ${detail.orderNumber}: ${detail.errors.join('; ')}`)
-                return
-              }
-
-              result.ordersProcessed += 1
-              result.materialsDeleted += detail.materialsDeleted
-              result.materialsSkipped += detail.materialsSkipped
-              result.materialsFailed += detail.materialsFailed
-              result.uncertainDeletions += detail.uncertainDeletions
+            // Phase 1: Query orders
+            await trackDuration(async () => await this.queryOrders(workFrame, batchOrders), {
+              operationName: 'query',
+              message: '执行订单查询',
+              slowThresholdMs: 3000,
+              context: { orderCount: batchOrders.length }
             })
 
-            const missingOrders = getMissingOrders(batchOrders, queriedOrderNumbersInBatch)
-            for (const missingOrder of missingOrders) {
-              const missingMessage = '订单未出现在查询结果中'
-              result.errors.push(`Order ${missingOrder}: ${missingMessage}`)
-              result.details.push(this.createErrorDetail(missingOrder, missingMessage, true))
-            }
+            // Phase 2: Wait for loading complete
+            await trackDuration(async () => await this.waitForLoading(workFrame), {
+              operationName: 'wait_loading',
+              message: '等待加载完成',
+              slowThresholdMs: 5000
+            })
+
+            // Phase 3: Collect query results
+            const collectResult = await trackDuration(
+              async () => await this.collectQueryResultRows(workFrame),
+              {
+                operationName: 'collect_results',
+                message: '收集查询结果',
+                slowThresholdMs: 2000
+              }
+            )
+            const queriedRows = collectResult.result
+            const queriedOrderNumbersInBatch = new Set(queriedRows.map((row) => row.orderNumber))
+
+            // Phase 4: Process all orders in batch
+            await trackDuration(
+              async () => {
+                await runWithConcurrency(queriedRows, processConcurrency, async (row) => {
+                  const { rowIndex, orderNumber } = row
+
+                  // [新增] Worker 开始追踪
+                  tracker.workerStarted()
+
+                  try {
+                    const openedDetailPage = await popupMutex.runExclusive(async () => {
+                      // [新增] Mutex 等待追踪
+                      tracker.waitingForMutex()
+                      const page = await this.openDetailPageFromRow(workFrame, popupPage!, rowIndex)
+                      // [新增] Mutex 获取追踪
+                      tracker.acquiredMutex()
+                      return page
+                    })
+
+                    let detail: OrderCleanDetail
+                    try {
+                      detail = await this.processDetailPage({
+                        detailPage: openedDetailPage,
+                        deleteSet,
+                        dryRun,
+                        expectedOrderNumber: orderNumber,
+                        progressState,
+                        onProgress: input.onProgress
+                      })
+                    } catch (error) {
+                      const message = error instanceof Error ? error.message : 'Unknown error'
+                      detail = this.createErrorDetail(orderNumber, message)
+                    } finally {
+                      progressState.ordersStarted += 1
+                      progressState.ordersCompleted += 1
+                      progressState.lastCompletedOrder = orderNumber
+                      lastActivityTime = Date.now() // [新增] 健康检查：更新活动时间
+                    }
+
+                    result.details.push(detail)
+
+                    if (detail.errors.length > 0) {
+                      result.errors.push(`Order ${detail.orderNumber}: ${detail.errors.join('; ')}`)
+                      return
+                    }
+
+                    result.ordersProcessed += 1
+                    result.materialsDeleted += detail.materialsDeleted
+                    result.materialsSkipped += detail.materialsSkipped
+                    result.materialsFailed += detail.materialsFailed
+                    result.uncertainDeletions += detail.uncertainDeletions
+                  } finally {
+                    // [新增] Worker 完成追踪
+                    tracker.workerCompleted()
+                  }
+                })
+
+                // Handle missing orders
+                const missingOrders = getMissingOrders(batchOrders, queriedOrderNumbersInBatch)
+                for (const missingOrder of missingOrders) {
+                  const missingMessage = '订单未出现在查询结果中'
+                  result.errors.push(`Order ${missingOrder}: ${missingMessage}`)
+                  result.details.push(this.createErrorDetail(missingOrder, missingMessage, true))
+                }
+              },
+              {
+                operationName: 'process_all_orders_in_batch',
+                message: `处理批次中所有${queriedRows.length}个订单`,
+                slowThresholdMs: 10000
+              }
+            )
+
+            // Phase 5: Save batch results (already included in process_all_orders_in_batch)
+            // No separate save step needed as results are accumulated in result object
           },
           {
             operationName: `batch-${batchIndex + 1}-${orderBatches[batchIndex].length}-orders`,
@@ -323,6 +443,9 @@ export class CleanerService {
             }
           }
         )
+
+        // [新增] 清理健康检查定时器
+        clearInterval(healthCheckInterval)
       }
 
       const retryResult = await this.retryFailedOrders({
@@ -381,7 +504,16 @@ export class CleanerService {
         dryRun,
         orderNumbers: input.orderNumbers,
         materialCodes: input.materialCodes,
-        ...(popupPage ? await capturePageContext(popupPage, undefined, 'cleaner.outerCatch') : {})
+        ...(popupPage
+          ? await capturePageContext(
+              popupPage,
+              undefined,
+              'cleaner.outerCatch',
+              undefined,
+              undefined,
+              'outer_catch'
+            )
+          : {})
       })
       result.errors.push(`Clean failed: ${message}`)
       result.crashed = true
@@ -438,7 +570,14 @@ export class CleanerService {
       log.error('[导航失败] forwardFrame 为空', {
         elapsedMs: Date.now() - navStartTime,
         pageUrl: popupPage.url(),
-        contextData: await capturePageContext(popupPage, undefined, 'nav.forwardFrame')
+        contextData: await capturePageContext(
+          popupPage,
+          undefined,
+          'nav.forwardFrame',
+          undefined,
+          undefined,
+          'nav_forward_frame'
+        )
       })
       throw new Error('无法访问弹出窗口的 forwardFrame')
     }
@@ -457,7 +596,14 @@ export class CleanerService {
       log.error('[导航失败] workFrame 为空', {
         elapsedMs: Date.now() - navStartTime,
         pageUrl: popupPage.url(),
-        contextData: await capturePageContext(popupPage, undefined, 'nav.workFrame')
+        contextData: await capturePageContext(
+          popupPage,
+          undefined,
+          'nav.workFrame',
+          undefined,
+          undefined,
+          'nav_work_frame'
+        )
       })
       throw new Error('无法访问内部工作框架')
     }
@@ -680,13 +826,39 @@ export class CleanerService {
     const { detailPage, deleteSet, dryRun, progressState, expectedOrderNumber, onProgress } = params
     const processStartTime = Date.now()
 
+    log.info('[ORDER_START] 开始处理订单', {
+      orderIndex: progressState.ordersStarted,
+      orderPosition: `${progressState.ordersStarted + 1}/${progressState.totalOrders}`,
+      orderNumber: expectedOrderNumber,
+      phase: 'starting',
+      elapsedMs: Date.now() - processStartTime
+    })
+
     log.info('[订单详情处理开始]', {
       expectedOrderNumber,
       dryRun,
       deleteSetSize: deleteSet.size,
-      completedOrders: progressState.completedOrders,
+      ordersStarted: progressState.ordersStarted,
+      ordersCompleted: progressState.ordersCompleted,
       totalOrders: progressState.totalOrders
     })
+
+    let detailCount = 0
+    const detail: OrderCleanDetail = {
+      orderNumber: expectedOrderNumber || 'UNKNOWN',
+      materialsDeleted: 0,
+      materialsSkipped: 0,
+      errors: [],
+      skippedMaterials: [],
+      deletedMaterials: [],
+      retryCount: 0,
+      retryAttempts: [],
+      retriedAt: undefined,
+      retrySuccess: false,
+      materialsFailed: 0,
+      failedMaterials: [],
+      uncertainDeletions: 0
+    }
 
     try {
       // Step 1: Access forward frame
@@ -699,7 +871,14 @@ export class CleanerService {
         log.error('[详情页面失败] forwardFrame 访问失败', {
           elapsedMs: Date.now() - processStartTime,
           pageUrl: detailPage.url(),
-          contextData: await capturePageContext(detailPage)
+          contextData: await capturePageContext(
+            detailPage,
+            undefined,
+            'processDetail.forwardFrame',
+            expectedOrderNumber,
+            undefined,
+            'process_detail_forward_frame'
+          )
         })
         throw new Error(errorMsg)
       }
@@ -721,7 +900,10 @@ export class CleanerService {
           contextData: await capturePageContext(
             detailPage,
             undefined,
-            'processDetail.detailInnerFrame'
+            'processDetail.detailInnerFrame',
+            expectedOrderNumber,
+            undefined,
+            'process_detail_inner_frame'
           )
         })
         throw new Error(errorMsg)
@@ -752,21 +934,8 @@ export class CleanerService {
         usedFallback: !sourceOrderNumber && !!expectedOrderNumber
       })
 
-      const detail: OrderCleanDetail = {
-        orderNumber,
-        materialsDeleted: 0,
-        materialsSkipped: 0,
-        errors: [],
-        skippedMaterials: [],
-        deletedMaterials: [],
-        retryCount: 0,
-        retryAttempts: [],
-        retriedAt: undefined,
-        retrySuccess: false,
-        materialsFailed: 0,
-        failedMaterials: [],
-        uncertainDeletions: 0
-      }
+      // 更新 orderNumber 为实际提取的值或 fallback
+      detail.orderNumber = orderNumber
 
       // Step 5: Get material counts and status
       log.debug('[详情页面 Step 5] 读取物料数量和状态')
@@ -788,13 +957,13 @@ export class CleanerService {
       onProgress?.(
         `开始处理订单：${orderNumber}`,
         this.calculateProgress(
-          progressState.completedOrders,
+          progressState.ordersStarted,
           0,
           detailCount,
           progressState.totalOrders
         ),
         {
-          currentOrderIndex: progressState.completedOrders + 1,
+          currentOrderIndex: progressState.ordersStarted + 1,
           totalOrders: progressState.totalOrders,
           currentMaterialIndex: 0,
           totalMaterialsInOrder: detailCount,
@@ -861,7 +1030,7 @@ export class CleanerService {
           const pendingQty = await this.getInputValue(childForm, /^累计待发数量$/)
 
           const progress = this.calculateProgress(
-            progressState.completedOrders,
+            progressState.ordersStarted,
             materialIdx,
             detailCount,
             progressState.totalOrders
@@ -871,7 +1040,7 @@ export class CleanerService {
             `订单 ${orderNumber} - 物料 ${materialIdx}/${detailCount}: ${materialName}`,
             progress,
             {
-              currentOrderIndex: progressState.completedOrders + 1,
+              currentOrderIndex: progressState.ordersStarted + 1,
               totalOrders: progressState.totalOrders,
               currentMaterialIndex: materialIdx,
               totalMaterialsInOrder: detailCount,
@@ -1078,10 +1247,31 @@ export class CleanerService {
         orderNumber: expectedOrderNumber || 'UNKNOWN',
         error: message,
         elapsedMs: Date.now() - processStartTime,
-        contextData: await capturePageContext(detailPage, undefined, 'processDetail.error')
+        contextData: await capturePageContext(
+          detailPage,
+          undefined,
+          'processDetail.error',
+          expectedOrderNumber,
+          undefined,
+          'process_detail_error'
+        )
       })
       throw error
     } finally {
+      const totalOrderTime = Date.now() - processStartTime
+      log.info('[ORDER_COMPLETE] 订单处理完成', {
+        orderIndex: progressState.ordersStarted,
+        orderPosition: `${progressState.ordersStarted + 1}/${progressState.totalOrders}`,
+        ordersCompleted: progressState.ordersCompleted,
+        orderNumber: expectedOrderNumber || 'UNKNOWN',
+        totalMaterials: detailCount,
+        deleted: detail?.materialsDeleted ?? 0,
+        skipped: detail?.materialsSkipped ?? 0,
+        failed: detail?.materialsFailed ?? 0,
+        totalOrderTimeMs: totalOrderTime,
+        isSlow: totalOrderTime > 30000
+      })
+
       log.debug('[详情页面清理] 准备关闭详情页面', { pageUrl: detailPage.url() })
       await detailPage.close()
       log.debug('[详情页面清理完成] 详情页已关闭')
@@ -1115,7 +1305,11 @@ export class CleanerService {
     return /^SC\d{14}$/.test(value)
   }
 
-  private createErrorDetail(orderNumber: string, message: string, notFound: boolean = false): OrderCleanDetail {
+  private createErrorDetail(
+    orderNumber: string,
+    message: string,
+    notFound: boolean = false
+  ): OrderCleanDetail {
     return {
       orderNumber,
       materialsDeleted: 0,
@@ -1589,7 +1783,8 @@ export class CleanerService {
                 dryRun,
                 expectedOrderNumber: orderNumber,
                 progressState: {
-                  completedOrders: detailIndex,
+                  ordersStarted: detailIndex,
+                  ordersCompleted: 0,
                   totalOrders: failedDetails.length
                 },
                 onProgress: (message, progress, extra) => {

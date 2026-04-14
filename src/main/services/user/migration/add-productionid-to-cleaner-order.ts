@@ -42,9 +42,7 @@ async function runMySQLMigration(): Promise<void> {
       return
     }
 
-    await service.query(
-      `ALTER TABLE CleanerOrderHistory ADD COLUMN ProductionId VARCHAR(50) NULL`
-    )
+    await service.query(`ALTER TABLE CleanerOrderHistory ADD COLUMN ProductionId VARCHAR(50) NULL`)
     console.log('Added ProductionId column to CleanerOrderHistory.')
   } finally {
     if (service.isConnected()) await service.disconnect()

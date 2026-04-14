@@ -91,7 +91,7 @@ vi.mock('../../../../src/main/services/erp/erp-auth', () => ({
 }))
 
 vi.mock('../../../../src/main/services/database/cleaner-operation-history-dao', () => ({
-CleanerOperationHistoryDAO: class {
+  CleanerOperationHistoryDAO: class {
     async getBatchDetails(batchId: string) {
       return { executions: [{ attemptNumber: 1, isDryRun: false }], orders: [] }
     }

@@ -16,6 +16,9 @@ export interface ErpErrorContext {
   targetSelector?: string
   step?: string
   screenshotPath?: string
+  orderId?: string
+  materialCode?: string
+  errorStage?: string
 }
 
 /**
@@ -69,11 +72,18 @@ async function captureScreenshot(page: Page, step?: string): Promise<string | un
  *
  * @param page - The Playwright page to inspect
  * @param targetSelector - Optional selector that was being targeted
+ * @param step - Optional step name for context
+ * @param orderId - Optional order ID for error correlation
+ * @param materialCode - Optional material code for error correlation
+ * @param stage - Optional stage name (defaults to 'unknown')
  */
 export async function capturePageContext(
   page: Page,
   targetSelector?: string,
-  step?: string
+  step?: string,
+  orderId?: string,
+  materialCode?: string,
+  stage: string = 'unknown'
 ): Promise<ErpErrorContext> {
   const ctx: ErpErrorContext = {}
 
@@ -97,6 +107,16 @@ export async function capturePageContext(
   if (step) {
     ctx.step = step
   }
+
+  if (orderId) {
+    ctx.orderId = orderId
+  }
+
+  if (materialCode) {
+    ctx.materialCode = materialCode
+  }
+
+  ctx.errorStage = stage
 
   ctx.screenshotPath = await captureScreenshot(page, step)
 

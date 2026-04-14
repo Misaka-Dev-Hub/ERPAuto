@@ -13,6 +13,7 @@
 ## Task 1: 新增类型定义
 
 **Files:**
+
 - Create: `src/main/types/cleaner-history.types.ts`
 
 **Step 1: 创建类型文件**
@@ -146,6 +147,7 @@ feat(cleaner): add type definitions for cleaner operation history
 ## Task 2: 新增 DAO 层
 
 **Files:**
+
 - Create: `src/main/services/database/cleaner-operation-history-dao.ts`
 
 **Step 1: 创建 DAO 文件**
@@ -165,47 +167,101 @@ export class CleanerOperationHistoryDAO {
   }
 
   async insertExecution(input: InsertCleanerExecutionInput): Promise<boolean>
-  async updateExecutionStatus(batchId: string, attemptNumber: number, status: string, ordersProcessed: number, materialsDeleted: number, materialsSkipped: number, materialsFailed: number, uncertainDeletions: number, endTime: Date, errorMessage?: string): Promise<boolean>
+  async updateExecutionStatus(
+    batchId: string,
+    attemptNumber: number,
+    status: string,
+    ordersProcessed: number,
+    materialsDeleted: number,
+    materialsSkipped: number,
+    materialsFailed: number,
+    uncertainDeletions: number,
+    endTime: Date,
+    errorMessage?: string
+  ): Promise<boolean>
 
   // ===== 订单表 =====
   private getOrderTableName(): string {
     return this.getDialect().quoteTableName('ERPAuto', 'CleanerOrderHistory')
   }
 
-  async insertOrderRecords(batchId: string, attemptNumber: number, orders: InsertOrderInput[]): Promise<boolean>
-  async updateOrderStatus(batchId: string, attemptNumber: number, orderNumber: string, status: string, materialsDeleted: number, materialsSkipped: number, materialsFailed: number, uncertainDeletions: number, retryCount: number, retrySuccess: boolean, errorMessage?: string): Promise<boolean>
+  async insertOrderRecords(
+    batchId: string,
+    attemptNumber: number,
+    orders: InsertOrderInput[]
+  ): Promise<boolean>
+  async updateOrderStatus(
+    batchId: string,
+    attemptNumber: number,
+    orderNumber: string,
+    status: string,
+    materialsDeleted: number,
+    materialsSkipped: number,
+    materialsFailed: number,
+    uncertainDeletions: number,
+    retryCount: number,
+    retrySuccess: boolean,
+    errorMessage?: string
+  ): Promise<boolean>
 
   // ===== 物料表 =====
   private getMaterialTableName(): string {
     return this.getDialect().quoteTableName('ERPAuto', 'CleanerMaterialDetail')
   }
 
-  async insertMaterialDetails(batchId: string, attemptNumber: number, details: InsertMaterialDetailInput[]): Promise<boolean>
+  async insertMaterialDetails(
+    batchId: string,
+    attemptNumber: number,
+    details: InsertMaterialDetailInput[]
+  ): Promise<boolean>
 
   // ===== 查询 =====
-  async getBatches(userId?: number, options?: GetCleanerBatchesOptions): Promise<CleanerBatchStats[]>
-  async getBatchDetails(batchId: string): Promise<{ executions: CleanerExecutionRecord[]; orders: CleanerOrderRecord[] }>
-  async getMaterialDetails(batchId: string, attemptNumber: number, orderNumber: string): Promise<CleanerMaterialRecord[]>
+  async getBatches(
+    userId?: number,
+    options?: GetCleanerBatchesOptions
+  ): Promise<CleanerBatchStats[]>
+  async getBatchDetails(
+    batchId: string
+  ): Promise<{ executions: CleanerExecutionRecord[]; orders: CleanerOrderRecord[] }>
+  async getMaterialDetails(
+    batchId: string,
+    attemptNumber: number,
+    orderNumber: string
+  ): Promise<CleanerMaterialRecord[]>
 
   // ===== 删除 =====
-  async deleteBatch(batchId: string, requestingUserId: number, isAdmin: boolean): Promise<{ success: boolean; error?: string }>
+  async deleteBatch(
+    batchId: string,
+    requestingUserId: number,
+    isAdmin: boolean
+  ): Promise<{ success: boolean; error?: string }>
 
   // ===== 列询执行级记录 =====
-  async getMaterialDetails(batchId: string, attemptNumber: number, orderNumber: string): Promise<CleanerMaterialRecord[]>
+  async getMaterialDetails(
+    batchId: string,
+    attemptNumber: number,
+    orderNumber: string
+  ): Promise<CleanerMaterialRecord[]>
 
   // ===== 删除 =====
-  async deleteBatch(batchId: string, requestingUserId: number, isAdmin: boolean): Promise<{ success: boolean; error?: string }>
+  async deleteBatch(
+    batchId: string,
+    requestingUserId: number,
+    isAdmin: boolean
+  ): Promise<{ success: boolean; error?: string }>
   async disconnect(): Promise<void>
 }
 ```
 
 `getBatches` 查询逻辑：
+
 - `GROUP BY BatchId`，取 `MAX(AttemptNumber)` 对应的执行记录状态作为最终状态
 - 汇总订单级的 success/failed 计数
 - 支持 userId 过滤（普通用户）和 usernames 过滤（管理员）
 - 支持分页
 
 `getBatchDetails` 查询逻辑：
+
 - 返回某 BatchId 下所有 execution 记录 + order 记录
 - 前端用 attemptNumber 区分不同尝试
 
@@ -227,6 +283,7 @@ feat(cleaner): add CleanerOperationHistoryDAO for three-table persistence
 ## Task 3: 新增 IPC channels
 
 **Files:**
+
 - Modify: `src/shared/ipc-channels.ts`
 
 **Step 1: 添加 cleaner history channels**
@@ -252,6 +309,7 @@ feat(cleaner): add IPC channels for cleaner operation history
 ## Task 4: 新增 IPC handler
 
 **Files:**
+
 - Create: `src/main/ipc/cleaner-history-handler.ts`
 - Modify: `src/main/ipc/index.ts` — 注册新 handler
 
@@ -282,14 +340,24 @@ export function registerCleanerHistoryHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.CLEANER_HISTORY_GET_BATCH_DETAILS,
-    async (event, batchId: string): Promise<IpcResult<{ executions: CleanerExecutionRecord[]; orders: CleanerOrderRecord[] }>> => {
+    async (
+      event,
+      batchId: string
+    ): Promise<
+      IpcResult<{ executions: CleanerExecutionRecord[]; orders: CleanerOrderRecord[] }>
+    > => {
       // ... 与 operation-history-handler 的 getBatchDetails 模式一致
     }
   )
 
   ipcMain.handle(
     IPC_CHANNELS.CLEANER_HISTORY_GET_MATERIAL_DETAILS,
-    async (event, batchId: string, attemptNumber: number, orderNumber: string): Promise<IpcResult<CleanerMaterialRecord[]>> => {
+    async (
+      event,
+      batchId: string,
+      attemptNumber: number,
+      orderNumber: string
+    ): Promise<IpcResult<CleanerMaterialRecord[]>> => {
       // ...
     }
   )
@@ -323,6 +391,7 @@ feat(cleaner): add IPC handlers for cleaner operation history
 ## Task 5: 新增 Preload API
 
 **Files:**
+
 - Modify: `src/preload/api/cleaner.ts` — 新增 history 方法
 - Modify: `src/preload/index.d.ts` — 新增类型声明
 
@@ -374,6 +443,7 @@ feat(cleaner): add preload API for cleaner operation history
 ## Task 6: 改造 CleanerApplicationService — 写入数据库记录
 
 **Files:**
+
 - Modify: `src/main/services/cleaner/cleaner-application-service.ts`
 
 这是核心变更。`runCleaner` 方法需要：
@@ -403,6 +473,7 @@ async runCleaner(
 **Step 4: 执行后更新订单记录和写入物料明细**
 
 清理完成后遍历 `result.details`（`OrderCleanDetail[]`），对每个订单：
+
 - 调用 `historyDao.updateOrderStatus(...)` 更新订单结果
 - 调用 `historyDao.insertMaterialDetails(...)` 写入物料明细（skipped + failed 材料全部写入）
 
@@ -413,6 +484,7 @@ async runCleaner(
 **Step 6: 外层重试改造**
 
 当 `result.crashed` 时：
+
 1. 调用 `historyDao.updateExecutionStatus(batchId, 1, 'crashed', ...)` 标记首次尝试为 crashed
 2. 调用 `historyDao.insertExecution({ batchId, attemptNumber: 2, ... })` 创建第二次尝试
 3. 调用 `historyDao.insertOrderRecords(batchId, 2, orders)` 写入第二次尝试的 pending 订单
@@ -435,11 +507,13 @@ refactor(cleaner): replace report generation with database persistence
 ## Task 7: 改造 cleaner-handler.ts — 执行前后写入
 
 **Files:**
+
 - Modify: `src/main/ipc/cleaner-handler.ts`
 
 **Step 1: 修改 CLEANER_RUN handler**
 
 在调用 `cleanerService.runCleaner()` 之前：
+
 1. 获取当前用户信息
 2. `batchId = randomUUID()`
 3. 创建 `CleanerOperationHistoryDAO` 实例
@@ -469,6 +543,7 @@ refactor(cleaner): write execution records to database in IPC handler
 ## Task 8: 删除 Markdown 报告生成器
 
 **Files:**
+
 - Delete: `src/main/services/report/cleaner-report-generator.ts`
 
 **Step 1: 删除文件**
@@ -495,6 +570,7 @@ refactor(cleaner): remove Markdown report generator
 ## Task 9: 前端 — 新增操作历史弹窗
 
 **Files:**
+
 - Create: `src/renderer/src/components/CleanerOperationHistoryModal.tsx`
 - Modify: `src/renderer/src/pages/CleanerPage.tsx`
 
@@ -531,6 +607,7 @@ feat(cleaner): add operation history modal with database-backed records
 ## Task 10: 更新 renderer 类型定义
 
 **Files:**
+
 - Modify: `src/renderer/src/hooks/cleaner/types.ts`
 
 **Step 1: 添加 history 相关类型**
@@ -553,6 +630,7 @@ feat(cleaner): add renderer types for cleaner operation history
 ## Task 11: 清理旧代码
 
 **Files:**
+
 - Modify: `src/renderer/src/hooks/cleaner/types.ts` — 移除 `CleanerReportData.crashed`（如果不再需要）
 - 检查 `ReportViewerDialog.tsx`、`ReportAnalysisDialog.tsx` 是否仍被 Cleaner 使用
 
@@ -564,6 +642,7 @@ feat(cleaner): add renderer types for cleaner operation history
 **Step 2: 评估 ReportViewerDialog 和 ReportAnalysisDialog**
 
 这两个组件目前用于查看 Markdown 报告文件。如果 Cleaner 不再使用它们：
+
 - 在 CleanerPage 中移除相关按钮和引用
 - 不删除组件本身（Extractor 可能仍在使用，后续统一清理）
 

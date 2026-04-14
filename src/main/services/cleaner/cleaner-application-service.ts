@@ -484,11 +484,7 @@ export class CleanerApplicationService {
           batchId,
           attemptNumber,
           detail.orderNumber,
-          detail.notFound
-            ? 'erp_not_found'
-            : detail.errors.length > 0
-              ? 'failed'
-              : 'success',
+          detail.notFound ? 'erp_not_found' : detail.errors.length > 0 ? 'failed' : 'success',
           detail.materialsDeleted,
           detail.materialsSkipped,
           detail.materialsFailed,

@@ -82,7 +82,14 @@ export class ErpAuthService {
 
     if (!contentFrame) {
       log.error('Failed to access forwardFrame content frame', {
-        ...(await capturePageContext(page))
+        ...(await capturePageContext(
+          page,
+          undefined,
+          'auth.forwardFrame',
+          undefined,
+          undefined,
+          'auth_forward_frame'
+        ))
       })
       throw new Error('Failed to access forwardFrame content frame')
     }
@@ -96,7 +103,14 @@ export class ErpAuthService {
     } catch (e) {
       log.error('Failed to find username input', {
         error: e instanceof Error ? e.message : String(e),
-        ...(await capturePageContext(page, undefined, 'login.username'))
+        ...(await capturePageContext(
+          page,
+          undefined,
+          'login.username',
+          undefined,
+          undefined,
+          'login_username'
+        ))
       })
       throw new Error(`Failed to find username input: ${e}`)
     }
@@ -107,7 +121,14 @@ export class ErpAuthService {
     } catch (e) {
       log.error('Failed to find password input', {
         error: e instanceof Error ? e.message : String(e),
-        ...(await capturePageContext(page, undefined, 'login.password'))
+        ...(await capturePageContext(
+          page,
+          undefined,
+          'login.password',
+          undefined,
+          undefined,
+          'login_password'
+        ))
       })
       throw new Error(`Failed to find password input: ${e}`)
     }
@@ -118,7 +139,14 @@ export class ErpAuthService {
     } catch (e) {
       log.error('Failed to click login button', {
         error: e instanceof Error ? e.message : String(e),
-        ...(await capturePageContext(page, undefined, 'login.button'))
+        ...(await capturePageContext(
+          page,
+          undefined,
+          'login.button',
+          undefined,
+          undefined,
+          'login_button'
+        ))
       })
       throw new Error(`Failed to click login button: ${e}`)
     }

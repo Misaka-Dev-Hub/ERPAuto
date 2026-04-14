@@ -13,14 +13,14 @@ Extractor 已有成熟的数据库持久化模式（`ExtractorOperationHistory` 
 
 ## 设计决策
 
-| 决策项 | 选择 | 理由 |
-|--------|------|------|
-| 表结构 | 独立建表，不与 Extractor 共用 | Cleaner 数据结构差异大（双层、物料级详情），独立更清晰 |
-| 记录粒度 | 执行 + 订单 + 物料三层 | 执行表存全局信息，订单表存订单汇总，物料表存操作明细 |
-| 批次标识 | `BatchId`（UUID），与 Extractor 一致 | 标准、简洁，不需要嵌入时间戳 |
-| 重试记录 | 不覆盖，每次尝试独立写入，用 `AttemptNumber` 区分 | 保留完整审计链，为后续智能跳过提供数据基础 |
-| 报告文件 | 移除 Markdown 报告和 RustFS 上传 | 数据库完全替代，报告相关代码（CleanerReportGenerator、generateAndUploadReport）删除 |
-| 前端历史 | 独立 CleanerOperationHistoryModal，复用 Extractor 的 UI 模式 | 放在 CleanerPage 上，与 Extractor 的"操作历史"按钮对齐 |
+| 决策项   | 选择                                                         | 理由                                                                                |
+| -------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| 表结构   | 独立建表，不与 Extractor 共用                                | Cleaner 数据结构差异大（双层、物料级详情），独立更清晰                              |
+| 记录粒度 | 执行 + 订单 + 物料三层                                       | 执行表存全局信息，订单表存订单汇总，物料表存操作明细                                |
+| 批次标识 | `BatchId`（UUID），与 Extractor 一致                         | 标准、简洁，不需要嵌入时间戳                                                        |
+| 重试记录 | 不覆盖，每次尝试独立写入，用 `AttemptNumber` 区分            | 保留完整审计链，为后续智能跳过提供数据基础                                          |
+| 报告文件 | 移除 Markdown 报告和 RustFS 上传                             | 数据库完全替代，报告相关代码（CleanerReportGenerator、generateAndUploadReport）删除 |
+| 前端历史 | 独立 CleanerOperationHistoryModal，复用 Extractor 的 UI 模式 | 放在 CleanerPage 上，与 Extractor 的"操作历史"按钮对齐                              |
 
 ## 数据库表结构
 
@@ -32,25 +32,25 @@ Extractor 已有成熟的数据库持久化模式（`ExtractorOperationHistory` 
 
 一次清理操作（含重试）的全局信息。每次尝试一行记录。
 
-| 列名 | 类型 | 说明 |
-|------|------|------|
-| ID | INT IDENTITY | 自增主键 |
-| BatchId | UNIQUEIDENTIFIER | 批次 ID，一次清理操作（含重试）共享 |
-| AttemptNumber | INT | 第几次尝试（1=首次，2=外层重试） |
-| UserId | INT | 操作用户 ID |
-| Username | NVARCHAR(255) | 操作用户名 |
-| OperationTime | DATETIME | 操作时间 |
-| EndTime | DATETIME | 结束时间 |
-| Status | NVARCHAR(50) | pending / success / failed / partial / crashed |
-| IsDryRun | BIT | 是否模拟运行 |
-| TotalOrders | INT | 订单总数 |
-| OrdersProcessed | INT | 已处理订单数 |
-| TotalMaterialsDeleted | INT | 总删除物料数 |
-| TotalMaterialsSkipped | INT | 总跳过物料数 |
-| TotalMaterialsFailed | INT | 总失败物料数 |
-| TotalUncertainDeletions | INT | 总不确定删除数 |
-| ErrorMessage | NVARCHAR(MAX) | 全局错误信息（如外层崩溃原因） |
-| AppVersion | NVARCHAR(20) | 应用版本号 |
+| 列名                    | 类型             | 说明                                           |
+| ----------------------- | ---------------- | ---------------------------------------------- |
+| ID                      | INT IDENTITY     | 自增主键                                       |
+| BatchId                 | UNIQUEIDENTIFIER | 批次 ID，一次清理操作（含重试）共享            |
+| AttemptNumber           | INT              | 第几次尝试（1=首次，2=外层重试）               |
+| UserId                  | INT              | 操作用户 ID                                    |
+| Username                | NVARCHAR(255)    | 操作用户名                                     |
+| OperationTime           | DATETIME         | 操作时间                                       |
+| EndTime                 | DATETIME         | 结束时间                                       |
+| Status                  | NVARCHAR(50)     | pending / success / failed / partial / crashed |
+| IsDryRun                | BIT              | 是否模拟运行                                   |
+| TotalOrders             | INT              | 订单总数                                       |
+| OrdersProcessed         | INT              | 已处理订单数                                   |
+| TotalMaterialsDeleted   | INT              | 总删除物料数                                   |
+| TotalMaterialsSkipped   | INT              | 总跳过物料数                                   |
+| TotalMaterialsFailed    | INT              | 总失败物料数                                   |
+| TotalUncertainDeletions | INT              | 总不确定删除数                                 |
+| ErrorMessage            | NVARCHAR(MAX)    | 全局错误信息（如外层崩溃原因）                 |
+| AppVersion              | NVARCHAR(20)     | 应用版本号                                     |
 
 ### 2. `CleanerOrderHistory`（订单级）
 
@@ -58,20 +58,20 @@ Extractor 已有成熟的数据库持久化模式（`ExtractorOperationHistory` 
 
 每个订单在每次尝试中的执行结果。每个订单每次尝试一行记录。
 
-| 列名 | 类型 | 说明 |
-|------|------|------|
-| ID | INT IDENTITY | 自增主键 |
-| BatchId | UNIQUEIDENTIFIER | 关联执行表 BatchId |
-| AttemptNumber | INT | 关联执行表 AttemptNumber |
-| OrderNumber | NVARCHAR(255) | 订单号 |
-| Status | NVARCHAR(50) | pending / success / failed |
-| MaterialsDeleted | INT | 删除物料数 |
-| MaterialsSkipped | INT | 跳过物料数 |
-| MaterialsFailed | INT | 删除失败物料数 |
-| UncertainDeletions | INT | 不确定删除数 |
-| RetryCount | INT | 内层重试次数 |
-| RetrySuccess | BIT | 内层重试是否成功 |
-| ErrorMessage | NVARCHAR(MAX) | 错误信息 |
+| 列名               | 类型             | 说明                       |
+| ------------------ | ---------------- | -------------------------- |
+| ID                 | INT IDENTITY     | 自增主键                   |
+| BatchId            | UNIQUEIDENTIFIER | 关联执行表 BatchId         |
+| AttemptNumber      | INT              | 关联执行表 AttemptNumber   |
+| OrderNumber        | NVARCHAR(255)    | 订单号                     |
+| Status             | NVARCHAR(50)     | pending / success / failed |
+| MaterialsDeleted   | INT              | 删除物料数                 |
+| MaterialsSkipped   | INT              | 跳过物料数                 |
+| MaterialsFailed    | INT              | 删除失败物料数             |
+| UncertainDeletions | INT              | 不确定删除数               |
+| RetryCount         | INT              | 内层重试次数               |
+| RetrySuccess       | BIT              | 内层重试是否成功           |
+| ErrorMessage       | NVARCHAR(MAX)    | 错误信息                   |
 
 关联方式：`BatchId + AttemptNumber` 关联执行表。
 
@@ -81,19 +81,19 @@ Extractor 已有成熟的数据库持久化模式（`ExtractorOperationHistory` 
 
 每个物料在每次尝试中的操作明细。
 
-| 列名 | 类型 | 说明 |
-|------|------|------|
-| ID | INT IDENTITY | 自增主键 |
-| BatchId | UNIQUEIDENTIFIER | 关联执行表 BatchId |
-| AttemptNumber | INT | 关联执行表 AttemptNumber |
-| OrderNumber | NVARCHAR(255) | 所属订单号 |
-| MaterialCode | NVARCHAR(255) | 物料代码 |
-| MaterialName | NVARCHAR(255) | 物料名称 |
-| RowNumber | INT | 行号 |
-| Result | NVARCHAR(50) | deleted / skipped / failed / uncertain |
-| Reason | NVARCHAR(MAX) | 跳过/失败原因 |
-| AttemptCount | INT | 删除尝试次数 |
-| FinalErrorCategory | NVARCHAR(50) | 最终错误分类 |
+| 列名               | 类型             | 说明                                   |
+| ------------------ | ---------------- | -------------------------------------- |
+| ID                 | INT IDENTITY     | 自增主键                               |
+| BatchId            | UNIQUEIDENTIFIER | 关联执行表 BatchId                     |
+| AttemptNumber      | INT              | 关联执行表 AttemptNumber               |
+| OrderNumber        | NVARCHAR(255)    | 所属订单号                             |
+| MaterialCode       | NVARCHAR(255)    | 物料代码                               |
+| MaterialName       | NVARCHAR(255)    | 物料名称                               |
+| RowNumber          | INT              | 行号                                   |
+| Result             | NVARCHAR(50)     | deleted / skipped / failed / uncertain |
+| Reason             | NVARCHAR(MAX)    | 跳过/失败原因                          |
+| AttemptCount       | INT              | 删除尝试次数                           |
+| FinalErrorCategory | NVARCHAR(50)     | 最终错误分类                           |
 
 关联方式：`BatchId + AttemptNumber + OrderNumber` 关联订单表。
 
@@ -102,18 +102,21 @@ Extractor 已有成熟的数据库持久化模式（`ExtractorOperationHistory` 
 首次执行到第 80 个订单时崩溃，外层重试成功完成全部 211 个订单：
 
 **CleanerExecution**
+
 ```
 BatchId=uuid-1, Attempt=1, Status=crashed,  TotalOrders=211, Processed=80,  ...
 BatchId=uuid-1, Attempt=2, Status=success,  TotalOrders=211, Processed=211, ...
 ```
 
 **CleanerOrderHistory**（Attempt=1 中部分记录）
+
 ```
 BatchId=uuid-1, Attempt=1, Order=SC001, Status=success, Deleted=5, Skipped=1
 BatchId=uuid-1, Attempt=1, Order=SC080, Status=crashed, Error=查询超时
 ```
 
 **CleanerOrderHistory**（Attempt=2 中部分记录）
+
 ```
 BatchId=uuid-1, Attempt=2, Order=SC001, Status=success, Deleted=5, Skipped=1
 BatchId=uuid-1, Attempt=2, Order=SC080, Status=success, Deleted=3, Skipped=0
@@ -121,6 +124,7 @@ BatchId=uuid-1, Attempt=2, Order=SC211, Status=success, Deleted=2, Skipped=0
 ```
 
 **CleanerMaterialDetail**（SC080 在 Attempt=2 中的物料）
+
 ```
 BatchId=uuid-1, Attempt=2, Order=SC080, Material=MAT-001, Result=deleted
 BatchId=uuid-1, Attempt=2, Order=SC080, Material=MAT-002, Result=skipped, Reason=不可删除
@@ -218,14 +222,14 @@ BatchId=uuid-1, Attempt=2, Order=SC080, Material=MAT-002, Result=skipped, Reason
 
 ## 移除的概念
 
-| 概念 | 原因 |
-|------|------|
-| ExecutionId（CLN-时间戳-随机） | 为文件名设计，数据库用 UUID |
-| generateExecutionId() | 随 ExecutionId 一起移除 |
-| CleanerReportGenerator | Markdown 报告生成器，被数据库替代 |
-| generateAndUploadReport() | RustFS 上传链路，被数据库写入替代 |
-| 报告文件名去重 | 数据库 UUID 天然唯一 |
-| 重试覆盖旧报告 | 数据库保留所有尝试记录 |
+| 概念                           | 原因                              |
+| ------------------------------ | --------------------------------- |
+| ExecutionId（CLN-时间戳-随机） | 为文件名设计，数据库用 UUID       |
+| generateExecutionId()          | 随 ExecutionId 一起移除           |
+| CleanerReportGenerator         | Markdown 报告生成器，被数据库替代 |
+| generateAndUploadReport()      | RustFS 上传链路，被数据库写入替代 |
+| 报告文件名去重                 | 数据库 UUID 天然唯一              |
+| 重试覆盖旧报告                 | 数据库保留所有尝试记录            |
 
 ## 不涉及的部分
 
