@@ -46,8 +46,8 @@ describe('MySqlDialect', () => {
   })
 
   describe('currentTimestamp', () => {
-    it('should return NOW()', () => {
-      expect(dialect.currentTimestamp()).toBe('NOW()')
+    it('should return UTC_TIMESTAMP()', () => {
+      expect(dialect.currentTimestamp()).toBe('UTC_TIMESTAMP()')
     })
   })
 

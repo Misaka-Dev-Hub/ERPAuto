@@ -45,8 +45,8 @@ describe('SqlServerDialect', () => {
   })
 
   describe('currentTimestamp', () => {
-    it('should return GETDATE()', () => {
-      expect(dialect.currentTimestamp()).toBe('GETDATE()')
+    it('should return SYSUTCDATETIME()', () => {
+      expect(dialect.currentTimestamp()).toBe('SYSUTCDATETIME()')
     })
   })
 

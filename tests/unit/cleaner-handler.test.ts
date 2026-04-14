@@ -8,11 +8,23 @@ const withErrorHandlingMock = vi.fn(async (handler: () => Promise<unknown>) => {
 })
 
 const serviceMethods = {
-  runCleaner: vi.fn(async (_sender: unknown, input: unknown) => ({ success: true, input })),
+  runCleaner: vi.fn(
+    async (
+      _sender: unknown,
+      input: unknown,
+      _batchId: string,
+      _historyDao: unknown,
+      _appVersion: string
+    ) => ({ success: true, input })
+  ),
   exportResults: vi.fn(async (items: unknown[]) => ({ success: true, total: items.length }))
 }
 
 vi.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+    getVersion: () => 'test-version'
+  },
   ipcMain: {
     handle: handleMock
   }
@@ -51,7 +63,14 @@ describe('registerCleanerHandlers', () => {
 
     const result = await runHandler?.(event, input)
 
-    expect(serviceMethods.runCleaner).toHaveBeenCalledWith(sender, input)
+    expect(serviceMethods.runCleaner).toHaveBeenCalledTimes(1)
+    const actualCall = serviceMethods.runCleaner.mock.calls[0]
+    expect(actualCall[0]).toBe(sender)
+    expect(actualCall[1]).toEqual(input)
+    expect(typeof actualCall[2]).toBe('string') // batchId is UUID
+    expect(actualCall[3]).toBeDefined() // historyDao
+    expect(actualCall[4]).toBe('test-version') // appVersion
+
     expect(result).toEqual({
       success: true,
       data: { success: true, input }
