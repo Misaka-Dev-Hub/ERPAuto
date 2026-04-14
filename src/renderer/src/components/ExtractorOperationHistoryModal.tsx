@@ -7,6 +7,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Modal } from './ui/Modal'
+import { ConfirmDialog } from './ui/ConfirmDialog'
+import { useConfirmDialog } from './ui/useConfirmDialog'
 import { useLogger } from '../hooks/useLogger'
 import {
   RefreshCw,
@@ -83,6 +85,7 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
   const [deleting, setDeleting] = useState<Set<string>>(new Set())
   const [allUsers, setAllUsers] = useState<string[]>([])
   const [selectedUsers, setSelectedUsers] = useState<string[]>([])
+  const { confirm, dialog: confirmDialog } = useConfirmDialog()
   const logger = useLogger('OperationHistory')
 
   const isAdmin = user?.userType === 'Admin'
@@ -172,7 +175,24 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
   const handleDeleteBatch = async (batchId: string) => {
     if (deleting.has(batchId)) return
 
-    const confirmed = confirm('确定要删除此批次记录吗？此操作不可撤销。')
+    const batch = batches.find((item) => item.batchId === batchId)
+    const ownerLabel = batch ? `操作人：${batch.username}` : '此操作不可撤销。'
+
+    const confirmed = await confirm({
+      title: '确认删除提取历史',
+      message: (
+        <div className="space-y-3">
+          <p className="text-gray-700">确定要删除这条提取操作历史吗？</p>
+          <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div>该操作会删除当前批次下的提取记录明细。</div>
+            <div className="mt-1 text-red-600/90">{ownerLabel}</div>
+          </div>
+        </div>
+      ),
+      confirmText: '删除',
+      cancelText: '取消',
+      variant: 'danger'
+    })
     if (!confirmed) return
 
     setDeleting((prev) => new Set(prev).add(batchId))
@@ -503,6 +523,7 @@ export const ExtractorOperationHistoryModal: React.FC<ExtractorOperationHistoryM
           </button>
         </div>
       </div>
+      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
     </Modal>
   )
 }

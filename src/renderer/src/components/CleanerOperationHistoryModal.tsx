@@ -8,6 +8,8 @@
 
 import React, { useState, useEffect, useCallback, useTransition } from 'react'
 import { Modal } from './ui/Modal'
+import { ConfirmDialog } from './ui/ConfirmDialog'
+import { useConfirmDialog } from './ui/useConfirmDialog'
 import { useLogger } from '../hooks/useLogger'
 import {
   RefreshCw,
@@ -68,6 +70,7 @@ interface BatchItemProps {
   batch: CleanerHistoryBatchStats
   isAdmin: boolean
   onDelete: (batchId: string) => void
+  onRequestDelete: (batchId: string) => Promise<boolean>
 }
 
 const BATCH_PAGE_SIZE = 5
@@ -113,7 +116,7 @@ const formatDuration = (startTime: string | Date | null, endTime: string | Date 
 // ====== BatchItem Component ======
 // Extracted from the modal so that expanding one batch doesn't re-render siblings.
 // Each BatchItem manages its own details, orders, and material state locally.
-const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
+const BatchItem = React.memo(({ batch, isAdmin, onDelete, onRequestDelete }: BatchItemProps) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [executions, setExecutions] = useState<ExecutionRecord[]>([])
   const [orders, setOrders] = useState<CleanerHistoryOrderRecord[]>([])
@@ -241,7 +244,7 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete }: BatchItemProps) => {
 
   const handleDelete = async () => {
     if (isDeleting) return
-    const confirmed = confirm('确定要删除此批次记录吗？此操作不可撤销。')
+    const confirmed = await onRequestDelete(batch.batchId)
     if (!confirmed) return
 
     setIsDeleting(true)
@@ -645,6 +648,7 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
   const [selectedUsers, setSelectedUsers] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useState(0)
   const [isFilterPending, startFilterTransition] = useTransition()
+  const { confirm, dialog: confirmDialog } = useConfirmDialog()
   const logger = useLogger('CleanerOperationHistory')
 
   const isAdmin = user?.userType === 'Admin'
@@ -703,6 +707,30 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
   const handleDeleteBatch = useCallback((batchId: string) => {
     setBatches((prev) => prev.filter((b) => b.batchId !== batchId))
   }, [])
+
+  const requestDeleteConfirmation = useCallback(
+    async (batchId: string) => {
+      const batch = batches.find((item) => item.batchId === batchId)
+      const ownerLabel = batch ? `操作人：${batch.username}` : '此操作不可撤销。'
+
+      return confirm({
+        title: '确认删除历史批次',
+        message: (
+          <div className="space-y-3">
+            <p className="text-gray-700">确定要删除这条清理操作历史吗？</p>
+            <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <div>该操作会一并删除批次、订单和物料明细记录。</div>
+              <div className="mt-1 text-red-600/90">{ownerLabel}</div>
+            </div>
+          </div>
+        ),
+        confirmText: '删除',
+        cancelText: '取消',
+        variant: 'danger'
+      })
+    },
+    [batches, confirm]
+  )
 
   const toggleUserFilter = (username: string) => {
     startFilterTransition(() => {
@@ -824,6 +852,7 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
                   batch={batch}
                   isAdmin={isAdmin}
                   onDelete={handleDeleteBatch}
+                  onRequestDelete={requestDeleteConfirmation}
                 />
               ))}
             </div>
@@ -853,6 +882,7 @@ export const CleanerOperationHistoryModal: React.FC<CleanerOperationHistoryModal
           </div>
         </div>
       </div>
+      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
     </Modal>
   )
 }
