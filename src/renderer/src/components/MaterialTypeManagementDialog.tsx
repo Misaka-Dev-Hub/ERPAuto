@@ -6,7 +6,7 @@
  * Regular users can only see and edit their own records.
  */
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import React, { memo, useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { 
   X, 
   Plus, 
@@ -46,6 +46,9 @@ interface MaterialTypeManagementDialogProps {
   triggerRef?: React.RefObject<HTMLButtonElement | null>
 }
 
+// Stable ID generator for React keys
+const generateId = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+
 // --- KeywordCard Component (Handles individual items) ---
 interface KeywordCardProps {
   item: RowState
@@ -56,7 +59,7 @@ interface KeywordCardProps {
   onRestore: (localId: string) => void
 }
 
-const KeywordCard: React.FC<KeywordCardProps> = ({ item, isAdmin, managers, onUpdate, onDelete, onRestore }) => {
+const KeywordCard = memo(function KeywordCard({ item, isAdmin, managers, onUpdate, onDelete, onRestore }: KeywordCardProps) {
   const [isEditing, setIsEditing] = useState(item.state === 'new');
   const [text, setText] = useState(item.record.materialName);
   const [manager, setManager] = useState(item.record.managerName);
@@ -180,7 +183,7 @@ const KeywordCard: React.FC<KeywordCardProps> = ({ item, isAdmin, managers, onUp
       </div>
     </div>
   );
-};
+});
 
 
 // --- Main Dialog Component ---
@@ -206,13 +209,16 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
   ).length
   const isSynced = pendingCount === 0;
 
-  // UUID Generator for stable React keys
-  const generateId = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const managersResult = await window.electron.materialType.getManagers()
+      const [managersResult, recordsResult] = await Promise.all([
+        window.electron.materialType.getManagers(),
+        isAdmin
+          ? window.electron.materialType.getAll()
+          : window.electron.materialType.getByManager(currentUsername)
+      ])
+
       if (managersResult.success && managersResult.data) {
         setManagers(managersResult.data)
         if (isAdmin) {
@@ -221,13 +227,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
       }
 
       let records: MaterialTypeRecord[] = []
-      if (isAdmin) {
-        const result = await window.electron.materialType.getAll()
-        if (result.success && result.data) records = result.data
-      } else {
-        const result = await window.electron.materialType.getByManager(currentUsername)
-        if (result.success && result.data) records = result.data
-      }
+      if (recordsResult.success && recordsResult.data) records = recordsResult.data
 
       setRows(
         records.map((record) => ({
@@ -266,7 +266,7 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
 
 
   // --- Row Actions ---
-  const handleAdd = () => {
+  const handleAdd = useCallback(() => {
     const newRow: RowState = {
       localId: generateId(),
       record: { materialName: '', managerName: isAdmin ? '' : currentUsername },
@@ -274,9 +274,9 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
     }
     setRows(prev => [newRow, ...prev])
     setSearchQuery('')
-  }
+  }, [isAdmin, currentUsername])
 
-  const handleUpdate = (localId: string, updates: Partial<MaterialTypeRecord>) => {
+  const handleUpdate = useCallback((localId: string, updates: Partial<MaterialTypeRecord>) => {
     setRows(prev => prev.map(row => {
       if (row.localId !== localId) return row;
       return {
@@ -285,26 +285,25 @@ export const MaterialTypeManagementDialog: React.FC<MaterialTypeManagementDialog
         state: row.state === 'new' ? 'new' : 'modified'
       }
     }))
-  }
+  }, [])
 
-  const handleDelete = (localId: string) => {
+  const handleDelete = useCallback((localId: string) => {
     setRows(prev => {
       const row = prev.find(r => r.localId === localId);
       if (!row) return prev;
       if (row.state === 'new') return prev.filter(r => r.localId !== localId);
       return prev.map(r => r.localId === localId ? { ...r, state: 'deleted' } : r);
     })
-  }
+  }, [])
 
-  const handleRestore = (localId: string) => {
+  const handleRestore = useCallback((localId: string) => {
     setRows(prev => prev.map(r => {
       if (r.localId !== localId) return r;
-      // Determine if it was modified before deletion
-      const wasModified = r.originalRecord?.materialName !== r.record.materialName || 
+      const wasModified = r.originalRecord?.materialName !== r.record.materialName ||
                           r.originalRecord?.managerName !== r.record.managerName;
       return { ...r, state: wasModified ? 'modified' : 'original' }
     }))
-  }
+  }, [])
 
   const handleReset = async () => {
     if (pendingCount === 0) return
