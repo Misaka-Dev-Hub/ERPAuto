@@ -129,3 +129,21 @@ export interface CleanerHistoryMaterialRecord {
   attemptCount: number
   finalErrorCategory: string | null
 }
+
+// Search result types (mirrors main process types)
+
+export interface CleanerHistorySearchOrderResult {
+  order: CleanerHistoryOrderRecord
+  materials: CleanerHistoryMaterialRecord[]
+}
+
+export interface CleanerHistorySearchBatchResult {
+  batch: CleanerHistoryBatchStats
+  executions: CleanerHistoryExecutionRecord[]
+  orders: CleanerHistorySearchOrderResult[]
+}
+
+export interface CleanerHistorySearchResult {
+  batches: CleanerHistorySearchBatchResult[]
+  totalMatches: number
+}
