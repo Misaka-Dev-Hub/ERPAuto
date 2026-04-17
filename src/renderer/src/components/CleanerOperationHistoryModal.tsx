@@ -354,7 +354,9 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete, onRequestDelete, searc
             </div>
             <div>
               <div className="text-gray-500 text-xs">操作用户</div>
-              <div className="font-medium text-gray-900">{batch.username}</div>
+              <div className="font-medium text-gray-900">
+                {searchQuery ? highlightText(batch.username, searchQuery) : batch.username}
+              </div>
             </div>
             <div>
               <div className="text-gray-500 text-xs">状态</div>
@@ -363,7 +365,9 @@ const BatchItem = React.memo(({ batch, isAdmin, onDelete, onRequestDelete, searc
                 <span
                   className={`px-2 py-0.5 rounded text-xs font-medium ${batchStatusDisplay.badgeClassName}`}
                 >
-                  {batchStatusDisplay.label}
+                  {searchQuery
+                    ? highlightText(batchStatusDisplay.label, searchQuery)
+                    : batchStatusDisplay.label}
                 </span>
               </div>
             </div>
