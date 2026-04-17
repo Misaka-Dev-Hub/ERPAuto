@@ -18,7 +18,10 @@ import type {
   InsertCleanerExecutionInput,
   InsertOrderInput,
   InsertMaterialDetailInput,
-  GetCleanerBatchesOptions
+  GetCleanerBatchesOptions,
+  SearchCleanerHistoryOptions,
+  CleanerSearchBatchResult,
+  CleanerHistorySearchResult
 } from '../../types/cleaner-history.types'
 
 const log = createLogger('CleanerOperationHistoryDAO')
@@ -977,6 +980,169 @@ export class CleanerOperationHistoryDAO {
         success: false,
         error: error instanceof Error ? error.message : String(error)
       }
+    }
+  }
+
+  // ==================== QUERY: SEARCH BATCHES ====================
+
+  /**
+   * Full-level search across batches, orders, and materials.
+   * Uses a UNION ALL query to find matching BatchIds, then fetches
+   * full nested data for each matched batch.
+   *
+   * @param userId - Optional user ID for filtering
+   * @param options - Search options (query string, usernames filter, result limit)
+   * @returns Search result with matched batches and total count
+   */
+  async searchBatches(
+    userId: number | undefined,
+    options: SearchCleanerHistoryOptions
+  ): Promise<CleanerHistorySearchResult> {
+    const emptyResult: CleanerHistorySearchResult = { batches: [], totalMatches: 0 }
+
+    try {
+      const dbService = await this.getDatabaseService()
+      const execTable = this.getExecutionTableName()
+      const orderTable = this.getOrderTableName()
+      const materialTable = this.getMaterialTableName()
+      const dialect = this.getDialect()
+
+      const { query, limit = 20 } = options
+      const safeLimit = Math.floor(limit)
+      const likePattern = `%${query}%`
+
+      // Build UNION ALL to find distinct BatchIds matching the query
+      // Each subquery searches a different table's columns
+      let paramIndex = 0
+      const p = () => dialect.param(paramIndex++)
+
+      const unionSql = `
+        SELECT DISTINCT BatchId FROM (
+          SELECT BatchId FROM ${execTable}
+          WHERE BatchId LIKE ${p()}
+             OR Username LIKE ${p()}
+             OR Status LIKE ${p()}
+          UNION ALL
+          SELECT BatchId FROM ${orderTable}
+          WHERE OrderNumber LIKE ${p()}
+             OR ProductionId LIKE ${p()}
+          UNION ALL
+          SELECT BatchId FROM ${materialTable}
+          WHERE MaterialCode LIKE ${p()}
+             OR MaterialName LIKE ${p()}
+        ) AS matched
+        WHERE BatchId IN (
+          SELECT BatchId FROM ${execTable}
+          WHERE 1=1
+          ${userId !== undefined ? `AND UserId = ${p()}` : ''}
+          ${userId === undefined && options.usernames && options.usernames.length > 0 ? `AND Username IN (${dialect.params(options.usernames.length)})` : ''}
+        )
+      `
+
+      const unionParams: (string | number)[] = [
+        likePattern, likePattern, likePattern, // exec table: BatchId, Username, Status
+        likePattern, likePattern, // order table: OrderNumber, ProductionId
+        likePattern, likePattern // material table: MaterialCode, MaterialName
+      ]
+
+      // User filtering params
+      if (userId !== undefined) {
+        unionParams.push(userId)
+      } else if (options.usernames && options.usernames.length > 0) {
+        unionParams.push(...options.usernames)
+      }
+
+      const { result } = await trackDuration(
+        async () => await dbService.query(unionSql, unionParams),
+        {
+          operationName: 'CleanerOperationHistoryDAO.searchBatches.union',
+          context: { operationType: 'SELECT', query }
+        }
+      )
+
+      const matchedBatchIds: string[] = result.rows.map((row) => row.BatchId as string)
+      const totalMatches = matchedBatchIds.length
+      const limitedBatchIds = matchedBatchIds.slice(0, safeLimit)
+
+      if (limitedBatchIds.length === 0) {
+        return { batches: [], totalMatches: 0 }
+      }
+
+      // Fetch full nested data for each matched batch
+      const batches: CleanerSearchBatchResult[] = []
+
+      for (const batchId of limitedBatchIds) {
+        try {
+          const details = await this.getBatchDetails(batchId)
+
+          if (details.executions.length === 0) {
+            continue
+          }
+
+          // Derive batch stats from execution records
+          const latestExec = details.executions.reduce((a, b) =>
+            a.attemptNumber > b.attemptNumber ? a : b
+          )
+
+          const batch: CleanerBatchStats = {
+            batchId,
+            userId: latestExec.userId,
+            username: latestExec.username,
+            operationTime: latestExec.operationTime.toISOString(),
+            status: latestExec.status,
+            totalAttempts: details.executions.length,
+            totalOrders: latestExec.totalOrders,
+            ordersProcessed: latestExec.ordersProcessed,
+            totalMaterialsDeleted: latestExec.totalMaterialsDeleted,
+            totalMaterialsFailed: latestExec.totalMaterialsFailed,
+            successCount: details.orders.filter((o) => o.status === 'success').length,
+            failedCount: details.orders.filter((o) => o.status === 'failed').length,
+            isDryRun: latestExec.isDryRun
+          }
+
+          // Fetch materials for each order
+          const ordersWithMaterials = await Promise.all(
+            details.orders.map(async (order) => {
+              const materials = await this.getMaterialDetails(
+                batchId,
+                order.attemptNumber,
+                order.orderNumber
+              )
+              return { order, materials }
+            })
+          )
+
+          batches.push({
+            batch,
+            executions: details.executions,
+            orders: ordersWithMaterials
+          })
+        } catch (error) {
+          log.error('Error fetching batch data for search result', {
+            operationType: 'SELECT',
+            batchId,
+            error: error instanceof Error ? error.message : String(error)
+          })
+        }
+      }
+
+      log.info('Search batches completed', {
+        operationType: 'SELECT',
+        requestId: getRequestId(),
+        query,
+        totalMatches,
+        returnedBatches: batches.length
+      })
+
+      return { batches, totalMatches }
+    } catch (error) {
+      log.error('Search batches error', {
+        operationType: 'SELECT',
+        requestId: getRequestId(),
+        query: options.query,
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return emptyResult
     }
   }
 
