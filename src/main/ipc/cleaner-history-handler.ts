@@ -19,7 +19,9 @@ import type {
   CleanerExecutionRecord,
   CleanerOrderRecord,
   CleanerMaterialRecord,
-  GetCleanerBatchesOptions
+  GetCleanerBatchesOptions,
+  SearchCleanerHistoryOptions,
+  CleanerHistorySearchResult
 } from '../types/cleaner-history.types'
 
 const log = createLogger('CleanerHistoryHandler')
@@ -149,6 +151,43 @@ export function registerCleanerHistoryHandlers(): void {
 
         return { deleted: true }
       }, 'cleanerHistory:deleteBatch')
+    }
+  )
+
+  /**
+   * Search across all history levels (batches, orders, materials)
+   * Admin users search all records, regular users search only their own
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CLEANER_HISTORY_SEARCH,
+    async (
+      _event,
+      options: SearchCleanerHistoryOptions
+    ): Promise<IpcResult<CleanerHistorySearchResult>> => {
+      return withErrorHandling(async () => {
+        const currentUser = SessionManager.getInstance().getUserInfo()
+
+        if (!currentUser) {
+          throw new Error('用户未登录')
+        }
+
+        if (!options.query || options.query.trim().length === 0) {
+          return { batches: [], totalMatches: 0 }
+        }
+
+        const userId = currentUser.userType === 'Admin' ? undefined : currentUser.id
+
+        log.info('Searching cleaner history', {
+          userId: currentUser.id,
+          userType: currentUser.userType,
+          query: options.query
+        })
+
+        return await dao.searchBatches(userId, {
+          ...options,
+          query: options.query.trim()
+        })
+      }, 'cleanerHistory:search')
     }
   )
 
