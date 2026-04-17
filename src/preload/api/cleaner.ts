@@ -8,7 +8,9 @@ import type {
   CleanerExecutionRecord,
   CleanerOrderRecord,
   CleanerMaterialRecord,
-  GetCleanerBatchesOptions
+  GetCleanerBatchesOptions,
+  SearchCleanerHistoryOptions,
+  CleanerHistorySearchResult
 } from '../../main/types/cleaner-history.types'
 import type { IpcResult } from '../../main/types/ipc.types'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
@@ -53,5 +55,10 @@ export const cleanerApi = {
     ),
 
   deleteHistoryBatch: (batchId: string): Promise<IpcResult<{ deleted: boolean }>> =>
-    invokeIpc(IPC_CHANNELS.CLEANER_HISTORY_DELETE_BATCH, batchId)
+    invokeIpc(IPC_CHANNELS.CLEANER_HISTORY_DELETE_BATCH, batchId),
+
+  searchHistoryRecords: (
+    options: SearchCleanerHistoryOptions
+  ): Promise<IpcResult<CleanerHistorySearchResult>> =>
+    invokeIpc(IPC_CHANNELS.CLEANER_HISTORY_SEARCH, options)
 } as const
