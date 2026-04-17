@@ -65,6 +65,7 @@ orderResolution:
 cleaner:
   queryBatchSize: 100
   processConcurrency: 1
+  recordVideo: false # 是否录制清理过程视频，true=录制并仅保留最终失败订单的视频
 
 logging:
   level: info
