@@ -10,6 +10,8 @@ interface CleanerExecutionBarProps {
   setHeadless: (value: boolean) => void
   processConcurrency: number
   updateProcessConcurrency: (value: number) => void
+  recordVideo: boolean
+  updateRecordVideo: (value: boolean) => void
   showSettingsMenu: boolean
   setShowSettingsMenu: (open: boolean) => void
   handleExecuteDeletion: () => Promise<void>
@@ -26,6 +28,8 @@ export function CleanerExecutionBar({
   setHeadless,
   processConcurrency,
   updateProcessConcurrency,
+  recordVideo,
+  updateRecordVideo,
   showSettingsMenu,
   setShowSettingsMenu,
   handleExecuteDeletion,
@@ -79,6 +83,22 @@ export function CleanerExecutionBar({
                       className={`transition-colors flex-shrink-0 ml-4 ${headless ? 'text-blue-500' : 'text-slate-300'}`}
                     >
                       {headless ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+                    </button>
+                  </div>
+                </div>
+                <div className="border-t border-slate-100 pt-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium text-slate-800">录制处理视频</div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        为每个订单详情页生成视频，仅保留最终失败订单的视频
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => void updateRecordVideo(!recordVideo)}
+                      className={`transition-colors flex-shrink-0 ml-4 ${recordVideo ? 'text-emerald-500' : 'text-slate-300'}`}
+                    >
+                      {recordVideo ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
                     </button>
                   </div>
                 </div>

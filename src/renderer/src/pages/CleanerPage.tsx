@@ -42,6 +42,8 @@ const CleanerPage: React.FC = () => {
     setHeadless,
     processConcurrency,
     updateProcessConcurrency,
+    recordVideo,
+    updateRecordVideo,
     showSettingsMenu,
     setShowSettingsMenu,
     filteredResults,
@@ -126,6 +128,8 @@ const CleanerPage: React.FC = () => {
           setHeadless={setHeadless}
           processConcurrency={processConcurrency}
           updateProcessConcurrency={updateProcessConcurrency}
+          recordVideo={recordVideo}
+          updateRecordVideo={updateRecordVideo}
           showSettingsMenu={showSettingsMenu}
           setShowSettingsMenu={setShowSettingsMenu}
           handleExecuteDeletion={handleExecuteDeletion}

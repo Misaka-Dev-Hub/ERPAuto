@@ -62,6 +62,7 @@ export function useCleaner() {
   const [headless, setHeadless] = useState(() => getStoredBoolean('cleaner_headless', true))
   const [queryBatchSize, setQueryBatchSize] = useState(100)
   const [processConcurrency, setProcessConcurrency] = useState(1)
+  const [recordVideo, setRecordVideo] = useState(false)
   const [showSettingsMenu, setShowSettingsMenu] = useState(false)
 
   // Inline editing state for manager field (Admin only)
@@ -138,6 +139,7 @@ export function useCleaner() {
         if (result) {
           setQueryBatchSize(result.queryBatchSize)
           setProcessConcurrency(result.processConcurrency)
+          setRecordVideo(result.recordVideo)
         }
       } catch (err) {
         logger.error('Failed to load cleaner config', {
@@ -165,6 +167,18 @@ export function useCleaner() {
       logger.error('Failed to update process concurrency', {
         error: err instanceof Error ? err.message : String(err),
         value: clamped
+      })
+    }
+  }
+
+  const updateRecordVideo = async (value: boolean) => {
+    setRecordVideo(value)
+    try {
+      await window.electron.config.updateCleaner({ recordVideo: value })
+    } catch (err) {
+      logger.error('Failed to update record video setting', {
+        error: err instanceof Error ? err.message : String(err),
+        value
       })
     }
   }
@@ -377,6 +391,7 @@ export function useCleaner() {
         headless,
         queryBatchSize,
         processConcurrency,
+        recordVideo,
         selectedManagers: Array.from(selectedManagers)
       })
       setReportData(result)
@@ -441,6 +456,8 @@ export function useCleaner() {
     processConcurrency,
     setProcessConcurrency,
     updateProcessConcurrency,
+    recordVideo,
+    updateRecordVideo,
     showSettingsMenu,
     setShowSettingsMenu,
     filteredResults,

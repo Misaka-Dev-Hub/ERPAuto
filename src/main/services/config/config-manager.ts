@@ -99,7 +99,8 @@ const DEFAULT_CONFIG: FullConfig = {
   },
   cleaner: {
     queryBatchSize: 100,
-    processConcurrency: 1
+    processConcurrency: 1,
+    recordVideo: false
   },
   orderResolution: {
     tableName: '',

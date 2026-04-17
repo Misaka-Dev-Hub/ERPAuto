@@ -60,6 +60,7 @@ export interface CleanerInitializationResult {
 export interface CleanerConfigResult {
   queryBatchSize: number
   processConcurrency: number
+  recordVideo: boolean
 }
 
 // Cleaner operation history types (mirrors preload/index.d.ts)

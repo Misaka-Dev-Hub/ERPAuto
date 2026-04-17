@@ -18,6 +18,9 @@ export interface CleanerInput {
   headless?: boolean
   queryBatchSize?: number
   processConcurrency?: number
+  recordVideo?: boolean
+  videoBatchId?: string
+  videoAttemptNumber?: number
   onProgress?: (message: string, progress?: number, extra?: Partial<CleanerProgress>) => void
 }
 

@@ -3,6 +3,7 @@ export interface ErpConfig {
   username: string
   password: string
   headless?: boolean // Optional: override default headless setting
+  recordVideoDir?: string
 }
 
 export interface ErpSession {

@@ -1,4 +1,6 @@
 import type { WebContents } from 'electron'
+import * as fs from 'fs/promises'
+import * as path from 'path'
 import type { IDatabaseService } from '../../types/database.types'
 import { ErpAuthService } from '../erp/erp-auth'
 import { CleanerService } from '../erp/cleaner'
@@ -11,6 +13,7 @@ import { ResultExporter } from '../excel/result-exporter'
 import { SessionManager } from '../user/session-manager'
 import { UserErpConfigService } from '../user/user-erp-config-service'
 import { createLogger } from '../logger'
+import { getLogDir } from '../logger/shared'
 import { logAuditWithCurrentUser } from '../logger/audit-logger'
 import { AuditAction, AuditStatus } from '../../types/audit.types'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
@@ -132,7 +135,8 @@ export class CleanerApplicationService {
         url: erpConfig.url,
         username: erpConfig.username,
         password: erpConfig.password,
-        headless: input.headless ?? true
+        headless: input.headless ?? true,
+        recordVideoDir: input.recordVideo ? await this.prepareVideoTempDir(batchId, 1) : undefined
       })
 
       log.info('Logging in to ERP...')
@@ -159,6 +163,8 @@ export class CleanerApplicationService {
       const modifiedInput: CleanerInput = {
         ...input,
         orderNumbers: validOrderNumbers,
+        videoBatchId: batchId,
+        videoAttemptNumber: 1,
         onProgress: (message, progress, extra) => {
           this.sendProgress(eventSender, message, progress ?? 0, extra)
         }
@@ -180,6 +186,7 @@ export class CleanerApplicationService {
 
         // Save attempt 1 result as crashed
         await this.saveAttemptToDatabase(historyDao, batchId, 1, result)
+        await cleaner.finalizeVideoArtifacts(result.details)
 
         this.sendProgress(eventSender, '流程崩溃，正在重新登录并重试...', 0, {
           phase: 'retry',
@@ -200,7 +207,8 @@ export class CleanerApplicationService {
           url: erpConfig.url,
           username: erpConfig.username,
           password: erpConfig.password,
-          headless: input.headless ?? true
+          headless: input.headless ?? true,
+          recordVideoDir: input.recordVideo ? await this.prepareVideoTempDir(batchId, 2) : undefined
         })
 
         try {
@@ -238,10 +246,14 @@ export class CleanerApplicationService {
         }
 
         cleaner = new CleanerService(authService)
-        result = await cleaner.clean(modifiedInput)
+        result = await cleaner.clean({
+          ...modifiedInput,
+          videoAttemptNumber: 2
+        })
 
         // Save attempt 2 result
         await this.saveAttemptToDatabase(historyDao, batchId, 2, result)
+        await cleaner.finalizeVideoArtifacts(result.details)
 
         log.info('Outer retry completed', {
           batchId,
@@ -252,6 +264,7 @@ export class CleanerApplicationService {
       } else {
         // No crash — save attempt 1 result
         await this.saveAttemptToDatabase(historyDao, batchId, 1, result)
+        await cleaner.finalizeVideoArtifacts(result.details)
       }
 
       if (warnings.length > 0) {
@@ -298,6 +311,18 @@ export class CleanerApplicationService {
         }
       }
     }
+  }
+
+  private async prepareVideoTempDir(batchId: string, attemptNumber: number): Promise<string> {
+    const tempDir = path.join(
+      getLogDir(),
+      'clearner-video-records',
+      batchId,
+      '.tmp',
+      `attempt-${attemptNumber}`
+    )
+    await fs.mkdir(tempDir, { recursive: true })
+    return tempDir
   }
 
   async exportResults(items: ExportResultItem[]): Promise<ExportResultResponse> {

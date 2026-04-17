@@ -61,7 +61,8 @@ export async function loadCleanerConfig(): Promise<CleanerConfigResult | null> {
 
   return {
     queryBatchSize: result.data.queryBatchSize,
-    processConcurrency: result.data.processConcurrency
+    processConcurrency: result.data.processConcurrency,
+    recordVideo: result.data.recordVideo
   }
 }
 
@@ -120,6 +121,7 @@ export async function runCleanerExecution(params: {
   headless: boolean
   queryBatchSize: number
   processConcurrency: number
+  recordVideo: boolean
   selectedManagers: string[]
 }): Promise<CleanerReportData> {
   const cleanerDataResult = await window.electron.validation.getCleanerData({
@@ -149,7 +151,8 @@ export async function runCleanerExecution(params: {
     dryRun: params.dryRun,
     headless: params.headless,
     queryBatchSize: params.queryBatchSize,
-    processConcurrency: params.processConcurrency
+    processConcurrency: params.processConcurrency,
+    recordVideo: params.recordVideo
   })
 
   const cleanerRunData = response.success ? (response.data as CleanerRunPayload | null) : null

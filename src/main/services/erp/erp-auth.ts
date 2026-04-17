@@ -1,4 +1,5 @@
 import { chromium } from 'playwright'
+import * as fs from 'fs/promises'
 import type { ErpConfig, ErpSession } from '../../types/erp.types'
 import { createLogger } from '../logger'
 import { capturePageContext } from './erp-error-context'
@@ -52,7 +53,15 @@ export class ErpAuthService {
       viewport: { width: 1920, height: 1080 },
       ignoreHTTPSErrors: true, // Ignore SSL certificate errors
       // Disable web security for internal VPN
-      javaScriptEnabled: true
+      javaScriptEnabled: true,
+      ...(this.config.recordVideoDir
+        ? {
+            recordVideo: {
+              dir: this.config.recordVideoDir,
+              size: { width: 1920, height: 1080 }
+            }
+          }
+        : {})
     })
 
     const page = await context.newPage()
@@ -223,6 +232,17 @@ export class ErpAuthService {
       await this.session.context.close()
       await this.session.browser.close()
       this.session = null
+
+      if (this.config.recordVideoDir) {
+        try {
+          await fs.rm(this.config.recordVideoDir, { recursive: true, force: true })
+        } catch (error) {
+          log.warn('清理视频临时目录失败', {
+            recordVideoDir: this.config.recordVideoDir,
+            error: error instanceof Error ? error.message : String(error)
+          })
+        }
+      }
     }
   }
 

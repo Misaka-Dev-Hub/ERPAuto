@@ -117,7 +117,8 @@ export const validationConfigSchema = z.object({
  */
 export const cleanerConfigSchema = z.object({
   queryBatchSize: z.number().int().min(1).max(100).default(100),
-  processConcurrency: z.number().int().min(1).max(20).default(1)
+  processConcurrency: z.number().int().min(1).max(20).default(1),
+  recordVideo: z.boolean().default(false)
 })
 export type CleanerConfig = z.infer<typeof cleanerConfigSchema>
 

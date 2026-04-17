@@ -9,7 +9,10 @@ import type {
 } from '../../types/cleaner.types'
 import type { ErpSession } from '../../types/erp.types'
 import type { FrameLocator, Locator, Page } from 'playwright'
+import * as fs from 'fs/promises'
+import * as path from 'path'
 import { createLogger, run, trackDuration } from '../logger'
+import { getLogDir } from '../logger/shared'
 import { capturePageContext } from './erp-error-context'
 
 const log = createLogger('CleanerService')
@@ -37,6 +40,12 @@ interface ProgressState {
 interface QueryResultRow {
   rowIndex: number
   orderNumber: string
+}
+
+interface CleanerVideoArtifact {
+  orderNumber: string
+  sequence: number
+  finalPath: string
 }
 
 class AsyncMutex {
@@ -176,6 +185,8 @@ export async function runWithConcurrency<T, R>(
 export class CleanerService {
   private authService: ErpAuthService
   private dryRun: boolean
+  private readonly recordedVideos = new Map<string, CleanerVideoArtifact[]>()
+  private readonly videoSequenceCounters = new Map<string, number>()
 
   constructor(authService: ErpAuthService, options: CleanerOptions = {}) {
     this.authService = authService
@@ -374,7 +385,10 @@ export class CleanerService {
                       return page
                     })
 
-                    let detail: OrderCleanDetail
+                    let detail: OrderCleanDetail = this.createErrorDetail(
+                      orderNumber,
+                      '详情页处理未返回结果'
+                    )
                     try {
                       detail = await this.processDetailPage({
                         detailPage: openedDetailPage,
@@ -388,11 +402,13 @@ export class CleanerService {
                       const message = error instanceof Error ? error.message : 'Unknown error'
                       detail = this.createErrorDetail(orderNumber, message)
                     } finally {
-                      progressState.ordersStarted += 1
-                      progressState.ordersCompleted += 1
-                      progressState.lastCompletedOrder = orderNumber
-                      lastActivityTime = Date.now() // [新增] 健康检查：更新活动时间
+                      await this.captureRecordedVideo(openedDetailPage, input, detail?.orderNumber || orderNumber)
                     }
+
+                    progressState.ordersStarted += 1
+                    progressState.ordersCompleted += 1
+                    progressState.lastCompletedOrder = orderNumber
+                    lastActivityTime = Date.now() // [新增] 健康检查：更新活动时间
 
                     result.details.push(detail)
 
@@ -456,6 +472,7 @@ export class CleanerService {
         ),
         deleteSet,
         dryRun,
+        input,
         onProgress: input.onProgress
       })
 
@@ -1678,13 +1695,14 @@ export class CleanerService {
     failedDetails: OrderCleanDetail[]
     deleteSet: Set<string>
     dryRun: boolean
+    input: CleanerInput
     onProgress?: (
       message: string,
       progress?: number,
       extra?: Partial<import('../../types/cleaner.types').CleanerProgress>
     ) => void
   }): Promise<RetryResult> {
-    const { workFrame, popupPage, failedDetails, deleteSet, dryRun, onProgress } = params
+    const { workFrame, popupPage, failedDetails, deleteSet, dryRun, input, onProgress } = params
 
     const result: RetryResult = {
       retriedOrders: 0,
@@ -1802,6 +1820,7 @@ export class CleanerService {
                 skipped: retryDetail.materialsSkipped,
                 elapsedMs: Date.now() - attemptStartTime
               })
+              await this.captureRecordedVideo(detailPage, input, retryDetail.orderNumber)
 
               // Success - update counters
               retryResult.successfulRetries += 1
@@ -1896,5 +1915,98 @@ export class CleanerService {
     )
 
     return trackedResult.result
+  }
+
+  public async finalizeVideoArtifacts(details: OrderCleanDetail[]): Promise<void> {
+    if (this.recordedVideos.size === 0) {
+      return
+    }
+
+    for (const detail of details) {
+      const artifacts = this.recordedVideos.get(detail.orderNumber)
+      if (!artifacts || artifacts.length === 0) {
+        continue
+      }
+
+      if (detail.errors.length === 0) {
+        for (const artifact of artifacts) {
+          try {
+            await fs.unlink(artifact.finalPath)
+          } catch (error) {
+            log.warn('删除成功订单视频失败', {
+              orderNumber: detail.orderNumber,
+              filePath: artifact.finalPath,
+              error: error instanceof Error ? error.message : String(error)
+            })
+          }
+        }
+
+        this.recordedVideos.delete(detail.orderNumber)
+        continue
+      }
+
+      log.info('保留失败订单视频', {
+        orderNumber: detail.orderNumber,
+        videoCount: artifacts.length,
+        files: artifacts.map((artifact) => artifact.finalPath)
+      })
+    }
+  }
+
+  private async captureRecordedVideo(
+    page: Page,
+    input: CleanerInput,
+    orderNumber: string
+  ): Promise<void> {
+    if (!input.recordVideo || !input.videoBatchId) {
+      return
+    }
+
+    const video = page.video()
+    if (!video) {
+      return
+    }
+
+    const finalDir = this.getVideoBatchDir(input.videoBatchId)
+    const normalizedOrderNumber = this.sanitizeVideoFileName(orderNumber || 'UNKNOWN_ORDER')
+    const sequence = (this.videoSequenceCounters.get(normalizedOrderNumber) ?? 0) + 1
+    this.videoSequenceCounters.set(normalizedOrderNumber, sequence)
+
+    const fileName =
+      sequence === 1 ? `${normalizedOrderNumber}.webm` : `${normalizedOrderNumber}__${sequence}.webm`
+    const finalPath = path.join(finalDir, fileName)
+
+    try {
+      await fs.mkdir(finalDir, { recursive: true })
+      await video.saveAs(finalPath)
+
+      const artifacts = this.recordedVideos.get(orderNumber) ?? []
+      artifacts.push({
+        orderNumber,
+        sequence,
+        finalPath
+      })
+      this.recordedVideos.set(orderNumber, artifacts)
+
+      log.info('订单视频已归档', {
+        orderNumber,
+        filePath: finalPath,
+        sequence
+      })
+    } catch (error) {
+      log.warn('订单视频归档失败', {
+        orderNumber,
+        filePath: finalPath,
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  private getVideoBatchDir(batchId: string): string {
+    return path.join(getLogDir(), 'clearner-video-records', batchId)
+  }
+
+  private sanitizeVideoFileName(value: string): string {
+    return value.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
   }
 }
