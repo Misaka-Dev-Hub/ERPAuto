@@ -345,7 +345,7 @@ export class CleanerOperationHistoryDAO {
                UncertainDeletions, RetryCount, RetrySuccess, ErrorMessage)
             VALUES
               (${dialect.param(0)}, ${dialect.param(1)}, ${dialect.param(2)}, ${dialect.param(3)}, ${dialect.param(4)},
-               0, 0, 0, 0, 0, 0, ${dialect.param(5)})
+               0, 0, 0, 0, 0, ${dialect.param(5)}, ${dialect.param(6)})
           `
           await trackDuration(
             async () =>
@@ -355,6 +355,7 @@ export class CleanerOperationHistoryDAO {
                 order.orderNumber,
                 order.productionId || null,
                 status,
+                0,
                 order.errorMessage || null
               ]),
             {
