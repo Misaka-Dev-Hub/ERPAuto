@@ -26,6 +26,7 @@ export const IPC_CHANNELS = {
   CLEANER_HISTORY_GET_BATCH_DETAILS: 'cleanerHistory:getBatchDetails',
   CLEANER_HISTORY_GET_MATERIAL_DETAILS: 'cleanerHistory:getMaterialDetails',
   CLEANER_HISTORY_DELETE_BATCH: 'cleanerHistory:deleteBatch',
+  CLEANER_HISTORY_SEARCH: 'cleanerHistory:search',
 
   // Database service - MySQL
   DATABASE_MYSQL_CONNECT: 'database:mysql:connect',

@@ -111,3 +111,26 @@ export interface GetCleanerBatchesOptions {
   offset?: number
   usernames?: string[]
 }
+
+/** Search options for full-level history search */
+export interface SearchCleanerHistoryOptions {
+  query: string
+  usernames?: string[]
+  limit?: number
+}
+
+/** A single batch's full nested data for search results */
+export interface CleanerSearchBatchResult {
+  batch: CleanerBatchStats
+  executions: CleanerExecutionRecord[]
+  orders: Array<{
+    order: CleanerOrderRecord
+    materials: CleanerMaterialRecord[]
+  }>
+}
+
+/** Search response */
+export interface CleanerHistorySearchResult {
+  batches: CleanerSearchBatchResult[]
+  totalMatches: number
+}
