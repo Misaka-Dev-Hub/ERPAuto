@@ -1068,63 +1068,66 @@ export class CleanerOperationHistoryDAO {
         return { batches: [], totalMatches: 0 }
       }
 
-      // Fetch full nested data for each matched batch
-      const batches: CleanerSearchBatchResult[] = []
+      // Fetch full nested data for each matched batch (parallel)
+      const batchResults = await Promise.all(
+        limitedBatchIds.map(async (batchId) => {
+          try {
+            const details = await this.getBatchDetails(batchId)
 
-      for (const batchId of limitedBatchIds) {
-        try {
-          const details = await this.getBatchDetails(batchId)
+            if (details.executions.length === 0) {
+              return null
+            }
 
-          if (details.executions.length === 0) {
-            continue
-          }
+            // Derive batch stats from execution records
+            const latestExec = details.executions.reduce((a, b) =>
+              a.attemptNumber > b.attemptNumber ? a : b
+            )
 
-          // Derive batch stats from execution records
-          const latestExec = details.executions.reduce((a, b) =>
-            a.attemptNumber > b.attemptNumber ? a : b
-          )
+            const batch: CleanerBatchStats = {
+              batchId,
+              userId: latestExec.userId,
+              username: latestExec.username,
+              operationTime: latestExec.operationTime.toISOString(),
+              status: latestExec.status,
+              totalAttempts: details.executions.length,
+              totalOrders: latestExec.totalOrders,
+              ordersProcessed: latestExec.ordersProcessed,
+              totalMaterialsDeleted: latestExec.totalMaterialsDeleted,
+              totalMaterialsFailed: latestExec.totalMaterialsFailed,
+              successCount: details.orders.filter((o) => o.status === 'success').length,
+              failedCount: details.orders.filter((o) => o.status === 'failed').length,
+              isDryRun: latestExec.isDryRun
+            }
 
-          const batch: CleanerBatchStats = {
-            batchId,
-            userId: latestExec.userId,
-            username: latestExec.username,
-            operationTime: latestExec.operationTime.toISOString(),
-            status: latestExec.status,
-            totalAttempts: details.executions.length,
-            totalOrders: latestExec.totalOrders,
-            ordersProcessed: latestExec.ordersProcessed,
-            totalMaterialsDeleted: latestExec.totalMaterialsDeleted,
-            totalMaterialsFailed: latestExec.totalMaterialsFailed,
-            successCount: details.orders.filter((o) => o.status === 'success').length,
-            failedCount: details.orders.filter((o) => o.status === 'failed').length,
-            isDryRun: latestExec.isDryRun
-          }
+            // Fetch materials for each order
+            const ordersWithMaterials = await Promise.all(
+              details.orders.map(async (order) => {
+                const materials = await this.getMaterialDetails(
+                  batchId,
+                  order.attemptNumber,
+                  order.orderNumber
+                )
+                return { order, materials }
+              })
+            )
 
-          // Fetch materials for each order
-          const ordersWithMaterials = await Promise.all(
-            details.orders.map(async (order) => {
-              const materials = await this.getMaterialDetails(
-                batchId,
-                order.attemptNumber,
-                order.orderNumber
-              )
-              return { order, materials }
+            return {
+              batch,
+              executions: details.executions,
+              orders: ordersWithMaterials
+            } satisfies CleanerSearchBatchResult
+          } catch (error) {
+            log.error('Error fetching batch data for search result', {
+              operationType: 'SELECT',
+              batchId,
+              error: error instanceof Error ? error.message : String(error)
             })
-          )
+            return null
+          }
+        })
+      )
 
-          batches.push({
-            batch,
-            executions: details.executions,
-            orders: ordersWithMaterials
-          })
-        } catch (error) {
-          log.error('Error fetching batch data for search result', {
-            operationType: 'SELECT',
-            batchId,
-            error: error instanceof Error ? error.message : String(error)
-          })
-        }
-      }
+      const batches = batchResults.filter((r): r is CleanerSearchBatchResult => r !== null)
 
       log.info('Search batches completed', {
         operationType: 'SELECT',
