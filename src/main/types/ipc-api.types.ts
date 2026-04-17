@@ -15,7 +15,9 @@ import type {
   CleanerBatchStats,
   CleanerExecutionRecord,
   CleanerOrderRecord,
-  CleanerMaterialRecord
+  CleanerMaterialRecord,
+  SearchCleanerHistoryOptions,
+  CleanerHistorySearchResult
 } from './cleaner-history.types'
 import type { IpcResult } from './ipc.types'
 
@@ -158,6 +160,14 @@ export interface CleanerAPI {
    * @param batchId - Batch ID
    */
   deleteHistoryBatch: (batchId: string) => Promise<IpcResult<{ deleted: boolean }>>
+
+  /**
+   * Search cleaner history records by keyword
+   * @param options - Search options (query, usernames, limit)
+   */
+  searchHistoryRecords: (
+    options: SearchCleanerHistoryOptions
+  ) => Promise<IpcResult<CleanerHistorySearchResult>>
 }
 
 /**
