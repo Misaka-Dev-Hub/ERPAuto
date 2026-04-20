@@ -33,6 +33,7 @@ const PROJECT_LEVELS = {
 
 // Cache isProduction() at module load — app.isPackaged never changes at runtime
 const IS_PROD = isProduction()
+const SEQ_TRANSPORT_MARKER = '__erpautoSeqTransport'
 
 /**
  * Check if an IPv4 address is an RFC 1918 private address.
@@ -210,6 +211,32 @@ const createFileTransport = (level?: string, maxFiles?: string): DailyRotateFile
   })
 }
 
+function isSeqTransport(transport: winston.transport): boolean {
+  const candidate = transport as winston.transport & {
+    [SEQ_TRANSPORT_MARKER]?: boolean
+    name?: string
+  }
+
+  return (
+    candidate[SEQ_TRANSPORT_MARKER] === true ||
+    candidate.name === 'seq' ||
+    candidate.constructor?.name?.toLowerCase().includes('seqtransport') === true
+  )
+}
+
+function markSeqTransport<T>(transport: T): T {
+  if (transport && typeof transport === 'object') {
+    Object.defineProperty(transport, SEQ_TRANSPORT_MARKER, {
+      value: true,
+      configurable: true,
+      enumerable: false,
+      writable: false
+    })
+  }
+
+  return transport
+}
+
 // Create the logger instance with default level - Console only initially
 // File transports are added after config is loaded via applyLoggingConfig()
 const logger = winston.createLogger({
@@ -265,6 +292,12 @@ export function applyLoggingConfig(
     logger.remove(transport)
   }
 
+  // Remove any previously registered Seq transports so config reloads do not duplicate them.
+  const existingSeqTransports = logger.transports.filter(isSeqTransport)
+  for (const transport of existingSeqTransports) {
+    logger.remove(transport)
+  }
+
   // Add app log transport with configured retention
   const retentionStr = `${config.appRetention}d`
   logger.add(createFileTransport(undefined, retentionStr))
@@ -290,7 +323,7 @@ export function applyLoggingConfig(
     try {
       const seqTransport = createSeqTransportSync(seqConfig)
       if (seqTransport) {
-        logger.add(seqTransport)
+        logger.add(markSeqTransport(seqTransport))
         logger.info('Seq transport added successfully', {
           serverUrl: seqConfig.serverUrl,
           batchPostingLimit: seqConfig.batchPostingLimit,
@@ -307,7 +340,7 @@ export function applyLoggingConfig(
         import('./seq-transport').then(({ createSeqTransport }) => {
           createSeqTransport(seqConfig).then((transport) => {
             if (transport) {
-              logger.add(transport)
+              logger.add(markSeqTransport(transport))
               logger.info('Seq transport added (async init complete)', {
                 serverUrl: seqConfig.serverUrl,
                 context: 'seq-transport'

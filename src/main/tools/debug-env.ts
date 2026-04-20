@@ -2,15 +2,19 @@
  * Debug script to verify Electron environment detection
  */
 import { app } from 'electron'
+import { createCliLogger } from '../utils/cli-log'
 
-console.log('=== Electron Environment Debug ===\n')
+const cli = createCliLogger('DebugEnv')
 
-console.log('1. app.isPackaged:', app.isPackaged)
-console.log('2. app.getPath("userData"):', app.getPath('userData'))
-console.log('3. app.getPath("logs"):', app.getPath('logs'))
-console.log('4. NODE_ENV:', process.env.NODE_ENV)
-console.log('5. process.cwd():', process.cwd())
-console.log('6. __dirname:', __dirname)
+cli.line('=== Electron Environment Debug ===')
+cli.line()
+
+cli.line(`1. app.isPackaged: ${app.isPackaged}`)
+cli.line(`2. app.getPath("userData"): ${app.getPath('userData')}`)
+cli.line(`3. app.getPath("logs"): ${app.getPath('logs')}`)
+cli.line(`4. NODE_ENV: ${process.env.NODE_ENV}`)
+cli.line(`5. process.cwd(): ${process.cwd()}`)
+cli.line(`6. __dirname: ${__dirname}`)
 
 // Predict log dir
 function getLogDir(): string {
@@ -21,7 +25,9 @@ function getLogDir(): string {
   return devLogDir
 }
 
-console.log('\n7. Predicted log dir:', getLogDir())
-console.log('\n=== END DEBUG ===')
+cli.line()
+cli.line(`7. Predicted log dir: ${getLogDir()}`)
+cli.line()
+cli.line('=== END DEBUG ===')
 
 app.quit()

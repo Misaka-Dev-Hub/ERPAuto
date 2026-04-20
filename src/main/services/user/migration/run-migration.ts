@@ -14,8 +14,10 @@ import * as path from 'path'
 import yaml from 'js-yaml'
 import { z } from 'zod'
 import { createLogger } from '../../logger'
+import { createCliLogger } from '../../../utils/cli-log'
 
 const log = createLogger('MigrationRunner')
+const cli = createCliLogger('MigrationRunner')
 
 /**
  * MySQL configuration schema
@@ -84,16 +86,17 @@ async function addColumn(
 ): Promise<void> {
   const sql = `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnType} NULL`
   await connection.query(sql)
-  console.log(`  ✓ Added column ${columnName} to ${tableName}`)
+  cli.success(`Added column ${columnName} to ${tableName}`)
 }
 
 /**
  * Main migration function
  */
 async function runMigration(): Promise<void> {
-  console.log('==============================================')
-  console.log('BIPUsers Table Migration: Add ERP Parameters')
-  console.log('==============================================\n')
+  cli.line('==============================================')
+  cli.line('BIPUsers Table Migration: Add ERP Parameters')
+  cli.line('==============================================')
+  cli.line()
 
   // Load config.yaml from project root or user data directory
   const isDev = !process.execPath.includes('Resources\\app')
@@ -101,7 +104,7 @@ async function runMigration(): Promise<void> {
     ? path.resolve(process.cwd(), 'config.yaml')
     : path.join(process.env.APPDATA || '', 'erpauto', 'config.yaml')
 
-  console.log(`Loading config from: ${configPath}`)
+  cli.line(`Loading config from: ${configPath}`)
 
   let dbConfig: { host: string; port: number; database: string; username: string; password: string }
 
@@ -121,15 +124,15 @@ async function runMigration(): Promise<void> {
   const dbPassword = dbConfig.password || ''
   const dbName = dbConfig.database || ''
 
-  console.log(`Database: ${dbHost}:${dbPort}/${dbName}`)
-  console.log(`Username: ${dbUser}`)
-  console.log('')
+  cli.line(`Database: ${dbHost}:${dbPort}/${dbName}`)
+  cli.line(`Username: ${dbUser}`)
+  cli.line()
 
   let connection: mysql.Connection | null = null
 
   try {
     // Connect to MySQL
-    console.log('Connecting to MySQL...')
+    cli.line('Connecting to MySQL...')
     connection = await mysql.createConnection({
       host: dbHost,
       port: dbPort,
@@ -137,12 +140,13 @@ async function runMigration(): Promise<void> {
       password: dbPassword,
       database: dbName
     })
-    console.log('✓ Connected to MySQL\n')
+    cli.success('Connected to MySQL')
+    cli.line()
 
     const tableName = 'dbo_BIPUsers'
 
     // Check and add columns
-    console.log('Checking columns...')
+    cli.line('Checking columns...')
     for (const [columnName, columnType] of [
       ['ERP_URL', 'VARCHAR(500)'],
       ['ERP_Username', 'VARCHAR(255)'],
@@ -150,45 +154,50 @@ async function runMigration(): Promise<void> {
     ] as const) {
       const exists = await checkColumnExists(connection, tableName, columnName)
       if (exists) {
-        console.log(`  ✓ Column ${columnName} already exists`)
+        cli.success(`Column ${columnName} already exists`)
       } else {
         await addColumn(connection, tableName, columnName, columnType)
       }
     }
 
-    console.log('\n==============================================')
-    console.log('Migration Summary:')
-    console.log('==============================================')
-    console.log('Database Type: MySQL')
-    console.log('Database: ' + dbName)
-    console.log('Columns Added/Verified:')
-    console.log('  - ERP_URL (VARCHAR 500)')
-    console.log('  - ERP_Username (VARCHAR 255)')
-    console.log('  - ERP_Password (VARCHAR 255)')
-    console.log('==============================================')
-    console.log('\n✅ Migration completed successfully!\n')
-    console.log('Next steps:')
-    console.log('1. Update ERP credentials for users in dbo_BIPUsers table')
-    console.log('2. Example SQL:')
-    console.log(`   UPDATE ${tableName}`)
-    console.log(`   SET ERP_URL = 'https://your-erp.com',`)
-    console.log(`       ERP_Username = 'your_username',`)
-    console.log(`       ERP_Password = 'your_password'`)
-    console.log(`   WHERE ERP_URL IS NULL;\n`)
+    cli.line()
+    cli.line('==============================================')
+    cli.line('Migration Summary:')
+    cli.line('==============================================')
+    cli.line('Database Type: MySQL')
+    cli.line('Database: ' + dbName)
+    cli.line('Columns Added/Verified:')
+    cli.line('  - ERP_URL (VARCHAR 500)')
+    cli.line('  - ERP_Username (VARCHAR 255)')
+    cli.line('  - ERP_Password (VARCHAR 255)')
+    cli.line('==============================================')
+    cli.line()
+    cli.success('Migration completed successfully!')
+    cli.line()
+    cli.line('Next steps:')
+    cli.line('1. Update ERP credentials for users in dbo_BIPUsers table')
+    cli.line('2. Example SQL:')
+    cli.line(`   UPDATE ${tableName}`)
+    cli.line(`   SET ERP_URL = 'https://your-erp.com',`)
+    cli.line(`       ERP_Username = 'your_username',`)
+    cli.line(`       ERP_Password = 'your_password'`)
+    cli.line(`   WHERE ERP_URL IS NULL;`)
+    cli.line()
   } catch (error) {
     log.error('Migration failed', { error })
-    console.error('\nTroubleshooting:')
-    console.error('1. Check if MySQL server is running')
-    console.error('2. Verify database credentials in config.yaml file')
-    console.error('3. Ensure database "' + dbName + '" exists')
-    console.error('4. Check network connectivity to ' + dbHost + ':' + dbPort)
+    cli.errorLine()
+    cli.errorLine('Troubleshooting:')
+    cli.errorLine('1. Check if MySQL server is running')
+    cli.errorLine('2. Verify database credentials in config.yaml file')
+    cli.errorLine(`3. Ensure database "${dbName}" exists`)
+    cli.errorLine(`4. Check network connectivity to ${dbHost}:${dbPort}`)
     process.exit(1)
   } finally {
     // Disconnect
     if (connection) {
       try {
         await connection.end()
-        console.log('Disconnected from MySQL')
+        cli.line('Disconnected from MySQL')
       } catch {
         // Ignore disconnect errors
       }

@@ -276,10 +276,13 @@ export class ConfigManager {
       fs.writeFileSync(this.configPath, content, 'utf-8')
 
       this.config = config
+      applyLoggingConfig(config.logging, config.seq)
+      applyAuditConfig(config.logging.auditRetention)
       log.info('Configuration saved successfully', {
         configPath: this.configPath,
         logLevel: config.logging.level,
-        auditRetention: config.logging.auditRetention
+        auditRetention: config.logging.auditRetention,
+        appRetention: config.logging.appRetention
       })
       return true
     } catch (error) {

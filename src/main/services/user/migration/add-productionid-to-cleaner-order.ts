@@ -13,8 +13,10 @@ import { MySqlService } from '../../database/mysql'
 import { SqlServerService } from '../../database/sql-server'
 import { PostgreSqlService } from '../../database/postgresql'
 import { createLogger } from '../../logger'
+import { createCliLogger } from '../../../utils/cli-log'
 
 const log = createLogger('Migration')
+const cli = createCliLogger('AddProductionIdMigration')
 
 async function runMySQLMigration(): Promise<void> {
   const configManager = ConfigManager.getInstance()
@@ -31,19 +33,19 @@ async function runMySQLMigration(): Promise<void> {
 
   try {
     await service.connect()
-    console.log('Connected to MySQL')
+    cli.success('Connected to MySQL')
 
     // Check if column already exists
     const check = await service.query(
       `SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'CleanerOrderHistory' AND COLUMN_NAME = 'ProductionId'`
     )
     if ((check.rows[0]?.cnt as number) > 0) {
-      console.log('Column ProductionId already exists, skipping.')
+      cli.line('Column ProductionId already exists, skipping.')
       return
     }
 
     await service.query(`ALTER TABLE CleanerOrderHistory ADD COLUMN ProductionId VARCHAR(50) NULL`)
-    console.log('Added ProductionId column to CleanerOrderHistory.')
+    cli.success('Added ProductionId column to CleanerOrderHistory.')
   } finally {
     if (service.isConnected()) await service.disconnect()
   }
@@ -65,21 +67,21 @@ async function runSqlServerMigration(): Promise<void> {
 
   try {
     await service.connect()
-    console.log('Connected to SQL Server')
+    cli.success('Connected to SQL Server')
 
     // Check if column already exists
     const check = await service.query(
       `SELECT COUNT(*) as cnt FROM sys.columns WHERE OBJECT_ID = OBJECT_ID('ERPAuto.CleanerOrderHistory') AND name = 'ProductionId'`
     )
     if ((check.rows[0]?.cnt as number) > 0) {
-      console.log('Column ProductionId already exists, skipping.')
+      cli.line('Column ProductionId already exists, skipping.')
       return
     }
 
     await service.query(
       `ALTER TABLE [ERPAuto].[CleanerOrderHistory] ADD ProductionId NVARCHAR(50) NULL`
     )
-    console.log('Added ProductionId column to CleanerOrderHistory.')
+    cli.success('Added ProductionId column to CleanerOrderHistory.')
   } finally {
     if (service.isConnected()) await service.disconnect()
   }
@@ -100,25 +102,25 @@ async function runPostgreSqlMigration(): Promise<void> {
 
   try {
     await service.connect()
-    console.log('Connected to PostgreSQL')
+    cli.success('Connected to PostgreSQL')
 
     await service.query(
       `ALTER TABLE "ERPAuto"."CleanerOrderHistory" ADD COLUMN IF NOT EXISTS "ProductionId" VARCHAR(50) NULL`
     )
-    console.log('Added ProductionId column to CleanerOrderHistory.')
+    cli.success('Added ProductionId column to CleanerOrderHistory.')
   } finally {
     if (service.isConnected()) await service.disconnect()
   }
 }
 
 async function main(): Promise<void> {
-  console.log('Migration: Add ProductionId to CleanerOrderHistory')
+  cli.line('Migration: Add ProductionId to CleanerOrderHistory')
 
   const configManager = ConfigManager.getInstance()
   await configManager.initialize()
   const dbType = configManager.getDatabaseType()
 
-  console.log(`Database type: ${dbType}`)
+  cli.line(`Database type: ${dbType}`)
 
   if (dbType === 'mysql') {
     await runMySQLMigration()
@@ -127,14 +129,14 @@ async function main(): Promise<void> {
   } else if (dbType === 'postgresql') {
     await runPostgreSqlMigration()
   } else {
-    console.error(`Unsupported database type: ${dbType}`)
+    cli.error(`Unsupported database type: ${dbType}`)
     process.exit(1)
   }
 
-  console.log('Done.')
+  cli.success('Done.')
 }
 
 main().catch((err) => {
-  console.error('Migration failed:', err)
+  cli.error('Migration failed', err instanceof Error ? { error: err.message, stack: err.stack } : err)
   process.exit(1)
 })

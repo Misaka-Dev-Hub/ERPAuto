@@ -17,14 +17,9 @@ import {
 } from '@aws-sdk/client-s3'
 import * as path from 'path'
 import * as fs from 'fs'
+import { createCliLogger } from '../utils/cli-log'
 
-// Simple console logger (standalone mode)
-const log = {
-  info: (msg: string, data?: any) => console.log(`[INFO] ${msg}`, data ? JSON.stringify(data) : ''),
-  error: (msg: string, data?: any) =>
-    console.error(`[ERROR] ${msg}`, data ? JSON.stringify(data) : ''),
-  warn: (msg: string, data?: any) => console.warn(`[WARN] ${msg}`, data ? JSON.stringify(data) : '')
-}
+const log = createCliLogger('RustfsTest')
 
 // Test configuration
 const TEST_CONFIG = {
@@ -67,15 +62,15 @@ function generateReportKey(reportFileName: string, username: string): string {
 }
 
 async function runTests() {
-  console.log('='.repeat(50))
-  console.log('RustFS Integration Test')
-  console.log('='.repeat(50))
-  console.log()
+  log.line('='.repeat(50))
+  log.line('RustFS Integration Test')
+  log.line('='.repeat(50))
+  log.line()
 
   const client = createS3Client(TEST_CONFIG)
 
   // Test connection
-  console.log('1. Testing connection...')
+  log.line('1. Testing connection...')
   try {
     const command = new ListObjectsV2Command({
       Bucket: TEST_CONFIG.bucket,
@@ -83,15 +78,15 @@ async function runTests() {
       MaxKeys: 1
     })
     await client.send(command)
-    console.log('   ✓ Connection successful')
+    log.success('Connection successful')
   } catch (error) {
-    console.log(`   ✗ Connection failed: ${(error as Error).message}`)
+    log.error('Connection failed', { error: (error as Error).message })
     return
   }
-  console.log()
+  log.line()
 
   // Test upload string
-  console.log('2. Testing string upload...')
+  log.line('2. Testing string upload...')
   const testContent = `# Test Report
 Generated at: ${new Date().toISOString()}
 
@@ -107,18 +102,17 @@ This is a test report to verify RustFS integration.
     }
     const command = new PutObjectCommand(input)
     const response = await client.send(command)
-    console.log('   ✓ Upload successful')
-    console.log(`     Key: ${testKey}`)
-    console.log(`     ETag: ${response.ETag}`)
+    log.success('Upload successful')
+    log.line(`     Key: ${testKey}`)
+    log.line(`     ETag: ${response.ETag}`)
   } catch (error) {
-    console.log('   ✗ Upload failed')
-    console.log(`     Error: ${(error as Error).message}`)
+    log.error('Upload failed', { error: (error as Error).message })
     return
   }
-  console.log()
+  log.line()
 
   // Test download
-  console.log('3. Testing download...')
+  log.line('3. Testing download...')
   try {
     const command = new GetObjectCommand({
       Bucket: TEST_CONFIG.bucket,
@@ -130,17 +124,16 @@ This is a test report to verify RustFS integration.
       chunks.push(Buffer.from(chunk))
     }
     const content = Buffer.concat(chunks)
-    console.log('   ✓ Download successful')
-    console.log(`     Size: ${content.length} bytes`)
-    console.log(`     Content preview: ${content.toString('utf-8').slice(0, 50)}...`)
+    log.success('Download successful')
+    log.line(`     Size: ${content.length} bytes`)
+    log.line(`     Content preview: ${content.toString('utf-8').slice(0, 50)}...`)
   } catch (error) {
-    console.log('   ✗ Download failed')
-    console.log(`     Error: ${(error as Error).message}`)
+    log.error('Download failed', { error: (error as Error).message })
   }
-  console.log()
+  log.line()
 
   // Test file upload (create a temporary file)
-  console.log('4. Testing file upload...')
+  log.line('4. Testing file upload...')
   const tempFilePath = path.join(process.cwd(), `test-file-${Date.now()}.md`)
   fs.writeFileSync(tempFilePath, testContent, 'utf-8')
 
@@ -155,40 +148,39 @@ This is a test report to verify RustFS integration.
     }
     const command = new PutObjectCommand(input)
     const response = await client.send(command)
-    console.log('   ✓ File upload successful')
-    console.log(`     Key: ${fileKey}`)
-    console.log(`     ETag: ${response.ETag}`)
+    log.success('File upload successful')
+    log.line(`     Key: ${fileKey}`)
+    log.line(`     ETag: ${response.ETag}`)
   } catch (error) {
-    console.log('   ✗ File upload failed')
-    console.log(`     Error: ${(error as Error).message}`)
+    log.error('File upload failed', { error: (error as Error).message })
   }
 
   // Cleanup temp file
   try {
     fs.unlinkSync(tempFilePath)
-    console.log('   ✓ Temporary file cleaned up')
+    log.success('Temporary file cleaned up')
   } catch (e) {
-    console.log(`   ⚠ Could not clean up temp file: ${(e as Error).message}`)
+    log.warn('Could not clean up temp file', { error: (e as Error).message })
   }
-  console.log()
+  log.line()
 
   // Test report key generation
-  console.log('5. Testing report key generation...')
+  log.line('5. Testing report key generation...')
   const reportKey = generateReportKey('cleaner-report-2026-03-17-10-30-00.md', 'admin')
-  console.log(`   ✓ Generated key: ${reportKey}`)
-  console.log()
+  log.success(`Generated key: ${reportKey}`)
+  log.line()
 
   // Test cleanup (delete test files)
-  console.log('6. Cleaning up test files...')
+  log.line('6. Cleaning up test files...')
   try {
     const deleteCommand = new DeleteObjectCommand({
       Bucket: TEST_CONFIG.bucket,
       Key: testKey
     })
     await client.send(deleteCommand)
-    console.log('   ✓ Test string file deleted')
+    log.success('Test string file deleted')
   } catch (error) {
-    console.log(`   ⚠ Could not delete test string file: ${(error as Error).message}`)
+    log.warn('Could not delete test string file', { error: (error as Error).message })
   }
 
   try {
@@ -197,19 +189,19 @@ This is a test report to verify RustFS integration.
       Key: fileKey
     })
     await client.send(deleteCommand)
-    console.log('   ✓ Test file deleted')
+    log.success('Test file deleted')
   } catch (error) {
-    console.log(`   ⚠ Could not delete test file: ${(error as Error).message}`)
+    log.warn('Could not delete test file', { error: (error as Error).message })
   }
-  console.log()
+  log.line()
 
-  console.log('='.repeat(50))
-  console.log('All tests completed!')
-  console.log('='.repeat(50))
+  log.line('='.repeat(50))
+  log.line('All tests completed!')
+  log.line('='.repeat(50))
 }
 
 // Run tests
 runTests().catch((error) => {
-  console.error('Test failed with error:', error)
+  log.error('Test failed with error', error instanceof Error ? { error: error.message } : error)
   process.exit(1)
 })

@@ -6,6 +6,9 @@
  */
 
 import * as path from 'path'
+import { createCliLogger } from '../utils/cli-log'
+
+const cli = createCliLogger('ConfigPathDebug')
 
 // Simulate different environments
 const scenarios = [
@@ -39,13 +42,14 @@ const scenarios = [
   }
 ]
 
-console.log('╔════════════════════════════════════════════════════════════════╗')
-console.log('║         ERPAuto Configuration Path Debug Tool                 ║')
-console.log('╚════════════════════════════════════════════════════════════════╝\n')
+cli.line('╔════════════════════════════════════════════════════════════════╗')
+cli.line('║         ERPAuto Configuration Path Debug Tool                 ║')
+cli.line('╚════════════════════════════════════════════════════════════════╝')
+cli.line()
 
 for (const scenario of scenarios) {
-  console.log(`📋 ${scenario.name}`)
-  console.log('─'.repeat(60))
+  cli.line(`📋 ${scenario.name}`)
+  cli.line('─'.repeat(60))
 
   const isDev = scenario.env.NODE_ENV === 'development' || scenario.env.APP_PACKAGED === 'false'
 
@@ -62,21 +66,21 @@ for (const scenario of scenarios) {
     backupPath = path.join(scenario.appData, 'config.yaml.backup')
   }
 
-  console.log(`  NODE_ENV: ${scenario.env.NODE_ENV}`)
-  console.log(`  APP_PACKAGED: ${scenario.env.APP_PACKAGED}`)
-  console.log(`  Is Development: ${isDev ? '✓ Yes' : '✗ No'}`)
+  cli.line(`  NODE_ENV: ${scenario.env.NODE_ENV}`)
+  cli.line(`  APP_PACKAGED: ${scenario.env.APP_PACKAGED}`)
+  cli.line(`  Is Development: ${isDev ? '✓ Yes' : '✗ No'}`)
   if ('exeDir' in scenario) {
-    console.log(`  EXE Directory: ${scenario.exeDir}`)
+    cli.line(`  EXE Directory: ${scenario.exeDir}`)
   }
-  console.log(`  → Config Path: ${configPath}`)
-  console.log(`  → Backup Path: ${backupPath}`)
-  console.log('')
+  cli.line(`  → Config Path: ${configPath}`)
+  cli.line(`  → Backup Path: ${backupPath}`)
+  cli.line()
 }
 
-console.log('╔════════════════════════════════════════════════════════════════╗')
-console.log('║  Configuration Strategy (配置策略):                           ║')
-console.log('╚════════════════════════════════════════════════════════════════╝')
-console.log(`
+cli.line('╔════════════════════════════════════════════════════════════════╗')
+cli.line('║  Configuration Strategy (配置策略):                           ║')
+cli.line('╚════════════════════════════════════════════════════════════════╝')
+cli.line(`
 ┌─────────────┬──────────────────────────────────────────────────────────┐
 │   环境      │   配置文件位置                                           │
 ├─────────────┼──────────────────────────────────────────────────────────┤
@@ -95,10 +99,10 @@ console.log(`
    ✓ 多用户环境下，每个用户有独立的配置
 `)
 
-console.log('╔════════════════════════════════════════════════════════════════╗')
-console.log('║  Recommended Directory Structure:                             ║')
-console.log('╚════════════════════════════════════════════════════════════════╝')
-console.log(`
+cli.line('╔════════════════════════════════════════════════════════════════╗')
+cli.line('║  Recommended Directory Structure:                             ║')
+cli.line('╚════════════════════════════════════════════════════════════════╝')
+cli.line(`
 【开发环境】
 D:\\Projects\\ERPAuto\\
 ├── src\\

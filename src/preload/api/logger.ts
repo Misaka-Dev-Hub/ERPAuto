@@ -4,6 +4,7 @@ import { ipcRenderer } from '../lib/ipc'
 
 // Cached log level for client-side filtering (avoids IPC for filtered-out messages)
 let cachedLevel: LogLevel = 'info'
+let isLevelListenerRegistered = false
 
 /**
  * Check if a message at the given level should be logged
@@ -45,13 +46,21 @@ export const loggerApi = {
    */
   fetchLevel: async (): Promise<void> => {
     cachedLevel = (await ipcRenderer.invoke(IPC_CHANNELS.LOGGER_GET_LEVEL)) as LogLevel
-    ipcRenderer.on(IPC_CHANNELS.LOGGER_LEVEL_CHANGED, onLevelChanged)
+    if (!isLevelListenerRegistered) {
+      ipcRenderer.on(IPC_CHANNELS.LOGGER_LEVEL_CHANGED, onLevelChanged)
+      isLevelListenerRegistered = true
+    }
   },
 
   /**
    * Remove the level change listener (call on cleanup/unmount)
    */
   cleanup: (): void => {
+    if (!isLevelListenerRegistered) {
+      return
+    }
+
     ipcRenderer.removeListener(IPC_CHANNELS.LOGGER_LEVEL_CHANGED, onLevelChanged)
+    isLevelListenerRegistered = false
   }
 } as const

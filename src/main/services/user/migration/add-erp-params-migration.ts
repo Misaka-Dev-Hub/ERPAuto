@@ -18,8 +18,10 @@ import { ConfigManager } from '../../config/config-manager'
 import { MySqlService } from '../../database/mysql'
 import { SqlServerService } from '../../database/sql-server'
 import { createLogger } from '../../logger'
+import { createCliLogger } from '../../../utils/cli-log'
 
 const log = createLogger('Migration')
+const cli = createCliLogger('Migration')
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -77,7 +79,7 @@ async function addColumnMySQL(
   columnType: string
 ): Promise<void> {
   await mysqlService.query(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnType}`)
-  console.log(`  ✓ Added column ${columnName} (${columnType})`)
+  cli.success(`Added column ${columnName} (${columnType})`)
 }
 
 /**
@@ -90,19 +92,20 @@ async function addColumnSqlServer(
   columnType: string
 ): Promise<void> {
   await sqlServerService.query(`ALTER TABLE ${tableName} ADD ${columnName} ${columnType}`)
-  console.log(`  ✓ Added column ${columnName} (${columnType})`)
+  cli.success(`Added column ${columnName} (${columnType})`)
 }
 
 /**
  * Run migration for MySQL
  */
 async function runMySQLMigration(configManager: ConfigManager): Promise<void> {
-  console.log('\n📦 Running MySQL Migration...')
+  cli.line()
+  cli.line('📦 Running MySQL Migration...')
 
   const config = configManager.getConfig()
   const dbConfig = config.database.mysql
 
-  console.log(`Connecting to MySQL: ${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`)
+  cli.line(`Connecting to MySQL: ${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`)
 
   const mysqlService = new MySqlService({
     host: dbConfig.host,
@@ -114,7 +117,7 @@ async function runMySQLMigration(configManager: ConfigManager): Promise<void> {
 
   try {
     await mysqlService.connect()
-    console.log('✓ Connected to MySQL')
+    cli.success('Connected to MySQL')
 
     const tableName = MIGRATION_CONFIG.tableName.mysql
 
@@ -126,7 +129,7 @@ async function runMySQLMigration(configManager: ConfigManager): Promise<void> {
     ] as const) {
       const exists = await checkColumnExistsMySQL(mysqlService, tableName, columnName)
       if (exists) {
-        console.log(`  ✓ Column ${columnName} already exists`)
+        cli.success(`Column ${columnName} already exists`)
       } else {
         await addColumnMySQL(mysqlService, tableName, columnName, columnType)
       }
@@ -134,8 +137,9 @@ async function runMySQLMigration(configManager: ConfigManager): Promise<void> {
 
     // Note: ERP credentials are now managed per-user via settings UI
     // This migration no longer initializes them from config
-    console.log('\n✓ MySQL Migration completed')
-    console.log('  Note: ERP credentials should be configured per-user via the Settings UI')
+    cli.line()
+    cli.success('MySQL Migration completed')
+    cli.line('  Note: ERP credentials should be configured per-user via the Settings UI')
 
     await mysqlService.disconnect()
   } catch (error) {
@@ -153,12 +157,13 @@ async function runMySQLMigration(configManager: ConfigManager): Promise<void> {
  * Run migration for SQL Server
  */
 async function runSqlServerMigration(configManager: ConfigManager): Promise<void> {
-  console.log('\n📦 Running SQL Server Migration...')
+  cli.line()
+  cli.line('📦 Running SQL Server Migration...')
 
   const config = configManager.getConfig()
   const dbConfig = config.database.sqlserver
 
-  console.log(`Connecting to SQL Server: ${dbConfig.server}:${dbConfig.port}/${dbConfig.database}`)
+  cli.line(`Connecting to SQL Server: ${dbConfig.server}:${dbConfig.port}/${dbConfig.database}`)
 
   const sqlServerService = new SqlServerService({
     server: dbConfig.server,
@@ -173,7 +178,7 @@ async function runSqlServerMigration(configManager: ConfigManager): Promise<void
 
   try {
     await sqlServerService.connect()
-    console.log('✓ Connected to SQL Server')
+    cli.success('Connected to SQL Server')
 
     const tableName = MIGRATION_CONFIG.tableName.sqlserver
 
@@ -185,15 +190,16 @@ async function runSqlServerMigration(configManager: ConfigManager): Promise<void
     ] as const) {
       const exists = await checkColumnExistsSqlServer(sqlServerService, tableName, columnName)
       if (exists) {
-        console.log(`  ✓ Column ${columnName} already exists`)
+        cli.success(`Column ${columnName} already exists`)
       } else {
         await addColumnSqlServer(sqlServerService, tableName, columnName, columnType)
       }
     }
 
     // Note: ERP credentials are now managed per-user via settings UI
-    console.log('\n✓ SQL Server Migration completed')
-    console.log('  Note: ERP credentials should be configured per-user via the Settings UI')
+    cli.line()
+    cli.success('SQL Server Migration completed')
+    cli.line('  Note: ERP credentials should be configured per-user via the Settings UI')
 
     await sqlServerService.disconnect()
   } catch (error) {
@@ -211,16 +217,17 @@ async function runSqlServerMigration(configManager: ConfigManager): Promise<void
  * Main function
  */
 async function main(): Promise<void> {
-  console.log('╔═══════════════════════════════════════════════════════════╗')
-  console.log('║   Migration: Add ERP Parameters to BIPUsers Table        ║')
-  console.log('╚═══════════════════════════════════════════════════════════╝')
+  cli.line('╔═══════════════════════════════════════════════════════════╗')
+  cli.line('║   Migration: Add ERP Parameters to BIPUsers Table        ║')
+  cli.line('╚═══════════════════════════════════════════════════════════╝')
 
   try {
     const configManager = ConfigManager.getInstance()
     await configManager.initialize()
 
     const dbType = configManager.getDatabaseType()
-    console.log(`\nCurrent database type: ${dbType}`)
+    cli.line()
+    cli.line(`Current database type: ${dbType}`)
 
     if (dbType === 'mysql') {
       await runMySQLMigration(configManager)
@@ -228,7 +235,9 @@ async function main(): Promise<void> {
       await runSqlServerMigration(configManager)
     }
 
-    console.log('\n✅ Migration completed successfully!\n')
+    cli.line()
+    cli.success('Migration completed successfully!')
+    cli.line()
   } catch (error) {
     log.error('Migration failed', { error: error instanceof Error ? error.message : String(error) })
     process.exit(1)

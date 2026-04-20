@@ -49,10 +49,6 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       // Logging failed — don't make things worse
     }
 
-    // Also print to console in development for immediate visibility
-    if (import.meta.env.DEV) {
-      console.error(`[ErrorBoundary:${scope}]`, error, errorInfo.componentStack)
-    }
   }
 
   handleReload = (): void => {

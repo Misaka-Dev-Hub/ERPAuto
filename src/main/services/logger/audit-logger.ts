@@ -9,9 +9,12 @@ import path from 'path'
 import { hostname } from 'os'
 import { app } from 'electron'
 import { getLogDir } from './shared'
+import { createLogger } from './index'
 import { SessionManager } from '../user/session-manager'
 import type { AuditEntry } from '../../types/audit.types'
 import { AuditAction, AuditStatus } from '../../types/audit.types'
+
+const fallbackLog = createLogger('AuditLogger')
 
 /**
  * JSONL formatter - outputs one JSON object per line
@@ -97,7 +100,7 @@ export function logAudit(
     // Using info level with the entry stringified as the message
     auditLogger.info(JSON.stringify(entry))
   } catch (error) {
-    console.error('Audit logging failed:', error)
+    fallbackLog.error('Audit logging failed', { error })
   }
 }
 

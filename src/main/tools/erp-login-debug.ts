@@ -17,6 +17,9 @@
 
 import { chromium } from 'playwright'
 import path from 'path'
+import { createCliLogger } from '../utils/cli-log'
+
+const cli = createCliLogger('ErpLoginDebug')
 
 // ==================== 配置区域 ====================
 const ERP_CONFIG = {
@@ -34,22 +37,22 @@ const DEBUG_CONFIG = {
 // ================================================
 
 async function debugErpLogin(): Promise<void> {
-  console.log('='.repeat(60))
-  console.log('ERP 登录调试工具')
-  console.log('='.repeat(60))
-  console.log('目标 URL:', ERP_CONFIG.url)
-  console.log('用户名:', ERP_CONFIG.username)
-  console.log('密码:', '***'.repeat(ERP_CONFIG.password.length))
-  console.log('='.repeat(60))
-  console.log()
-  console.log('操作步骤：')
-  console.log('1. 浏览器将自动打开并尝试登录')
-  console.log('2. 如果登录失败，请检查配置或手动重试')
-  console.log('3. 登录成功后，会自动暂停并打开开发者工具')
-  console.log('4. 使用元素选择器定位主界面特征元素')
-  console.log('5. 记录元素选择器，按 Ctrl+C 退出脚本')
-  console.log()
-  console.log('按 Enter 键开始...')
+  cli.line('='.repeat(60))
+  cli.line('ERP 登录调试工具')
+  cli.line('='.repeat(60))
+  cli.line(`目标 URL: ${ERP_CONFIG.url}`)
+  cli.line(`用户名: ${ERP_CONFIG.username}`)
+  cli.line(`密码: ${'***'.repeat(ERP_CONFIG.password.length)}`)
+  cli.line('='.repeat(60))
+  cli.line()
+  cli.line('操作步骤：')
+  cli.line('1. 浏览器将自动打开并尝试登录')
+  cli.line('2. 如果登录失败，请检查配置或手动重试')
+  cli.line('3. 登录成功后，会自动暂停并打开开发者工具')
+  cli.line('4. 使用元素选择器定位主界面特征元素')
+  cli.line('5. 记录元素选择器，按 Ctrl+C 退出脚本')
+  cli.line()
+  cli.line('按 Enter 键开始...')
 
   // 等待用户确认
   await new Promise<void>((resolve) => {
@@ -65,7 +68,8 @@ async function debugErpLogin(): Promise<void> {
   let page: any = null
 
   try {
-    console.log('\n正在启动浏览器...')
+    cli.line()
+    cli.line('正在启动浏览器...')
 
     // 启动浏览器（带调试配置）
     browser = await chromium.launch({
@@ -85,22 +89,22 @@ async function debugErpLogin(): Promise<void> {
 
     // 启用详细的控制台日志
     page.on('console', (msg: any) => {
-      console.log(`[Page Console] ${msg.type()}: ${msg.text()}`)
+      cli.info(`Page console ${msg.type()}: ${msg.text()}`)
     })
 
     page.on('pageerror', (error: any) => {
-      console.error(`[Page Error] ${error.message}`)
+      cli.error(`Page error: ${error.message}`)
     })
 
     // 导航到登录页面
     const loginUrl = `${ERP_CONFIG.url}/yonbip/resources/uap/rbac/login/main/index.html`
-    console.log(`正在加载登录页面：${loginUrl}`)
+    cli.line(`正在加载登录页面：${loginUrl}`)
     await page.goto(loginUrl, { timeout: DEBUG_CONFIG.timeout })
     await page.waitForLoadState('domcontentloaded')
-    console.log('登录页面已加载')
+    cli.success('登录页面已加载')
 
     // 等待并定位登录表单 iframe
-    console.log('等待登录表单...')
+    cli.line('等待登录表单...')
     await page.waitForSelector('#forwardFrame', { state: 'attached', timeout: 15000 })
     const frameLocator = page.locator('#forwardFrame')
     const contentFrame = await frameLocator.contentFrame()
@@ -110,46 +114,46 @@ async function debugErpLogin(): Promise<void> {
     }
 
     const mainFrame = contentFrame
-    console.log('登录表单框架已就绪')
+    cli.success('登录表单框架已就绪')
 
     // 填充用户名
-    console.log('正在输入用户名...')
+    cli.line('正在输入用户名...')
     try {
       const usernameInput = mainFrame.getByRole('textbox', { name: '用户名' })
       await usernameInput.waitFor({ state: 'visible', timeout: 5000 })
       await usernameInput.fill(ERP_CONFIG.username)
-      console.log('用户名已输入')
+      cli.success('用户名已输入')
     } catch (e: any) {
-      console.error('找不到用户名输入框:', e.message)
+      cli.error('找不到用户名输入框', { error: e.message })
       throw new Error('找不到用户名输入框，请检查页面结构是否改变')
     }
 
     // 填充密码
-    console.log('正在输入密码...')
+    cli.line('正在输入密码...')
     try {
       const passwordInput = mainFrame.getByRole('textbox', { name: '密码' })
       await passwordInput.waitFor({ state: 'visible', timeout: 5000 })
       await passwordInput.fill(ERP_CONFIG.password)
-      console.log('密码已输入')
+      cli.success('密码已输入')
     } catch (e: any) {
-      console.error('找不到密码输入框:', e.message)
+      cli.error('找不到密码输入框', { error: e.message })
       throw new Error('找不到密码输入框，请检查页面结构是否改变')
     }
     await page.pause()
     // 点击登录按钮
-    console.log('正在点击登录按钮...')
+    cli.line('正在点击登录按钮...')
     try {
       const loginButton = mainFrame.getByRole('button', { name: '登录' })
       await loginButton.waitFor({ state: 'visible', timeout: 5000 })
       await loginButton.click()
-      console.log('已点击登录按钮')
+      cli.success('已点击登录按钮')
     } catch (e: any) {
-      console.error('找不到登录按钮:', e.message)
+      cli.error('找不到登录按钮', { error: e.message })
       throw new Error('找不到登录按钮，请检查页面结构是否改变')
     }
 
     // 等待页面加载
-    console.log('等待登录响应...')
+    cli.line('等待登录响应...')
     await page.waitForLoadState('domcontentloaded', { timeout: 10000 })
     await page.waitForTimeout(2000) // 额外等待，确保页面完全加载
 
@@ -158,60 +162,60 @@ async function debugErpLogin(): Promise<void> {
       const confirmBtn = mainFrame.getByRole('button', { name: '确定' })
       const count = await confirmBtn.count()
       if (count > 0) {
-        console.log('检测到强制登录确认对话框，正在确认...')
+        cli.line('检测到强制登录确认对话框，正在确认...')
         await confirmBtn.first().click()
         await page.waitForTimeout(2000)
-        console.log('已确认强制登录')
+        cli.success('已确认强制登录')
       } else {
-        console.log('普通登录，无需确认')
+        cli.line('普通登录，无需确认')
       }
     } catch {
-      console.log('未检测到确认对话框')
+      cli.line('未检测到确认对话框')
     }
 
     // ==================== 登录成功，进入调试模式 ====================
-    console.log()
-    console.log('='.repeat(60))
-    console.log('✓ 登录成功！')
-    console.log('='.repeat(60))
-    console.log()
-    console.log('现在进入调试模式，请进行以下操作：')
-    console.log()
-    console.log('1. 按 F12 打开浏览器开发者工具')
-    console.log('2. 使用元素选择器 (Ctrl+Shift+C) 点击主界面特征元素')
-    console.log('3. 在 Elements 面板中右键元素 → Copy → Copy selector')
-    console.log('4. 或者使用 Playwright Inspector:')
-    console.log('   - 在控制台输入: await page.pause()')
-    console.log('   - 使用 Inspector 的元素选择工具')
-    console.log()
-    console.log('建议定位的特征元素：')
-    console.log('- 主界面顶部导航栏')
-    console.log('- 侧边菜单栏')
-    console.log('- 主内容区域的唯一标识')
-    console.log('- 用户信息显示区域')
-    console.log('- 任何登录后独有的界面元素')
-    console.log()
-    console.log('按 Ctrl+C 退出脚本')
-    console.log('='.repeat(60))
+    cli.line()
+    cli.line('='.repeat(60))
+    cli.success('登录成功！')
+    cli.line('='.repeat(60))
+    cli.line()
+    cli.line('现在进入调试模式，请进行以下操作：')
+    cli.line()
+    cli.line('1. 按 F12 打开浏览器开发者工具')
+    cli.line('2. 使用元素选择器 (Ctrl+Shift+C) 点击主界面特征元素')
+    cli.line('3. 在 Elements 面板中右键元素 → Copy → Copy selector')
+    cli.line('4. 或者使用 Playwright Inspector:')
+    cli.line('   - 在控制台输入: await page.pause()')
+    cli.line('   - 使用 Inspector 的元素选择工具')
+    cli.line()
+    cli.line('建议定位的特征元素：')
+    cli.line('- 主界面顶部导航栏')
+    cli.line('- 侧边菜单栏')
+    cli.line('- 主内容区域的唯一标识')
+    cli.line('- 用户信息显示区域')
+    cli.line('- 任何登录后独有的界面元素')
+    cli.line()
+    cli.line('按 Ctrl+C 退出脚本')
+    cli.line('='.repeat(60))
 
     // 保持浏览器打开，等待用户调试
     // 使用 pause 可以让用户手动恢复或使用 Inspector
     await page.pause()
   } catch (error: any) {
-    console.error()
-    console.error('='.repeat(60))
-    console.error('错误:', error.message)
-    console.error('='.repeat(60))
-    console.error()
-    console.error('调试提示：')
-    console.error('1. 检查 ERP_CONFIG 配置是否正确')
-    console.error('2. 检查网络连接')
-    console.error('3. 确认 ERP 系统可访问')
-    console.error('4. 如果是元素找不到，可能需要更新 locators.ts')
+    cli.errorLine()
+    cli.errorLine('='.repeat(60))
+    cli.errorLine(`错误: ${error.message}`)
+    cli.errorLine('='.repeat(60))
+    cli.errorLine()
+    cli.errorLine('调试提示：')
+    cli.errorLine('1. 检查 ERP_CONFIG 配置是否正确')
+    cli.errorLine('2. 检查网络连接')
+    cli.errorLine('3. 确认 ERP 系统可访问')
+    cli.errorLine('4. 如果是元素找不到，可能需要更新 locators.ts')
   } finally {
     // 清理资源（给用户时间保存信息）
-    console.log()
-    console.log('等待 5 秒后关闭浏览器...')
+    cli.line()
+    cli.line('等待 5 秒后关闭浏览器...')
     await new Promise((resolve) => setTimeout(resolve, 5000))
 
     if (context) {
@@ -220,13 +224,13 @@ async function debugErpLogin(): Promise<void> {
     if (browser) {
       await browser.close()
     }
-    console.log('浏览器已关闭')
+    cli.line('浏览器已关闭')
     process.exit(0)
   }
 }
 
 // 运行调试脚本
 debugErpLogin().catch((err) => {
-  console.error('脚本执行失败:', err)
+  cli.error('脚本执行失败', err instanceof Error ? { error: err.message, stack: err.stack } : err)
   process.exit(1)
 })
