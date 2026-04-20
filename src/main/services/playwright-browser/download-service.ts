@@ -42,6 +42,8 @@ export interface ValidationResult {
   fileCount?: number
   chromeExeExists?: boolean
   expectedChromePath?: string
+  headlessShellExists?: boolean
+  ffmpegExists?: boolean
 }
 
 /**
@@ -197,10 +199,15 @@ export class DownloadService {
       for (const obj of response.Contents || []) {
         if (!obj.Key) continue
 
-        // Simple filter: only download Chromium-related files
-        // This includes: chromium-1200, chromium-1208, chromium_headless_shell-1200, chromium_headless_shell-1208
-        // Excludes: firefox, webkit, ffmpeg, winldd, .links, .settings
-        if (!obj.Key.includes('chromium')) {
+        // Only download the exact versions we need
+        const relativePath = obj.Key.slice(this.config.prefix.length)
+        const dirName = relativePath.split('/')[0]
+        const allowedDirs = [
+          'chromium-1208',
+          'chromium_headless_shell-1208',
+          'ffmpeg-1011'
+        ]
+        if (!allowedDirs.includes(dirName)) {
           continue
         }
 
@@ -220,8 +227,20 @@ export class DownloadService {
 
   /**
    * Download a single file from S3 with retry logic
+   * Skips download if the file already exists locally
    */
-  async downloadFile(key: string, destPath: string): Promise<void> {
+  async downloadFile(key: string, destPath: string, expectedSize?: number): Promise<boolean> {
+    // Skip if file already exists with matching size
+    try {
+      const stat = await fs.promises.stat(destPath)
+      if (expectedSize !== undefined && stat.size === expectedSize) {
+        log.debug('File already exists, skipping', { key, destPath, size: stat.size })
+        return false
+      }
+    } catch {
+      // File doesn't exist, proceed with download
+    }
+
     await this.withRetry(async () => {
       log.debug('Downloading file', { key, destPath })
 
@@ -246,6 +265,8 @@ export class DownloadService {
 
       log.debug('File downloaded', { key, destPath })
     }, `Download ${key}`)
+
+    return true
   }
 
   /**
@@ -282,10 +303,15 @@ export class DownloadService {
       })
 
       try {
-        await this.downloadFile(obj.key, destPath)
-
+        const didDownload = await this.downloadFile(obj.key, destPath, obj.size)
         const fileSize = obj.size || 0
-        downloadedBytes += fileSize
+
+        if (didDownload) {
+          downloadedBytes += fileSize
+        } else {
+          // File was skipped, still count bytes for accurate progress
+          downloadedBytes += fileSize
+        }
 
         // Calculate speed and ETA
         const elapsedSeconds = (Date.now() - startTime) / 1000
@@ -339,7 +365,7 @@ export class DownloadService {
 
   /**
    * Validate the downloaded files
-   * Checks if the destination directory exists and chrome.exe is present
+   * Checks if the destination directory exists, chrome.exe, headless shell, and ffmpeg are present
    */
   async validateDownload(): Promise<ValidationResult> {
     log.info('Validating download', { destDir: this.config.destDir })
@@ -352,26 +378,29 @@ export class DownloadService {
         success: false,
         message: 'Download directory does not exist',
         fileCount: 0,
-        chromeExeExists: false
+        chromeExeExists: false,
+        headlessShellExists: false,
+        ffmpegExists: false
       }
     }
 
-    // Find chrome.exe in chromium-* folders
+    // Find chrome.exe in chromium-* folders (exclude headless)
     const chromeExePattern = /chromium-\d+[/\\]chrome-win64[/\\]chrome\.exe$/
     let chromeExeExists = false
     let expectedChromePath: string | undefined
+    let headlessShellExists = false
+    let ffmpegExists = false
     let fileCount = 0
 
-    const findChromeExe = async (dir: string): Promise<void> => {
+    const scanDir = async (dir: string): Promise<void> => {
       const entries = await fs.promises.readdir(dir, { withFileTypes: true })
 
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name)
 
         if (entry.isDirectory()) {
-          await findChromeExe(fullPath)
+          await scanDir(fullPath)
         } else if (entry.name.toLowerCase() === 'chrome.exe') {
-          // Check if path matches chromium-*/chrome-win64/chrome.exe pattern
           const relativePath = path.relative(this.config.destDir, fullPath)
           if (chromeExePattern.test(relativePath.replace(/\\/g, '/'))) {
             chromeExeExists = true
@@ -383,20 +412,54 @@ export class DownloadService {
       }
     }
 
+    // Check headless shell directory exists
+    const findHeadlessShell = async (): Promise<boolean> => {
+      try {
+        const entries = await fs.promises.readdir(this.config.destDir)
+        for (const entry of entries) {
+          if (entry.startsWith('chromium_headless_shell-')) {
+            return true
+          }
+        }
+      } catch {
+        // Ignore
+      }
+      return false
+    }
+
+    // Check ffmpeg exists
+    const ffmpegPath = path.join(this.config.destDir, 'ffmpeg-1011', 'ffmpeg-win64.exe')
     try {
-      await findChromeExe(this.config.destDir)
+      await fs.promises.access(ffmpegPath)
+      ffmpegExists = true
+    } catch {
+      ffmpegExists = false
+    }
+
+    try {
+      await scanDir(this.config.destDir)
     } catch (error) {
       log.error('Error scanning download directory', {
         error: error instanceof Error ? error.message : String(error)
       })
     }
 
+    headlessShellExists = await findHeadlessShell()
+
+    const allPassed = chromeExeExists && headlessShellExists && ffmpegExists
+    const missing: string[] = []
+    if (!chromeExeExists) missing.push('chromium')
+    if (!headlessShellExists) missing.push('headless shell')
+    if (!ffmpegExists) missing.push('ffmpeg')
+
     const result: ValidationResult = {
-      success: chromeExeExists,
-      message: chromeExeExists ? 'Validation passed' : 'chrome.exe not found in expected location',
+      success: allPassed,
+      message: allPassed ? 'Validation passed' : `Missing: ${missing.join(', ')}`,
       fileCount,
       chromeExeExists,
-      expectedChromePath
+      expectedChromePath,
+      headlessShellExists,
+      ffmpegExists
     }
 
     log.info('Validation result', result)

@@ -38,31 +38,54 @@ function createS3Client(): S3Client {
 async function checkBrowsersExist(): Promise<boolean> {
   const fs = await import('fs')
   const browsersPath = join(app.getPath('userData'), 'ms-playwright')
+
+  // Check ffmpeg
+  const ffmpegPath = join(browsersPath, 'ffmpeg-1011', 'ffmpeg-win64.exe')
+  if (!fs.default.existsSync(ffmpegPath)) {
+    return false
+  }
+
+  // Check chromium (exclude headless)
   const newChromiumPath = join(browsersPath, 'chromium-1208', 'chrome-win64', 'chrome.exe')
   const oldChromiumPath = join(browsersPath, 'chromium-win32', 'chrome.exe')
   const chromiumPath = fs.default.existsSync(newChromiumPath) ? newChromiumPath : oldChromiumPath
+  let chromiumReady = fs.default.existsSync(chromiumPath)
 
-  if (fs.default.existsSync(chromiumPath)) {
-    return true
+  if (!chromiumReady) {
+    try {
+      const entries = fs.default.readdirSync(browsersPath)
+      for (const entry of entries) {
+        if (entry.startsWith('chromium-') && !entry.includes('headless')) {
+          const revisionPath = join(browsersPath, entry, 'chrome-win64', 'chrome.exe')
+          if (fs.default.existsSync(revisionPath)) {
+            chromiumReady = true
+            break
+          }
+        }
+      }
+    } catch {
+      // Ignore browser directory probing failures
+    }
   }
 
-  let foundRevision = false
+  if (!chromiumReady) return false
+
+  // Check chromium headless shell
+  const headlessDir = join(browsersPath, 'chromium_headless_shell-1208')
+  let headlessReady = false
   try {
     const entries = fs.default.readdirSync(browsersPath)
     for (const entry of entries) {
-      if (entry.startsWith('chromium-') && !entry.includes('headless')) {
-        const revisionPath = join(browsersPath, entry, 'chrome-win64', 'chrome.exe')
-        if (fs.default.existsSync(revisionPath)) {
-          foundRevision = true
-          break
-        }
+      if (entry.startsWith('chromium_headless_shell-')) {
+        headlessReady = true
+        break
       }
     }
   } catch {
     // Ignore browser directory probing failures
   }
 
-  return foundRevision
+  return headlessReady
 }
 
 /**
