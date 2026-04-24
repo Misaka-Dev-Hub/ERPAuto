@@ -65,6 +65,7 @@ orderResolution:
 cleaner:
   queryBatchSize: 100
   processConcurrency: 1
+  sessionRefreshOrderThreshold: 160 # 会在 batch 边界检查；达到或超过阈值后，在当前 batch 完成后重建浏览器会话
 
 logging:
   level: info

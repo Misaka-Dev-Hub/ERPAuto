@@ -148,6 +148,9 @@ export class CleanerApplicationService {
       log.info('Login successful')
 
       const totalOrders = validOrderNumbers.length
+      const cleanerConfig = configManager.getConfig().cleaner
+      const effectiveSessionRefreshOrderThreshold =
+        input.sessionRefreshOrderThreshold ?? cleanerConfig.sessionRefreshOrderThreshold
       this.sendProgress(eventSender, 'ERP 登录成功', (1 / (1 + totalOrders)) * 100, {
         phase: 'login',
         currentOrderIndex: 0,
@@ -159,6 +162,7 @@ export class CleanerApplicationService {
       const modifiedInput: CleanerInput = {
         ...input,
         orderNumbers: validOrderNumbers,
+        sessionRefreshOrderThreshold: effectiveSessionRefreshOrderThreshold,
         onProgress: (message, progress, extra) => {
           this.sendProgress(eventSender, message, progress ?? 0, extra)
         }
@@ -168,7 +172,8 @@ export class CleanerApplicationService {
         batchId,
         orderCount: validOrderNumbers.length,
         queryBatchSize: input.queryBatchSize ?? 100,
-        processConcurrency: input.processConcurrency ?? 1
+        processConcurrency: input.processConcurrency ?? 1,
+        sessionRefreshOrderThreshold: effectiveSessionRefreshOrderThreshold
       })
 
       let cleaner = new CleanerService(authService)
@@ -450,12 +455,16 @@ export class CleanerApplicationService {
         : result.errors.length > 0
           ? AuditStatus.FAILURE
           : AuditStatus.SUCCESS
+    const cleanerConfig = ConfigManager.getInstance().getConfig().cleaner
+    const effectiveSessionRefreshOrderThreshold =
+      input.sessionRefreshOrderThreshold ?? cleanerConfig.sessionRefreshOrderThreshold
 
     logAuditWithCurrentUser(AuditAction.CLEAN, 'MATERIAL_PLAN', status, {
       orderCount,
       dryRun: input.dryRun ?? false,
       queryBatchSize: input.queryBatchSize ?? 100,
       processConcurrency: input.processConcurrency ?? 1,
+      sessionRefreshOrderThreshold: effectiveSessionRefreshOrderThreshold,
       materialsDeleted: result.materialsDeleted,
       materialsSkipped: result.materialsSkipped,
       errorCount: result.errors.length

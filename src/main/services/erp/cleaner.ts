@@ -8,9 +8,10 @@ import type {
   OrderCleanDetail
 } from '../../types/cleaner.types'
 import type { ErpSession } from '../../types/erp.types'
-import type { FrameLocator, Locator, Page } from 'playwright'
+import type { BrowserContext, FrameLocator, Locator, Page } from 'playwright'
 import { createLogger, run, trackDuration } from '../logger'
 import { capturePageContext } from './erp-error-context'
+import { capturePageState } from './page-state'
 
 const log = createLogger('CleanerService')
 
@@ -18,6 +19,7 @@ const DEFAULT_QUERY_BATCH_SIZE = 100
 const MAX_QUERY_BATCH_SIZE = 100
 const DEFAULT_PROCESS_CONCURRENCY = 1
 const MAX_PROCESS_CONCURRENCY = 20
+const DEFAULT_SESSION_REFRESH_ORDER_THRESHOLD = 160
 
 interface RetryResult {
   retriedOrders: number
@@ -67,37 +69,86 @@ class ConcurrencyTracker {
   private activeWorkers = 0
   private waitQueue = 0
   private mutexWaitCount = 0
+  private currentOwnerWorkerId: number | null = null
+  private currentOwnerOrderNumber: string | null = null
+  private waitStartedAt = new Map<number, number>()
 
-  workerStarted() {
+  workerStarted(workerId: number, orderNumber: string) {
     this.activeWorkers++
     log.verbose('[CONCURRENCY] Worker started', {
+      workerId,
+      orderNumber,
       activeWorkers: this.activeWorkers,
       waitQueue: this.waitQueue,
       waitingForPopupMutex: this.mutexWaitCount > 0
     })
   }
 
-  workerCompleted() {
+  workerCompleted(workerId: number, orderNumber: string) {
     this.activeWorkers--
     log.verbose('[CONCURRENCY] Worker completed', {
+      workerId,
+      orderNumber,
       activeWorkers: this.activeWorkers,
       queueRemaining: this.waitQueue
     })
   }
 
-  waitingForMutex() {
+  waitingForMutex(workerId: number, orderNumber: string) {
     this.mutexWaitCount++
+    this.waitQueue++
+    this.waitStartedAt.set(workerId, Date.now())
     log.warn('[CONCURRENCY] Worker waiting for popup mutex', {
+      workerId,
+      orderNumber,
       mutexWaitCount: this.mutexWaitCount,
-      activeWorkers: this.activeWorkers
+      activeWorkers: this.activeWorkers,
+      queueDepth: this.waitQueue,
+      currentOwnerWorkerId: this.currentOwnerWorkerId,
+      currentOwnerOrderNumber: this.currentOwnerOrderNumber
     })
   }
 
-  acquiredMutex() {
+  acquiredMutex(workerId: number, orderNumber: string) {
+    const waitStartedAt = this.waitStartedAt.get(workerId)
+    const waitDurationMs = waitStartedAt ? Date.now() - waitStartedAt : 0
+    this.waitStartedAt.delete(workerId)
     this.mutexWaitCount--
+    this.waitQueue = Math.max(0, this.waitQueue - 1)
+    this.currentOwnerWorkerId = workerId
+    this.currentOwnerOrderNumber = orderNumber
     log.verbose('[CONCURRENCY] Worker acquired popup mutex', {
+      workerId,
+      orderNumber,
       mutexWaitCount: this.mutexWaitCount,
-      activeWorkers: this.activeWorkers
+      activeWorkers: this.activeWorkers,
+      waitDurationMs,
+      queueDepth: this.waitQueue
+    })
+
+    if (waitDurationMs > 5000) {
+      log.warn('[CONCURRENCY] Popup mutex slow wait', {
+        workerId,
+        orderNumber,
+        waitDurationMs,
+        activeWorkers: this.activeWorkers,
+        queueDepth: this.waitQueue,
+        currentOwnerWorkerId: this.currentOwnerWorkerId,
+        currentOwnerOrderNumber: this.currentOwnerOrderNumber
+      })
+    }
+  }
+
+  releasedMutex(workerId: number, orderNumber: string) {
+    if (this.currentOwnerWorkerId === workerId) {
+      this.currentOwnerWorkerId = null
+      this.currentOwnerOrderNumber = null
+    }
+    log.verbose('[CONCURRENCY] Worker released popup mutex', {
+      workerId,
+      orderNumber,
+      activeWorkers: this.activeWorkers,
+      queueDepth: this.waitQueue
     })
   }
 }
@@ -148,20 +199,20 @@ export function getMissingOrders(inputOrders: string[], processedOrders: Set<str
 export async function runWithConcurrency<T, R>(
   items: T[],
   concurrency: number,
-  worker: (item: T, index: number) => Promise<R>
+  worker: (item: T, index: number, workerId: number) => Promise<R>
 ): Promise<R[]> {
   const results = new Array<R>(items.length)
   const limit = Math.max(1, Math.trunc(concurrency))
   let cursor = 0
 
-  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async (_, workerId) => {
     while (true) {
       const current = cursor
       cursor += 1
       if (current >= items.length) {
         return
       }
-      results[current] = await worker(items[current], current)
+      results[current] = await worker(items[current], current, workerId)
     }
   })
 
@@ -262,6 +313,10 @@ export class CleanerService {
       1,
       MAX_PROCESS_CONCURRENCY
     )
+    const sessionRefreshOrderThreshold =
+      input.sessionRefreshOrderThreshold && input.sessionRefreshOrderThreshold > 0
+        ? Math.trunc(input.sessionRefreshOrderThreshold)
+        : DEFAULT_SESSION_REFRESH_ORDER_THRESHOLD
 
     log.info('Starting cleaner', {
       totalOrders,
@@ -269,6 +324,7 @@ export class CleanerService {
       dryRun,
       queryBatchSize,
       processConcurrency,
+      sessionRefreshOrderThreshold,
       orderNumbers: input.orderNumbers,
       materialCodes: input.materialCodes
     })
@@ -281,12 +337,13 @@ export class CleanerService {
       const session = this.authService.getSession()
       const navigation = await this.navigateToCleanerPage(session)
       popupPage = navigation.popupPage
-      const { workFrame } = navigation
+      let { workFrame } = navigation
 
-      await this.setupQueryInterface(workFrame)
+      await this.setupQueryInterface(workFrame, popupPage)
 
       const orderBatches = createBatches(input.orderNumbers, queryBatchSize)
       const popupMutex = new AsyncMutex()
+      let ordersProcessedSinceLogin = 0
       const progressState: ProgressState = {
         ordersStarted: 0,
         ordersCompleted: 0,
@@ -329,7 +386,7 @@ export class CleanerService {
         await trackDuration(
           async () => {
             // Phase 1: Query orders
-            await trackDuration(async () => await this.queryOrders(workFrame, batchOrders), {
+            await trackDuration(async () => await this.queryOrders(workFrame, popupPage!, batchOrders), {
               operationName: 'query',
               message: '执行订单查询',
               slowThresholdMs: 3000,
@@ -345,7 +402,7 @@ export class CleanerService {
 
             // Phase 3: Collect query results
             const collectResult = await trackDuration(
-              async () => await this.collectQueryResultRows(workFrame),
+              async () => await this.collectQueryResultRows(workFrame, popupPage!),
               {
                 operationName: 'collect_results',
                 message: '收集查询结果',
@@ -358,20 +415,29 @@ export class CleanerService {
             // Phase 4: Process all orders in batch
             await trackDuration(
               async () => {
-                await runWithConcurrency(queriedRows, processConcurrency, async (row) => {
+                await runWithConcurrency(queriedRows, processConcurrency, async (row, _index, workerId) => {
                   const { rowIndex, orderNumber } = row
 
                   // [新增] Worker 开始追踪
-                  tracker.workerStarted()
+                  tracker.workerStarted(workerId, orderNumber)
 
                   try {
                     const openedDetailPage = await popupMutex.runExclusive(async () => {
                       // [新增] Mutex 等待追踪
-                      tracker.waitingForMutex()
-                      const page = await this.openDetailPageFromRow(workFrame, popupPage!, rowIndex)
-                      // [新增] Mutex 获取追踪
-                      tracker.acquiredMutex()
-                      return page
+                      tracker.waitingForMutex(workerId, orderNumber)
+                      try {
+                        const page = await this.openDetailPageFromRow(workFrame, popupPage!, rowIndex, {
+                          orderNumber,
+                          orderIndex: progressState.ordersStarted,
+                          orderPosition: `${progressState.ordersStarted + 1}/${progressState.totalOrders}`,
+                          workerId
+                        })
+                        // [新增] Mutex 获取追踪
+                        tracker.acquiredMutex(workerId, orderNumber)
+                        return page
+                      } finally {
+                        tracker.releasedMutex(workerId, orderNumber)
+                      }
                     })
 
                     let detail: OrderCleanDetail
@@ -408,7 +474,7 @@ export class CleanerService {
                     result.uncertainDeletions += detail.uncertainDeletions
                   } finally {
                     // [新增] Worker 完成追踪
-                    tracker.workerCompleted()
+                    tracker.workerCompleted(workerId, orderNumber)
                   }
                 })
 
@@ -446,6 +512,51 @@ export class CleanerService {
 
         // [新增] 清理健康检查定时器
         clearInterval(healthCheckInterval)
+
+        ordersProcessedSinceLogin += batchOrders.length
+        const remainingBatches = orderBatches.length - (batchIndex + 1)
+        log.info('[SESSION_REFRESH_CHECK] 批次完成，检查是否需要重建会话', {
+          batchIndex: batchIndex + 1,
+          totalBatches: orderBatches.length,
+          batchSize: batchOrders.length,
+          ordersProcessedSinceLogin,
+          threshold: sessionRefreshOrderThreshold,
+          remainingBatches
+        })
+
+        if (remainingBatches > 0 && ordersProcessedSinceLogin >= sessionRefreshOrderThreshold) {
+          log.info('[SESSION_REFRESH_TRIGGERED] 达到阈值，准备重建会话', {
+            batchIndex: batchIndex + 1,
+            totalBatches: orderBatches.length,
+            batchSize: batchOrders.length,
+            ordersProcessedSinceLogin,
+            threshold: sessionRefreshOrderThreshold,
+            remainingBatches
+          })
+
+          const refreshedNavigation = await this.refreshSessionAtBatchBoundary({
+            batchIndex: batchIndex + 1,
+            totalBatches: orderBatches.length,
+            batchSize: batchOrders.length,
+            threshold: sessionRefreshOrderThreshold,
+            ordersProcessedSinceLogin,
+            totalOrders,
+            completedOrders: progressState.ordersCompleted
+          })
+
+          popupPage = refreshedNavigation.popupPage
+          workFrame = refreshedNavigation.workFrame
+          ordersProcessedSinceLogin = 0
+        } else if (remainingBatches === 0 && ordersProcessedSinceLogin >= sessionRefreshOrderThreshold) {
+          log.info('[SESSION_REFRESH_SKIPPED] 已达到阈值但无剩余批次，跳过重建', {
+            batchIndex: batchIndex + 1,
+            totalBatches: orderBatches.length,
+            batchSize: batchOrders.length,
+            ordersProcessedSinceLogin,
+            threshold: sessionRefreshOrderThreshold,
+            remainingBatches
+          })
+        }
       }
 
       const retryResult = await this.retryFailedOrders({
@@ -556,6 +667,10 @@ export class CleanerService {
       elapsedMs: Date.now() - navStartTime,
       popupOpened: !!popupPage
     })
+    await this.logPageStateSnapshot(popupPage, 'nav.popup_opened', {
+      level: 'info',
+      elapsedMs: Date.now() - navStartTime
+    })
 
     // Step 3: Get forward frame
     log.debug('[导航 Step 3] 获取 forwardFrame 框架')
@@ -612,6 +727,10 @@ export class CleanerService {
     log.debug('[导航 Step 5] 等待页面就绪标志', { selector: '#hot-key-head_list', timeout: 30000 })
     await workFrame.locator('#hot-key-head_list').waitFor({ state: 'visible', timeout: 30000 })
     const totalNavTime = Date.now() - navStartTime
+    await this.logPageStateSnapshot(popupPage, 'nav.cleaner_page_ready', {
+      level: 'info',
+      elapsedMs: totalNavTime
+    })
     log.info('[导航完成] 已导航到清理页面', {
       totalNavTimeMs: totalNavTime,
       isSlow: totalNavTime > 5000
@@ -620,9 +739,13 @@ export class CleanerService {
     return { popupPage, workFrame }
   }
 
-  private async setupQueryInterface(innerFrame: FrameLocator): Promise<void> {
+  private async setupQueryInterface(innerFrame: FrameLocator, popupPage: Page): Promise<void> {
     const setupStartTime = Date.now()
     log.debug('[查询界面设置开始] 准备配置查询界面')
+    await this.logPageStateSnapshot(popupPage, 'query.setup.start', {
+      level: 'debug',
+      elapsedMs: 0
+    })
 
     // Step 1: Click search icon
     log.debug('[查询设置 Step 1] 点击搜索图标')
@@ -647,6 +770,10 @@ export class CleanerService {
     await inputEl.fill('5000')
     await inputEl.press('Enter')
     const totalSetupTime = Date.now() - setupStartTime
+    await this.logPageStateSnapshot(popupPage, 'query.setup.ready', {
+      level: 'info',
+      elapsedMs: totalSetupTime
+    })
     log.debug('[查询设置完成] 查询界面配置完毕', {
       totalSetupTimeMs: totalSetupTime,
       queryLimit: 5000,
@@ -654,7 +781,11 @@ export class CleanerService {
     })
   }
 
-  private async queryOrders(workFrame: FrameLocator, orderNumbers: string[]): Promise<void> {
+  private async queryOrders(
+    workFrame: FrameLocator,
+    popupPage: Page,
+    orderNumbers: string[]
+  ): Promise<void> {
     const queryStartTime = Date.now()
     log.debug('[订单查询开始]', {
       orderCount: orderNumbers.length,
@@ -662,6 +793,10 @@ export class CleanerService {
         .slice(0, 5)
         .concat(orderNumbers.length > 5 ? [`... (${orderNumbers.length - 5} more)`] : []),
       isPreview: orderNumbers.length > 5
+    })
+    await this.logPageStateSnapshot(popupPage, 'query.before_submit', {
+      level: 'debug',
+      elapsedMs: 0
     })
 
     const textbox = workFrame.getByRole('textbox', { name: '生产订单号' })
@@ -678,9 +813,16 @@ export class CleanerService {
       elapsedMs: Date.now() - queryStartTime,
       orderCount: orderNumbers.length
     })
+    await this.logPageStateSnapshot(popupPage, 'query.after_submit', {
+      level: 'info',
+      elapsedMs: Date.now() - queryStartTime
+    })
   }
 
-  private async collectQueryResultRows(workFrame: FrameLocator): Promise<QueryResultRow[]> {
+  private async collectQueryResultRows(
+    workFrame: FrameLocator,
+    popupPage: Page
+  ): Promise<QueryResultRow[]> {
     const collectStartTime = Date.now()
     log.debug('[查询结果收集开始] 准备读取查询结果表格')
 
@@ -707,6 +849,10 @@ export class CleanerService {
     }
 
     const totalCollectTime = Date.now() - collectStartTime
+    await this.logPageStateSnapshot(popupPage, 'query.results.collected', {
+      level: 'info',
+      elapsedMs: totalCollectTime
+    })
     log.info('[查询结果收集完成]', {
       totalRowsScanned: rowCount,
       validOrderCount,
@@ -754,37 +900,111 @@ export class CleanerService {
   private async openDetailPageFromRow(
     workFrame: FrameLocator,
     popupPage: Page,
-    rowIndex: number
+    rowIndex: number,
+    options?: {
+      orderNumber?: string
+      orderIndex?: number
+      orderPosition?: string
+      workerId?: number
+    }
   ): Promise<Page> {
+    const openStartTime = Date.now()
     const row = workFrame.locator('tbody tr').nth(rowIndex)
     await row.waitFor({ state: 'visible', timeout: 15000 })
+    log.info('[NAV_EVENT] 准备从查询结果打开详情页', {
+      step: 'detail.open.from_query_row',
+      rowIndex,
+      orderNumber: options?.orderNumber,
+      orderIndex: options?.orderIndex,
+      orderPosition: options?.orderPosition,
+      workerId: options?.workerId
+    })
+    await this.logPageStateSnapshot(popupPage, 'detail.open.from_query_row.before_click', {
+      level: 'debug',
+      orderNumber: options?.orderNumber,
+      orderIndex: options?.orderIndex,
+      orderPosition: options?.orderPosition,
+      workerId: options?.workerId,
+      elapsedMs: Date.now() - openStartTime
+    })
 
     const moreButton = row.locator('a.row-more').first()
     await moreButton.scrollIntoViewIfNeeded()
 
     const detailPagePromise = popupPage.waitForEvent('popup')
     await moreButton.click()
-    await this.clickMaterialPlanMenu(workFrame)
+    await this.clickMaterialPlanMenu(workFrame, popupPage, options)
 
-    return await detailPagePromise
+    const detailPage = await detailPagePromise
+    log.info('[POPUP_EVENT] 详情页弹窗已创建', {
+      step: 'detail.popup.opened',
+      rowIndex,
+      orderNumber: options?.orderNumber,
+      orderIndex: options?.orderIndex,
+      orderPosition: options?.orderPosition,
+      workerId: options?.workerId,
+      popupUrl: detailPage.url(),
+      elapsedMs: Date.now() - openStartTime
+    })
+    await this.logPageStateSnapshot(detailPage, 'detail.popup.opened', {
+      level: 'info',
+      orderNumber: options?.orderNumber,
+      orderIndex: options?.orderIndex,
+      orderPosition: options?.orderPosition,
+      workerId: options?.workerId,
+      elapsedMs: Date.now() - openStartTime
+    })
+    return detailPage
   }
 
   private async openDetailPageFromCurrentQuery(
     workFrame: FrameLocator,
-    popupPage: Page
+    popupPage: Page,
+    orderNumber?: string
   ): Promise<Page> {
+    const openStartTime = Date.now()
     const firstRow = workFrame.locator('tbody tr').first()
     await firstRow.waitFor({ state: 'visible', timeout: 10000 })
+    log.info('[NAV_EVENT] 准备从当前查询结果打开详情页', {
+      step: 'detail.open.from_current_query',
+      orderNumber
+    })
+    await this.logPageStateSnapshot(popupPage, 'detail.open.from_current_query.before_click', {
+      level: 'debug',
+      orderNumber,
+      elapsedMs: Date.now() - openStartTime
+    })
 
     const moreButton = firstRow.locator('a.row-more').first()
     const detailPagePromise = popupPage.waitForEvent('popup')
     await moreButton.click()
-    await this.clickMaterialPlanMenu(workFrame)
+    await this.clickMaterialPlanMenu(workFrame, popupPage, { orderNumber })
 
-    return await detailPagePromise
+    const detailPage = await detailPagePromise
+    log.info('[POPUP_EVENT] 详情页弹窗已创建', {
+      step: 'detail.popup.opened.retry',
+      orderNumber,
+      popupUrl: detailPage.url(),
+      elapsedMs: Date.now() - openStartTime
+    })
+    await this.logPageStateSnapshot(detailPage, 'detail.popup.opened.retry', {
+      level: 'info',
+      orderNumber,
+      elapsedMs: Date.now() - openStartTime
+    })
+    return detailPage
   }
 
-  private async clickMaterialPlanMenu(workFrame: FrameLocator): Promise<void> {
+  private async clickMaterialPlanMenu(
+    workFrame: FrameLocator,
+    popupPage: Page,
+    options?: {
+      orderNumber?: string
+      orderIndex?: number
+      orderPosition?: string
+      workerId?: number
+    }
+  ): Promise<void> {
     const candidates = [
       workFrame.locator('li:visible, a:visible, span:visible, div:visible').filter({
         hasText: /^备料计划$/
@@ -798,7 +1018,21 @@ export class CleanerService {
       const target = candidate.last()
       try {
         await target.waitFor({ state: 'visible', timeout: 2000 })
+        log.info('[NAV_EVENT] 点击备料计划菜单', {
+          step: 'detail.menu.material_plan',
+          orderNumber: options?.orderNumber,
+          orderIndex: options?.orderIndex,
+          orderPosition: options?.orderPosition,
+          workerId: options?.workerId
+        })
         await target.click()
+        await this.logPageStateSnapshot(popupPage, 'detail.menu.material_plan.clicked', {
+          level: 'debug',
+          orderNumber: options?.orderNumber,
+          orderIndex: options?.orderIndex,
+          orderPosition: options?.orderPosition,
+          workerId: options?.workerId
+        })
         return
       } catch {
         // Try next locator candidate
@@ -809,6 +1043,106 @@ export class CleanerService {
       selectorsAttempted: candidates.length
     })
     throw new Error('无法定位”备料计划”菜单项（可能菜单结构已变化）')
+  }
+
+  private getBrowserContext(): BrowserContext | undefined {
+    try {
+      return this.authService.getSession().context
+    } catch {
+      return undefined
+    }
+  }
+
+  private async logPageStateSnapshot(
+    page: Page,
+    step: string,
+    options: {
+      level?: 'info' | 'warn' | 'error' | 'debug'
+      orderNumber?: string
+      orderIndex?: number
+      orderPosition?: string
+      workerId?: number
+      elapsedMs?: number
+      includeFrameHierarchy?: boolean
+      includeBodyTextPreview?: boolean
+    } = {}
+  ) {
+    const pageState = await capturePageState(page, this.getBrowserContext(), {
+      includeFrameHierarchy: options.includeFrameHierarchy,
+      includeBodyTextPreview: options.includeBodyTextPreview
+    })
+
+    const payload = {
+      step,
+      orderNumber: options.orderNumber,
+      orderIndex: options.orderIndex,
+      orderPosition: options.orderPosition,
+      workerId: options.workerId,
+      elapsedMs: options.elapsedMs,
+      ...pageState
+    }
+
+    const level = options.level ?? 'info'
+    log[level]('[PAGE_STATE] 页面状态快照', payload)
+    return payload
+  }
+
+  private async ensureNotRedirectedToLoginPage(
+    page: Page,
+    step: string,
+    expectedOrderNumber: string | undefined,
+    progressState: ProgressState,
+    elapsedMs: number
+  ): Promise<void> {
+    const pageState = await capturePageState(page, this.getBrowserContext(), {
+      includeFrameHierarchy: true,
+      includeBodyTextPreview: true
+    })
+
+    if (!pageState.isCasLoginRedirect && pageState.pageKind !== 'login') {
+      return
+    }
+
+    log.error('[SESSION_LOST] 会话跳转到 CAS 登录页', {
+      step,
+      orderNumber: expectedOrderNumber,
+      orderIndex: progressState.ordersStarted,
+      orderPosition: `${progressState.ordersStarted + 1}/${progressState.totalOrders}`,
+      elapsedMs,
+      detectedBy: pageState.isCasLoginRedirect ? 'url_match' : 'login_form_detected',
+      ...pageState
+    })
+
+    throw new Error('ERP 会话已跳转到登录页')
+  }
+
+  private async refreshSessionAtBatchBoundary(params: {
+    batchIndex: number
+    totalBatches: number
+    batchSize: number
+    threshold: number
+    ordersProcessedSinceLogin: number
+    totalOrders: number
+    completedOrders: number
+  }): Promise<{ popupPage: Page; workFrame: FrameLocator }> {
+    const refreshStartTime = Date.now()
+
+    log.info('[SESSION_REFRESH_START] 开始关闭浏览器并重新登录', {
+      ...params
+    })
+
+    await this.authService.close()
+
+    const session = await this.authService.login()
+    const navigation = await this.navigateToCleanerPage(session)
+    await this.setupQueryInterface(navigation.workFrame, navigation.popupPage)
+
+    log.info('[SESSION_REFRESH_SUCCESS] 会话重建成功', {
+      ...params,
+      elapsedMs: Date.now() - refreshStartTime
+    })
+
+    return navigation
   }
 
   private async processDetailPage(params: {
@@ -861,16 +1195,40 @@ export class CleanerService {
     }
 
     try {
+      await this.logPageStateSnapshot(detailPage, 'detail.page.opened', {
+        level: 'debug',
+        orderNumber: expectedOrderNumber,
+        orderIndex: progressState.ordersStarted,
+        orderPosition: `${progressState.ordersStarted + 1}/${progressState.totalOrders}`,
+        elapsedMs: Date.now() - processStartTime
+      })
+
       // Step 1: Access forward frame
       log.debug('[详情页面 Step 1] 准备访问 forwardFrame')
+      await this.ensureNotRedirectedToLoginPage(
+        detailPage,
+        'detail.step1.forwardFrame',
+        expectedOrderNumber,
+        progressState,
+        Date.now() - processStartTime
+      )
       const detailMainFrame = detailPage.locator('#forwardFrame')
       const dFrame = await detailMainFrame.contentFrame()
 
       if (!dFrame) {
-        const errorMsg = '无法访问详情页面的 forwardFrame'
-        log.error('[详情页面失败] forwardFrame 访问失败', {
+        const pageState = await this.logPageStateSnapshot(detailPage, 'detail.step1.forwardFrame', {
+          level: 'error',
+          orderNumber: expectedOrderNumber,
+          orderIndex: progressState.ordersStarted,
+          orderPosition: `${progressState.ordersStarted + 1}/${progressState.totalOrders}`,
           elapsedMs: Date.now() - processStartTime,
-          pageUrl: detailPage.url(),
+          includeFrameHierarchy: true,
+          includeBodyTextPreview: true
+        })
+        const errorMsg = '无法访问详情页面的 forwardFrame'
+        log.error('[DETAIL_PAGE_INVALID] 详情页未建立', {
+          failureKind: 'forward_frame_missing',
+          ...pageState,
           contextData: await capturePageContext(
             detailPage,
             undefined,
@@ -888,15 +1246,49 @@ export class CleanerService {
 
       // Step 2: Access inner frame
       log.debug('[详情页面 Step 2] 等待并获取 mainiframe 内部框架', { timeout: 30000 })
+      await this.ensureNotRedirectedToLoginPage(
+        detailPage,
+        'detail.step2.mainiframe',
+        expectedOrderNumber,
+        progressState,
+        Date.now() - processStartTime
+      )
       const detailInnerLocator = dFrame.locator('#mainiframe')
-      await detailInnerLocator.waitFor({ state: 'visible', timeout: 30000 })
+      try {
+        await detailInnerLocator.waitFor({ state: 'visible', timeout: 30000 })
+      } catch (error) {
+        const pageState = await this.logPageStateSnapshot(detailPage, 'detail.step2.mainiframe', {
+          level: 'error',
+          orderNumber: expectedOrderNumber,
+          orderIndex: progressState.ordersStarted,
+          orderPosition: `${progressState.ordersStarted + 1}/${progressState.totalOrders}`,
+          elapsedMs: Date.now() - processStartTime,
+          includeFrameHierarchy: true,
+          includeBodyTextPreview: true
+        })
+        log.error('[DETAIL_PAGE_TIMEOUT] 详情页等待超时', {
+          failureKind: pageState.isCasLoginRedirect ? 'redirected_to_cas' : 'mainiframe_missing',
+          ...pageState,
+          error: error instanceof Error ? error.message : String(error)
+        })
+        throw error
+      }
       const detailInnerFrame = await detailInnerLocator.contentFrame()
 
       if (!detailInnerFrame) {
-        const errorMsg = '无法访问详情页面的内部框架'
-        log.error('[详情页面失败] 内部框架访问失败', {
+        const pageState = await this.logPageStateSnapshot(detailPage, 'detail.step2.detailInnerFrame', {
+          level: 'error',
+          orderNumber: expectedOrderNumber,
+          orderIndex: progressState.ordersStarted,
+          orderPosition: `${progressState.ordersStarted + 1}/${progressState.totalOrders}`,
           elapsedMs: Date.now() - processStartTime,
-          pageUrl: detailPage.url(),
+          includeFrameHierarchy: true,
+          includeBodyTextPreview: true
+        })
+        const errorMsg = '无法访问详情页面的内部框架'
+        log.error('[DETAIL_PAGE_INVALID] 详情页未建立', {
+          failureKind: 'mainiframe_missing',
+          ...pageState,
           contextData: await capturePageContext(
             detailPage,
             undefined,
@@ -917,9 +1309,36 @@ export class CleanerService {
         selector: '离散备料计划维护',
         timeout: 30000
       })
-      await detailInnerFrame
-        .getByText(/^离散备料计划维护：/)
-        .waitFor({ state: 'visible', timeout: 30000 })
+      await this.ensureNotRedirectedToLoginPage(
+        detailPage,
+        'detail.step3.header',
+        expectedOrderNumber,
+        progressState,
+        Date.now() - processStartTime
+      )
+      try {
+        await detailInnerFrame.getByText(/^离散备料计划维护：/).waitFor({
+          state: 'visible',
+          timeout: 30000
+        })
+      } catch (error) {
+        const pageState = await this.logPageStateSnapshot(detailPage, 'detail.step3.header', {
+          level: 'error',
+          orderNumber: expectedOrderNumber,
+          orderIndex: progressState.ordersStarted,
+          orderPosition: `${progressState.ordersStarted + 1}/${progressState.totalOrders}`,
+          elapsedMs: Date.now() - processStartTime,
+          includeFrameHierarchy: true,
+          includeBodyTextPreview: true
+        })
+        log.error('[DETAIL_PAGE_TIMEOUT] 详情页等待超时', {
+          failureKind: pageState.isCasLoginRedirect ? 'redirected_to_cas' : 'detail_header_missing',
+          expectedMarker: '离散备料计划维护：',
+          ...pageState,
+          error: error instanceof Error ? error.message : String(error)
+        })
+        throw error
+      }
       log.debug('[详情页面 Step 3 完成] 页面标题已显示', {
         elapsedMs: Date.now() - processStartTime
       })
@@ -1743,7 +2162,7 @@ export class CleanerService {
             try {
               // Step 1: Re-query order
               log.debug('[重试查询] 重新查询订单', { orderNumber, attempt })
-              await this.queryOrders(workFrame, [orderNumber])
+              await this.queryOrders(workFrame, popupPage, [orderNumber])
               await this.waitForLoading(workFrame)
               log.debug('[重试查询完成] 查询加载完成', {
                 orderNumber,
@@ -1768,7 +2187,11 @@ export class CleanerService {
 
               // Step 3: Open detail page
               log.debug('[重试详情] 打开订单详情页', { orderNumber, attempt })
-              const detailPage = await this.openDetailPageFromCurrentQuery(workFrame, popupPage)
+              const detailPage = await this.openDetailPageFromCurrentQuery(
+                workFrame,
+                popupPage,
+                orderNumber
+              )
               log.debug('[重试详情] 详情页已打开', {
                 orderNumber,
                 attempt,
