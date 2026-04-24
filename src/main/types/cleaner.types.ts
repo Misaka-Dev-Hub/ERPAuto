@@ -18,6 +18,7 @@ export interface CleanerInput {
   headless?: boolean
   queryBatchSize?: number
   processConcurrency?: number
+  sessionRefreshOrderThreshold?: number
   onProgress?: (message: string, progress?: number, extra?: Partial<CleanerProgress>) => void
 }
 

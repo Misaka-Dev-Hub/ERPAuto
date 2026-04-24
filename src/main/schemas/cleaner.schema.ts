@@ -14,7 +14,8 @@ export const CleanerInputSchema = z.object({
   materialCodes: z.array(z.string().min(1, 'Material code cannot be empty')),
   dryRun: z.boolean(),
   queryBatchSize: z.number().int().min(1).max(100).optional().default(100),
-  processConcurrency: z.number().int().min(1).max(20).optional().default(1)
+  processConcurrency: z.number().int().min(1).max(20).optional().default(1),
+  sessionRefreshOrderThreshold: z.number().int().positive().optional().default(160)
   // Note: onProgress is a function, not validated via Zod
 })
 

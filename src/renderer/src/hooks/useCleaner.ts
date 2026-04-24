@@ -62,6 +62,7 @@ export function useCleaner() {
   const [headless, setHeadless] = useState(() => getStoredBoolean('cleaner_headless', true))
   const [queryBatchSize, setQueryBatchSize] = useState(100)
   const [processConcurrency, setProcessConcurrency] = useState(1)
+  const [sessionRefreshOrderThreshold, setSessionRefreshOrderThreshold] = useState(160)
   const [showSettingsMenu, setShowSettingsMenu] = useState(false)
 
   // Inline editing state for manager field (Admin only)
@@ -138,6 +139,7 @@ export function useCleaner() {
         if (result) {
           setQueryBatchSize(result.queryBatchSize)
           setProcessConcurrency(result.processConcurrency)
+          setSessionRefreshOrderThreshold(result.sessionRefreshOrderThreshold)
         }
       } catch (err) {
         logger.error('Failed to load cleaner config', {
@@ -377,6 +379,7 @@ export function useCleaner() {
         headless,
         queryBatchSize,
         processConcurrency,
+        sessionRefreshOrderThreshold,
         selectedManagers: Array.from(selectedManagers)
       })
       setReportData(result)
@@ -440,6 +443,8 @@ export function useCleaner() {
     setQueryBatchSize,
     processConcurrency,
     setProcessConcurrency,
+    sessionRefreshOrderThreshold,
+    setSessionRefreshOrderThreshold,
     updateProcessConcurrency,
     showSettingsMenu,
     setShowSettingsMenu,

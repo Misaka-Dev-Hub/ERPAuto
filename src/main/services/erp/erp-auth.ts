@@ -3,6 +3,7 @@ import type { ErpConfig, ErpSession } from '../../types/erp.types'
 import { createLogger } from '../logger'
 import { capturePageContext } from './erp-error-context'
 import { attachPageDiagnostics, attachContextDiagnostics } from './page-diagnostics'
+import { capturePageState } from './page-state'
 
 const log = createLogger('ErpAuthService')
 
@@ -64,6 +65,10 @@ export class ErpAuthService {
     await page.goto(loginUrl)
 
     log.debug('已导航到登录页面')
+    log.info('[PAGE_STATE] 页面状态快照', {
+      step: 'auth.login_page_loaded',
+      ...(await capturePageState(page, context))
+    })
 
     // Wait for page to load
     await page.waitForLoadState('domcontentloaded', { timeout: PAGE_LOAD_TIMEOUT })
@@ -156,6 +161,10 @@ export class ErpAuthService {
     })
 
     await this.waitForLoginResult(mainFrame as unknown as import('playwright').Frame)
+    log.info('[PAGE_STATE] 页面状态快照', {
+      step: 'auth.login_result_confirmed',
+      ...(await capturePageState(page, context, { includeFrameHierarchy: true }))
+    })
 
     // Create session with mainFrame (Python returns main_frame as part of login result)
     this.session = {
