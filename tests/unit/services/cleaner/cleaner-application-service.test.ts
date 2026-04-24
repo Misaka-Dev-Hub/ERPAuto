@@ -279,6 +279,14 @@ describe('CleanerApplicationService', () => {
       expect(result.ordersProcessed).toBe(1)
     })
 
+    it('should fall back to default session refresh threshold when cleaner config is missing', async () => {
+      const eventSender: any = { send: vi.fn() }
+
+      await service.runCleaner(eventSender, makeInput())
+
+      expect(lastCleanerInput?.sessionRefreshOrderThreshold).toBe(160)
+    })
+
     it('should close ERP browser on success', async () => {
       await service.runCleaner({ send: vi.fn() } as any, makeInput())
 

@@ -27,6 +27,7 @@ import type { InsertMaterialDetailInput, InsertOrderInput } from '../../types/cl
 import type { OrderMapping } from '../../types/order-resolver.types'
 
 const log = createLogger('CleanerApplicationService')
+const DEFAULT_SESSION_REFRESH_ORDER_THRESHOLD = 160
 
 export class CleanerApplicationService {
   async runCleaner(
@@ -148,9 +149,8 @@ export class CleanerApplicationService {
       log.info('Login successful')
 
       const totalOrders = validOrderNumbers.length
-      const cleanerConfig = configManager.getConfig().cleaner
       const effectiveSessionRefreshOrderThreshold =
-        input.sessionRefreshOrderThreshold ?? cleanerConfig.sessionRefreshOrderThreshold
+        this.resolveSessionRefreshOrderThreshold(input, configManager)
       this.sendProgress(eventSender, 'ERP 登录成功', (1 / (1 + totalOrders)) * 100, {
         phase: 'login',
         currentOrderIndex: 0,
@@ -455,9 +455,10 @@ export class CleanerApplicationService {
         : result.errors.length > 0
           ? AuditStatus.FAILURE
           : AuditStatus.SUCCESS
-    const cleanerConfig = ConfigManager.getInstance().getConfig().cleaner
-    const effectiveSessionRefreshOrderThreshold =
-      input.sessionRefreshOrderThreshold ?? cleanerConfig.sessionRefreshOrderThreshold
+    const effectiveSessionRefreshOrderThreshold = this.resolveSessionRefreshOrderThreshold(
+      input,
+      ConfigManager.getInstance()
+    )
 
     logAuditWithCurrentUser(AuditAction.CLEAN, 'MATERIAL_PLAN', status, {
       orderCount,
@@ -469,6 +470,17 @@ export class CleanerApplicationService {
       materialsSkipped: result.materialsSkipped,
       errorCount: result.errors.length
     })
+  }
+
+  private resolveSessionRefreshOrderThreshold(
+    input: CleanerInput,
+    configManager: Pick<ConfigManager, 'getConfig'>
+  ): number {
+    return (
+      input.sessionRefreshOrderThreshold ??
+      configManager.getConfig().cleaner?.sessionRefreshOrderThreshold ??
+      DEFAULT_SESSION_REFRESH_ORDER_THRESHOLD
+    )
   }
 
   /**
