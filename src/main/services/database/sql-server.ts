@@ -38,6 +38,8 @@ export class SqlServerService implements IDatabaseService {
         user: this.config.user,
         password: this.config.password,
         database: this.config.database,
+        requestTimeout: 60000,
+        connectionTimeout: 15000,
         options: {
           encrypt: this.config.options?.encrypt ?? false,
           trustServerCertificate: this.config.options?.trustServerCertificate ?? false

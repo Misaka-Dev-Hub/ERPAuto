@@ -97,6 +97,14 @@ describe('ExtractorService', () => {
         recordsImported: 0,
         uniqueSourceNumbers: 0,
         errors: []
+      } as ImportResult),
+      importFromRecords: vi.fn().mockResolvedValue({
+        success: true,
+        recordsRead: 0,
+        recordsDeleted: 0,
+        recordsImported: 0,
+        uniqueSourceNumbers: 0,
+        errors: []
       } as ImportResult)
     }
 
@@ -173,6 +181,65 @@ describe('ExtractorService', () => {
 
       expect(Array.isArray(result.errors)).toBe(true)
     })
+
+    it('should import parsed records directly instead of re-reading merged Excel', async () => {
+      mockExtractorCoreInstance.downloadAllBatches.mockResolvedValue({
+        downloadedFiles: ['./file1.xlsx'],
+        errors: []
+      })
+      mockExcelParserInstance.parse = vi.fn().mockImplementation(() => {
+        mockExcelParserInstance._lastOrders = [
+          {
+            orderInfo: {
+              factory: '工厂A',
+              planNumber: 'PLAN001',
+              productionOrder: 'ORD001',
+              productCode: 'P001',
+              productName: '产品A',
+              plannedQuantity: '10',
+              unit: 'PCS'
+            },
+            materials: [
+              {
+                sequence: 1,
+                materialCode: 'MAT001',
+                materialName: '物料A',
+                quantity: 2,
+                unit: 'PCS'
+              }
+            ]
+          }
+        ]
+        return Promise.resolve()
+      })
+      mockDataImportInstance.importFromRecords.mockResolvedValue({
+        success: true,
+        recordsRead: 1,
+        recordsDeleted: 0,
+        recordsImported: 1,
+        uniqueSourceNumbers: 1,
+        errors: []
+      } as ImportResult)
+
+      const service = new ExtractorService(mockAuthService, './test-downloads')
+      vi.spyOn(service as any, 'saveMergedOrders').mockResolvedValue(undefined)
+
+      const result = await service.extract({
+        orderNumbers: ['ORD001'],
+        onProgress: vi.fn(),
+        onLog: vi.fn()
+      })
+
+      expect(result.importResult?.success).toBe(true)
+      expect(mockDataImportInstance.importFromRecords).toHaveBeenCalledTimes(1)
+      expect(mockDataImportInstance.importFromExcel).not.toHaveBeenCalled()
+      expect(mockDataImportInstance.importFromRecords.mock.calls[0][0][0]).toMatchObject({
+        planNumber: 'PLAN001',
+        sourceNumber: 'ORD001',
+        materialCode: 'MAT001',
+        planQuantity: 2
+      })
+    })
   })
 
   describe('mergeFiles()', () => {
@@ -196,6 +263,7 @@ describe('ExtractorService', () => {
       ]
 
       const service = new ExtractorService(mockAuthService, './test-downloads')
+      vi.spyOn(service as any, 'saveMergedOrders').mockResolvedValue(undefined)
 
       // @ts-ignore - accessing private method for testing
       const result = await service.mergeFiles(['./file1.xlsx'], ['ORD001'])
@@ -231,6 +299,7 @@ describe('ExtractorService', () => {
       })
 
       const service = new ExtractorService(mockAuthService, './test-downloads')
+      vi.spyOn(service as any, 'saveMergedOrders').mockResolvedValue(undefined)
 
       // @ts-ignore - accessing private method for testing
       const result = await service.mergeFiles(

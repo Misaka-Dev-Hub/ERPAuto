@@ -13,6 +13,7 @@ import { createDialect, type SqlDialect } from './dialects'
 import { createLogger, getRequestId, trackDuration } from '../logger'
 
 const log = createLogger('DiscreteMaterialPlanDAO')
+const SQLSERVER_REPLACE_SOURCE_NUMBER_BATCH_SIZE = 25
 
 /**
  * Material plan record interface
@@ -562,9 +563,16 @@ export class DiscreteMaterialPlanDAO {
       const tableName = this.getTableName()
       const dialect = this.getDialect()
 
-      // SQL Server has a limit of 2100 parameters per query
-      // Each record has 28 columns, so max rows per batch = 2100 / 28 = 75
-      // Leave some margin for query overhead
+      if (dbService.type === 'sqlserver') {
+        return await this.batchInsertSqlServerJson(
+          dbService,
+          tableName,
+          records,
+          batchSize,
+          batchId
+        )
+      }
+
       const columnsPerRow = 28
       const effectiveBatchSize = Math.min(batchSize, dialect.maxBatchRows(columnsPerRow))
       const totalBatches = Math.ceil(records.length / effectiveBatchSize)
@@ -626,6 +634,237 @@ export class DiscreteMaterialPlanDAO {
     }
   }
 
+  async replaceBySourceNumbers(
+    records: MaterialPlanRecord[],
+    batchSize = 1000
+  ): Promise<{ deleted: number; inserted: number }> {
+    if (!records || records.length === 0) {
+      return { deleted: 0, inserted: 0 }
+    }
+
+    const dbService = await this.getDatabaseService()
+    const sourceNumbers = [...new Set(records.map((record) => record.sourceNumber).filter(Boolean))]
+
+    if (dbService.type === 'sqlserver') {
+      return await this.replaceSqlServerJson(dbService, records, sourceNumbers)
+    }
+
+    const deleted = await this.deleteBySourceNumbers(sourceNumbers)
+    const inserted = await this.batchInsert(records, batchSize)
+    return { deleted, inserted }
+  }
+
+  private async replaceSqlServerJson(
+    dbService: IDatabaseService,
+    records: MaterialPlanRecord[],
+    sourceNumbers: string[]
+  ): Promise<{ deleted: number; inserted: number }> {
+    const tableName = this.getTableName()
+    const columns = this.getInsertColumns()
+    const withColumns = this.getSqlServerJsonWithColumns(columns)
+    const quotedColumns = columns.map((column) => `[${column}]`).join(', ')
+    const recordsBySourceNumber = this.groupRecordsBySourceNumber(records)
+    const totalBatches = Math.ceil(
+      sourceNumbers.length / SQLSERVER_REPLACE_SOURCE_NUMBER_BATCH_SIZE
+    )
+    let totalDeleted = 0
+    let totalInserted = 0
+
+    log.info('SQL Server JSON replace started', {
+      tableName,
+      operationType: 'REPLACE',
+      totalSourceNumbers: sourceNumbers.length,
+      totalRecords: records.length,
+      sourceNumberBatchSize: SQLSERVER_REPLACE_SOURCE_NUMBER_BATCH_SIZE,
+      totalBatches
+    })
+
+    for (
+      let offset = 0;
+      offset < sourceNumbers.length;
+      offset += SQLSERVER_REPLACE_SOURCE_NUMBER_BATCH_SIZE
+    ) {
+      const sourceNumberBatch = sourceNumbers.slice(
+        offset,
+        offset + SQLSERVER_REPLACE_SOURCE_NUMBER_BATCH_SIZE
+      )
+      const batchNumber = Math.floor(offset / SQLSERVER_REPLACE_SOURCE_NUMBER_BATCH_SIZE) + 1
+      const recordBatch = sourceNumberBatch.flatMap(
+        (sourceNumber) => recordsBySourceNumber.get(sourceNumber) || []
+      )
+      const jsonRows = recordBatch.map((record) => this.buildJsonRow(record, columns))
+
+      const sqlString = `
+        DECLARE @deleted int = 0;
+        DECLARE @inserted int = 0;
+
+        BEGIN TRY
+          BEGIN TRANSACTION;
+
+          DELETE target
+          FROM ${tableName} AS target
+          INNER JOIN OPENJSON(@p0)
+          WITH (SourceNumber nvarchar(100) '$') AS source
+            ON target.SourceNumber = source.SourceNumber;
+          SET @deleted = @@ROWCOUNT;
+
+          INSERT INTO ${tableName} (${quotedColumns})
+          SELECT ${quotedColumns}
+          FROM OPENJSON(@p1)
+          WITH (
+            ${withColumns}
+          );
+          SET @inserted = @@ROWCOUNT;
+
+          COMMIT TRANSACTION;
+        END TRY
+        BEGIN CATCH
+          IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+          THROW;
+        END CATCH;
+
+        SELECT @deleted AS deletedCount, @inserted AS insertedCount;
+      `
+
+      const result = await trackDuration(
+        async () =>
+          await dbService.query(sqlString, [
+            JSON.stringify(sourceNumberBatch),
+            JSON.stringify(jsonRows)
+          ]),
+        {
+          operationName: 'DiscreteMaterialPlanDAO.replaceSqlServerJsonBatch',
+          context: {
+            tableName,
+            operationType: 'REPLACE',
+            batchNumber,
+            totalBatches,
+            sourceNumberCount: sourceNumberBatch.length,
+            recordCount: recordBatch.length
+          }
+        }
+      )
+
+      const stats = result.result.rows[0] || {}
+      totalDeleted += Number(stats.deletedCount || 0)
+      totalInserted += Number(stats.insertedCount || recordBatch.length)
+
+      log.debug('SQL Server JSON replace batch completed', {
+        tableName,
+        batchNumber,
+        totalBatches,
+        sourceNumberCount: sourceNumberBatch.length,
+        recordCount: recordBatch.length
+      })
+    }
+
+    log.info('SQL Server JSON replace completed', {
+      tableName,
+      operationType: 'REPLACE',
+      totalDeleted,
+      totalInserted,
+      totalBatches
+    })
+
+    return {
+      deleted: totalDeleted,
+      inserted: totalInserted
+    }
+  }
+
+  private groupRecordsBySourceNumber(
+    records: MaterialPlanRecord[]
+  ): Map<string, MaterialPlanRecord[]> {
+    const groups = new Map<string, MaterialPlanRecord[]>()
+
+    for (const record of records) {
+      if (!record.sourceNumber) {
+        continue
+      }
+
+      const existing = groups.get(record.sourceNumber) || []
+      existing.push(record)
+      groups.set(record.sourceNumber, existing)
+    }
+
+    return groups
+  }
+
+  private async batchInsertSqlServerJson(
+    dbService: IDatabaseService,
+    tableName: string,
+    records: MaterialPlanRecord[],
+    batchSize: number,
+    batchId: string
+  ): Promise<number> {
+    const columns = this.getInsertColumns()
+    const effectiveBatchSize = Math.max(1, batchSize)
+    const totalBatches = Math.ceil(records.length / effectiveBatchSize)
+    let totalInserted = 0
+
+    log.info('SQL Server JSON batch insert started', {
+      tableName,
+      operationType: 'INSERT',
+      requestId: batchId,
+      totalRecords: records.length,
+      effectiveBatchSize,
+      totalBatches
+    })
+
+    for (let i = 0; i < records.length; i += effectiveBatchSize) {
+      const batch = records.slice(i, i + effectiveBatchSize)
+      const batchNumber = Math.floor(i / effectiveBatchSize) + 1
+      const jsonRows = batch.map((record) => this.buildJsonRow(record, columns))
+
+      const withColumns = this.getSqlServerJsonWithColumns(columns)
+      const quotedColumns = columns.map((column) => `[${column}]`).join(', ')
+
+      const sqlString = `
+        INSERT INTO ${tableName} (${quotedColumns})
+        SELECT ${quotedColumns}
+        FROM OPENJSON(@p0)
+        WITH (
+          ${withColumns}
+        )
+      `
+
+      const result = await trackDuration(
+        async () => await dbService.query(sqlString, [JSON.stringify(jsonRows)]),
+        {
+          operationName: 'DiscreteMaterialPlanDAO.insertBatchSqlServerJson',
+          context: {
+            tableName,
+            operationType: 'INSERT',
+            batchId,
+            batchNumber,
+            totalBatches,
+            recordCount: batch.length
+          }
+        }
+      )
+      totalInserted += result.result.rowCount || batch.length
+
+      log.debug('Inserted SQL Server JSON batch', {
+        batch: batchNumber,
+        totalBatches,
+        count: batch.length,
+        batchId
+      })
+    }
+
+    log.info('SQL Server JSON batch insert completed', {
+      tableName,
+      operationType: 'INSERT',
+      requestId: batchId,
+      totalInserted,
+      batchSize: effectiveBatchSize,
+      totalBatches
+    })
+
+    return totalInserted
+  }
+
   /**
    * Insert a single batch of records with tracking
    */
@@ -641,37 +880,7 @@ export class DiscreteMaterialPlanDAO {
       return 0
     }
 
-    // Build column list (excluding id)
-    const columns = [
-      'Factory',
-      'MaterialStatus',
-      'PlanNumber',
-      'SourceNumber',
-      'MaterialType',
-      'ProductCode',
-      'ProductName',
-      'ProductUnit',
-      'ProductPlanQuantity',
-      'UseDepartment',
-      'Remark',
-      'Creator',
-      'CreateDate',
-      'Approver',
-      'ApproveDate',
-      'SequenceNumber',
-      'MaterialCode',
-      'MaterialName',
-      'Specification',
-      'Model',
-      'DrawingNumber',
-      'MaterialQuality',
-      'PlanQuantity',
-      'Unit',
-      'RequiredDate',
-      'Warehouse',
-      'UnitUsage',
-      'CumulativeOutputQuantity'
-    ]
+    const columns = this.getInsertColumns()
 
     // Build parameterized insert
     const values: any[] = []
@@ -730,6 +939,91 @@ export class DiscreteMaterialPlanDAO {
     })
   }
 
+  private getInsertColumns(): string[] {
+    return [
+      'Factory',
+      'MaterialStatus',
+      'PlanNumber',
+      'SourceNumber',
+      'MaterialType',
+      'ProductCode',
+      'ProductName',
+      'ProductUnit',
+      'ProductPlanQuantity',
+      'UseDepartment',
+      'Remark',
+      'Creator',
+      'CreateDate',
+      'Approver',
+      'ApproveDate',
+      'SequenceNumber',
+      'MaterialCode',
+      'MaterialName',
+      'Specification',
+      'Model',
+      'DrawingNumber',
+      'MaterialQuality',
+      'PlanQuantity',
+      'Unit',
+      'RequiredDate',
+      'Warehouse',
+      'UnitUsage',
+      'CumulativeOutputQuantity'
+    ]
+  }
+
+  private buildJsonRow(record: MaterialPlanRecord, columns: string[]): Record<string, unknown> {
+    const row: Record<string, unknown> = {}
+
+    for (const column of columns) {
+      const value = this.getColumnValue(record, column)
+      row[column] = value instanceof Date ? value.toISOString() : value
+    }
+
+    return row
+  }
+
+  private getSqlServerJsonWithColumns(columns: string[]): string {
+    return columns
+      .map((column) => `[${column}] ${this.getSqlServerJsonColumnType(column)} '$.${column}'`)
+      .join(',\n          ')
+  }
+
+  private getSqlServerJsonColumnType(column: string): string {
+    const columnTypes: Record<string, string> = {
+      Factory: 'nvarchar(100)',
+      MaterialStatus: 'nvarchar(50)',
+      PlanNumber: 'nvarchar(100)',
+      SourceNumber: 'nvarchar(100)',
+      MaterialType: 'nvarchar(100)',
+      ProductCode: 'nvarchar(100)',
+      ProductName: 'nvarchar(255)',
+      ProductUnit: 'nvarchar(50)',
+      ProductPlanQuantity: 'decimal(18,4)',
+      UseDepartment: 'nvarchar(100)',
+      Remark: 'nvarchar(500)',
+      Creator: 'nvarchar(100)',
+      CreateDate: 'datetime2',
+      Approver: 'nvarchar(100)',
+      ApproveDate: 'datetime2',
+      SequenceNumber: 'int',
+      MaterialCode: 'nvarchar(100)',
+      MaterialName: 'nvarchar(255)',
+      Specification: 'nvarchar(255)',
+      Model: 'nvarchar(255)',
+      DrawingNumber: 'nvarchar(100)',
+      MaterialQuality: 'nvarchar(100)',
+      PlanQuantity: 'decimal(18,4)',
+      Unit: 'nvarchar(50)',
+      RequiredDate: 'datetime2',
+      Warehouse: 'nvarchar(100)',
+      UnitUsage: 'decimal(18,6)',
+      CumulativeOutputQuantity: 'decimal(18,4)'
+    }
+
+    return columnTypes[column] || 'nvarchar(max)'
+  }
+
   /**
    * Get the value for a specific column from the record
    */
@@ -774,6 +1068,10 @@ export class DiscreteMaterialPlanDAO {
 
     // Handle null/undefined
     if (value === null || value === undefined) {
+      return null
+    }
+
+    if (value instanceof Date && Number.isNaN(value.getTime())) {
       return null
     }
 

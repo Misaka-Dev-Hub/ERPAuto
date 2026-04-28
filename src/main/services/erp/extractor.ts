@@ -10,6 +10,7 @@ import type {
   LogLevel
 } from '../../types/extractor.types'
 import { DataImportService } from '../database/data-importer'
+import type { MaterialPlanRecord } from '../database/discrete-material-plan-dao'
 import { createLogger, withRequestContext, getRequestId } from '../logger'
 import { trackDuration } from '../logger/performance-monitor'
 
@@ -112,16 +113,18 @@ export class ExtractorService {
             // Always clean up temporary files regardless of merge success
             await this.cleanupTempFiles(result.downloadedFiles, input.orderNumbers)
 
-            // Auto-import to database if merge was successful
-            if (result.mergedFile) {
+            // Auto-import parsed records directly. The merged Excel file is an archive artifact,
+            // not the source for persistence.
+            if (mergeResult.records.length > 0) {
               const importProgress = (1 + totalBatches + 1) * progressPerPoint
               input.onProgress?.('正在写入数据库...', importProgress, {
                 phase: 'importing',
                 totalBatches
               })
-              const importResult = await this.importToDatabaseWithLogging(
-                result.mergedFile,
-                input.onLog
+              const importResult = await this.importRecordsToDatabaseWithLogging(
+                mergeResult.records,
+                input.onLog,
+                result.mergedFile
               )
               result.importResult = importResult
 
@@ -168,9 +171,10 @@ export class ExtractorService {
     recordCount: number
     error?: string
     orderRecordCounts: Array<{ orderNumber: string; recordCount: number }>
+    records: MaterialPlanRecord[]
   }> {
     if (filePaths.length === 0) {
-      return { mergedFile: null, recordCount: 0, orderRecordCounts: [] }
+      return { mergedFile: null, recordCount: 0, orderRecordCounts: [], records: [] }
     }
 
     log.info('Starting merge', { fileCount: filePaths.length, orderCount: orderNumbers.length })
@@ -219,10 +223,11 @@ export class ExtractorService {
         }
 
         log.info('Merge summary', { orderCount: allOrders.length, recordCount })
+        const records = this.buildMaterialPlanRecords(allOrders)
 
         if (recordCount === 0) {
           log.warn('No records found in any downloaded files', { orderNumbers })
-          return { mergedFile: null, recordCount: 0, orderRecordCounts }
+          return { mergedFile: null, recordCount: 0, orderRecordCounts, records }
         }
 
         // Generate output filename with timestamp
@@ -238,7 +243,7 @@ export class ExtractorService {
           log.info('Saving merged file', { outputPath })
           await this.saveMergedOrders(allOrders, outputPath)
           log.info('Merged file saved successfully', { recordCount })
-          return { mergedFile: outputPath, recordCount, orderRecordCounts }
+          return { mergedFile: outputPath, recordCount, orderRecordCounts, records }
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error)
           const errorStack = error instanceof Error ? error.stack : ''
@@ -253,6 +258,7 @@ export class ExtractorService {
             mergedFile: null,
             recordCount,
             orderRecordCounts,
+            records,
             error: `保存合并文件失败：${errorMsg}`
           }
         }
@@ -370,6 +376,78 @@ export class ExtractorService {
     log.debug('File saved successfully', { outputPath })
   }
 
+  private buildMaterialPlanRecords(
+    orders: Array<{ orderInfo: any; materials: any[] }>
+  ): MaterialPlanRecord[] {
+    const records: MaterialPlanRecord[] = []
+
+    for (const order of orders) {
+      const { orderInfo, materials } = order
+
+      for (const material of materials) {
+        records.push({
+          factory: this.toText(orderInfo.factory),
+          materialStatus: this.toText(orderInfo.materialStatus),
+          planNumber: this.toText(orderInfo.planNumber),
+          sourceNumber: this.toText(orderInfo.productionOrder),
+          materialType: this.toText(orderInfo.materialType),
+          productCode: this.toText(orderInfo.productCode),
+          productName: this.toText(orderInfo.productName),
+          productPlanQuantity: this.toNumber(orderInfo.plannedQuantity),
+          productUnit: this.toText(orderInfo.unit),
+          useDepartment: this.toText(orderInfo.department),
+          remark: this.toText(orderInfo.remark),
+          creator: this.toText(orderInfo.creator),
+          createDate: this.toDate(orderInfo.createDate),
+          approver: this.toText(orderInfo.approver),
+          approveDate: this.toDate(orderInfo.approveDate),
+          sequenceNumber: this.toNumber(material.sequence),
+          materialCode: this.toText(material.materialCode),
+          materialName: this.toText(material.materialName),
+          specification: this.toText(material.specification),
+          model: this.toText(material.model),
+          drawingNumber: this.toText(material.drawingNumber),
+          materialQuality: this.toText(material.material),
+          planQuantity: this.toNumber(material.quantity),
+          unit: this.toText(material.unit),
+          requiredDate: this.toDate(material.requiredDate),
+          warehouse: this.toText(material.warehouse),
+          unitUsage: this.toNumber(material.unitUsage),
+          cumulativeOutputQuantity: this.toNumber(material.cumulativeOutboundQty),
+          bomVersion: ''
+        })
+      }
+    }
+
+    return records
+  }
+
+  private toText(value: unknown): string {
+    if (value === null || value === undefined) {
+      return ''
+    }
+    return String(value).trim()
+  }
+
+  private toNumber(value: unknown): number {
+    if (value === null || value === undefined || value === '') {
+      return 0
+    }
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+
+  private toDate(value: unknown): Date {
+    if (value instanceof Date) {
+      return value
+    }
+    if (value === null || value === undefined || value === '') {
+      return new Date(NaN)
+    }
+    const parsed = new Date(String(value))
+    return parsed
+  }
+
   /**
    * Clean up temporary batch files after merging
    * @param filePaths - Array of temporary file paths to delete
@@ -452,6 +530,72 @@ export class ExtractorService {
         operationName: 'Database Import',
         context: {
           filePath
+        }
+      }
+    )
+
+    return trackedResult.result
+  }
+
+  private async importRecordsToDatabaseWithLogging(
+    records: MaterialPlanRecord[],
+    onLog?: (level: LogLevel, message: string) => void,
+    archiveFilePath?: string | null
+  ): Promise<ImportResult> {
+    log.info('Starting database import from parsed records', {
+      recordCount: records.length,
+      archiveFilePath
+    })
+    onLog?.('info', `开始导入数据到数据库...`)
+
+    const trackedResult = await trackDuration(
+      async () => {
+        const importService = new DataImportService()
+
+        try {
+          const result = await importService.importFromRecords(records, 1000)
+
+          log.info('Import completed', {
+            success: result.success,
+            recordsRead: result.recordsRead,
+            recordsDeleted: result.recordsDeleted,
+            recordsImported: result.recordsImported
+          })
+
+          if (result.success) {
+            onLog?.(
+              'success',
+              `导入完成：读取 ${result.recordsRead} 条，删除 ${result.recordsDeleted} 条，导入 ${result.recordsImported} 条`
+            )
+          } else if (result.errors.length > 0) {
+            result.errors.forEach((err) => onLog?.('error', err))
+          }
+
+          return result
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error)
+          log.error('Import failed', {
+            error: errorMsg,
+            archiveFilePath,
+            downloadDir: this.downloadDir
+          })
+          onLog?.('error', `导入失败：${errorMsg}`)
+
+          return {
+            success: false,
+            recordsRead: 0,
+            recordsDeleted: 0,
+            recordsImported: 0,
+            uniqueSourceNumbers: 0,
+            errors: [errorMsg]
+          }
+        }
+      },
+      {
+        operationName: 'Database Import',
+        context: {
+          recordCount: records.length,
+          archiveFilePath
         }
       }
     )

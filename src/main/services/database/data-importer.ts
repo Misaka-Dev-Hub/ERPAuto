@@ -96,45 +96,12 @@ export class DataImportService {
       // Step 1: Read Excel file
       log.info('Reading Excel file...')
       const { records, sourceNumbers } = await this.readExcelFile(filePath)
-      result.recordsRead = records.length
-      result.uniqueSourceNumbers = sourceNumbers.size
-
       log.info('Excel read completed', {
-        recordsRead: result.recordsRead,
-        uniqueSourceNumbers: result.uniqueSourceNumbers
+        recordsRead: records.length,
+        uniqueSourceNumbers: sourceNumbers.size
       })
 
-      if (records.length === 0) {
-        result.success = true
-        result.errors.push('Excel file contains no data records')
-        return result
-      }
-
-      // Step 2: Delete existing records by SourceNumber
-      log.info('Deleting existing records...', {
-        sourceNumberCount: sourceNumbers.size
-      })
-
-      const sourceNumberArray = Array.from(sourceNumbers)
-      result.recordsDeleted = await this.dao.deleteBySourceNumbers(sourceNumberArray)
-
-      log.info('Existing records deleted', {
-        recordsDeleted: result.recordsDeleted
-      })
-
-      // Step 3: Batch insert new records
-      log.info('Inserting new records...', {
-        recordCount: records.length,
-        batchSize
-      })
-
-      result.recordsImported = await this.dao.batchInsert(records, batchSize)
-
-      log.info('Records imported successfully', {
-        recordsImported: result.recordsImported
-      })
-
-      result.success = true
+      await this.importRecords(records, batchSize, result)
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       result.errors.push(`Import failed: ${errorMsg}`)
@@ -164,6 +131,92 @@ export class DataImportService {
       }
     )
 
+    return result
+  }
+
+  /**
+   * Import already parsed records to database.
+   *
+   * This is the preferred path for extraction: the downloader/parser already has
+   * structured rows, so database persistence should not require writing and
+   * reading an intermediate Excel file.
+   */
+  async importFromRecords(records: MaterialPlanRecord[], batchSize = 1000): Promise<ImportResult> {
+    const result: ImportResult = {
+      success: false,
+      recordsRead: 0,
+      recordsDeleted: 0,
+      recordsImported: 0,
+      uniqueSourceNumbers: 0,
+      errors: []
+    }
+
+    try {
+      log.info('Starting import from parsed records', {
+        recordCount: records.length,
+        batchSize
+      })
+
+      return await this.importRecords(records, batchSize, result)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      result.errors.push(`Import failed: ${errorMsg}`)
+      log.error('Import from records failed', { error: errorMsg })
+      return result
+    } finally {
+      try {
+        await this.dao.disconnect()
+      } catch (e) {
+        log.warn('Error disconnecting DAO', {
+          error: e instanceof Error ? e.message : String(e)
+        })
+      }
+
+      logAuditWithCurrentUser(
+        AuditAction.DATA_IMPORT,
+        'MATERIAL_PLAN',
+        result.success ? AuditStatus.SUCCESS : AuditStatus.FAILURE,
+        {
+          recordsRead: result.recordsRead,
+          recordsDeleted: result.recordsDeleted,
+          recordsImported: result.recordsImported,
+          uniqueSourceNumbers: result.uniqueSourceNumbers,
+          errorCount: result.errors.length
+        }
+      )
+    }
+  }
+
+  private async importRecords(
+    records: MaterialPlanRecord[],
+    batchSize: number,
+    result: ImportResult
+  ): Promise<ImportResult> {
+    const sourceNumbers = new Set(records.map((record) => record.sourceNumber).filter(Boolean))
+    result.recordsRead = records.length
+    result.uniqueSourceNumbers = sourceNumbers.size
+
+    if (records.length === 0) {
+      result.success = true
+      result.errors.push('No data records to import')
+      return result
+    }
+
+    // Step 1: Replace existing records by SourceNumber
+    log.info('Replacing existing records...', {
+      sourceNumberCount: sourceNumbers.size
+    })
+
+    const replaceResult = await this.dao.replaceBySourceNumbers(records, batchSize)
+    result.recordsDeleted = replaceResult.deleted
+    result.recordsImported = replaceResult.inserted
+
+    log.info('Records replaced successfully', {
+      recordsDeleted: result.recordsDeleted,
+      recordsImported: result.recordsImported
+    })
+
+    result.success = true
     return result
   }
 
