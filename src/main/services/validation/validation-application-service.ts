@@ -236,6 +236,7 @@ export class ValidationApplicationService {
   ): Promise<{
     success: boolean
     orderNumbers?: string[]
+    originalInputs?: string[]
     materialCodes?: string[]
     error?: string
   }> {
@@ -288,6 +289,7 @@ export class ValidationApplicationService {
           return {
             success: true,
             orderNumbers,
+            originalInputs: sharedIds,
             materialCodes
           }
         } catch (error) {

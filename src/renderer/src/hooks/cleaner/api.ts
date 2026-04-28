@@ -10,6 +10,7 @@ import type { CleanerExportItem, MaterialBatchChange } from './helpers'
 interface CleanerDataPayload {
   success?: boolean
   orderNumbers?: string[]
+  originalInputs?: string[]
   materialCodes?: string[]
 }
 
@@ -147,6 +148,7 @@ export async function runCleanerExecution(params: {
 
   const response = await window.electron.cleaner.runCleaner({
     orderNumbers: orderNumberList,
+    originalInputs: cleanerData?.originalInputs,
     materialCodes: materialCodeList,
     dryRun: params.dryRun,
     headless: params.headless,

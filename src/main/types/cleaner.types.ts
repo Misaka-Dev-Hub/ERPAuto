@@ -13,6 +13,7 @@ export interface CleanerProgress {
 
 export interface CleanerInput {
   orderNumbers: string[]
+  originalInputs?: string[]
   materialCodes: string[]
   dryRun: boolean
   headless?: boolean

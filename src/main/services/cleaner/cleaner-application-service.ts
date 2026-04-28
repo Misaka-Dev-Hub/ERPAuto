@@ -66,7 +66,8 @@ export class CleanerApplicationService {
       }
 
       const resolver = new OrderNumberResolver(dbService)
-      const mappings = await resolver.resolve(input.orderNumbers)
+      const inputsToResolve = input.originalInputs?.length ? input.originalInputs : input.orderNumbers
+      const mappings = await resolver.resolve(inputsToResolve)
       const validOrderNumbers = resolver.getValidOrderNumbers(mappings)
       const warnings = resolver.getWarnings(mappings)
 
