@@ -325,7 +325,7 @@ export class ValidationApplicationService {
   }
 
   private async loadTypeKeywords(dbService: ValidationDatabaseService): Promise<TypeKeyword[]> {
-    const typeKeywordTableName = getValidationTableName('dbo_MaterialsTypeToBeDeleted')
+    const typeKeywordTableName = getValidationTableName('dbo.MaterialsTypeToBeDeleted')
     const sql = `
       SELECT MaterialName, ManagerName
       FROM ${typeKeywordTableName}
@@ -341,7 +341,7 @@ export class ValidationApplicationService {
   private async loadMarkedCodes(
     dbService: ValidationDatabaseService
   ): Promise<Map<string, string>> {
-    const markedTableName = getValidationTableName('dbo_MaterialsToBeDeleted')
+    const markedTableName = getValidationTableName('dbo.MaterialsToBeDeleted')
     const sql = `
       SELECT MaterialCode, ManagerName
       FROM ${markedTableName}
@@ -416,7 +416,7 @@ export class ValidationApplicationService {
 
     try {
       dbService = await createValidationDatabaseService()
-      const detailTableName = getValidationTableName('dbo_DiscreteMaterialPlanData')
+      const detailTableName = getValidationTableName('dbo.DiscreteMaterialPlanData')
       const enrichedMaterials: MaterialRecordSummary[] = []
 
       log.info(`Enriching ${materials.length} materials with details`)
@@ -501,7 +501,7 @@ export class ValidationApplicationService {
     selectedManagers: string[],
     orderNumbers: string[]
   ): Promise<string[]> {
-    const markedTableName = getValidationTableName('dbo_MaterialsToBeDeleted')
+    const markedTableName = getValidationTableName('dbo.MaterialsToBeDeleted')
 
     // Admin with selected managers: filter MaterialsToBeDeleted by ManagerName IN (selectedManagers)
     if (isAdmin && selectedManagers && selectedManagers.length > 0) {

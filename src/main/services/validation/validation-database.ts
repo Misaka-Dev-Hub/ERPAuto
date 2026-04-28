@@ -52,25 +52,22 @@ export async function createValidationDatabaseService(): Promise<ValidationDatab
   return mysqlService
 }
 
-export function getValidationTableName(mysqlTableName: string): string {
+export function getValidationTableName(dottedTableName: string): string {
   const configManager = ConfigManager.getInstance()
   const dbType = configManager.getDatabaseType()
 
-  if (dbType === 'sqlserver' || dbType === 'postgresql') {
-    const firstUnderscoreIndex = mysqlTableName.indexOf('_')
-    if (firstUnderscoreIndex > 0) {
-      const schema = mysqlTableName.substring(0, firstUnderscoreIndex)
-      const tableName = mysqlTableName.substring(firstUnderscoreIndex + 1)
-      if (dbType === 'sqlserver') {
-        return `[${schema}].[${tableName}]`
-      }
-      return `"${schema}"."${tableName}"`
-    }
+  const dotIndex = dottedTableName.indexOf('.')
+  if (dotIndex > 0) {
+    const schema = dottedTableName.substring(0, dotIndex)
+    const tableName = dottedTableName.substring(dotIndex + 1)
     if (dbType === 'sqlserver') {
-      return `[dbo].[${mysqlTableName}]`
+      return `[${schema}].[${tableName}]`
     }
-    return `"public"."${mysqlTableName}"`
+    return `"${schema}"."${tableName}"`
   }
-
-  return mysqlTableName
+  // No dot found — use default schema
+  if (dbType === 'sqlserver') {
+    return `[dbo].[${dottedTableName}]`
+  }
+  return `"public"."${dottedTableName}"`
 }

@@ -180,7 +180,7 @@ validation:
 
 # 订单号解析配置
 orderResolution:
-  tableName: 'productionContractData_26 年压力表合同数据'
+  tableName: 'ERPAuto.vw_productionContractData'
   productionIdField: '总排号'
   orderNumberField: '生产订单号'
 ```

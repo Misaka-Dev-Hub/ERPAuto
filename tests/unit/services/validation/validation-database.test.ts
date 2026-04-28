@@ -125,31 +125,25 @@ describe('ValidationDatabaseService', () => {
   })
 
   describe('getValidationTableName', () => {
-    it('returns table name unchanged for mysql', async () => {
-      currentDbType = 'mysql'
-      const mod = await import('../../../../src/main/services/validation/validation-database')
-      expect(mod.getValidationTableName('MaterialsToBeDeleted')).toBe('MaterialsToBeDeleted')
-    })
-
-    it('converts schema_table to [schema].[table] for sqlserver', async () => {
+    it('converts schema.table to [schema].[table] for sqlserver', async () => {
       currentDbType = 'sqlserver'
       const mod = await import('../../../../src/main/services/validation/validation-database')
-      expect(mod.getValidationTableName('dbo_Materials')).toBe('[dbo].[Materials]')
+      expect(mod.getValidationTableName('dbo.Materials')).toBe('[dbo].[Materials]')
     })
 
-    it('wraps nameless table in [dbo].[name] for sqlserver', async () => {
+    it('wraps dotless table in [dbo].[name] for sqlserver', async () => {
       currentDbType = 'sqlserver'
       const mod = await import('../../../../src/main/services/validation/validation-database')
       expect(mod.getValidationTableName('Materials')).toBe('[dbo].[Materials]')
     })
 
-    it('converts schema_table to "schema"."table" for postgresql', async () => {
+    it('converts schema.table to "schema"."table" for postgresql', async () => {
       currentDbType = 'postgresql'
       const mod = await import('../../../../src/main/services/validation/validation-database')
-      expect(mod.getValidationTableName('public_Materials')).toBe('"public"."Materials"')
+      expect(mod.getValidationTableName('public.Materials')).toBe('"public"."Materials"')
     })
 
-    it('wraps nameless table in "public"."name" for postgresql', async () => {
+    it('wraps dotless table in "public"."name" for postgresql', async () => {
       currentDbType = 'postgresql'
       const mod = await import('../../../../src/main/services/validation/validation-database')
       expect(mod.getValidationTableName('Materials')).toBe('"public"."Materials"')

@@ -41,7 +41,7 @@ export async function getSourceNumbersFromInputs(
   }
 
   if (productionIds.length > 0) {
-    const contractTableName = getValidationTableName('productionContractData_26年压力表合同数据')
+    const contractTableName = getValidationTableName('ERPAuto.vw_productionContractData')
     const batchSize = 2000
 
     if (dbType === 'sqlserver') {

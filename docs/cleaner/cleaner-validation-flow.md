@@ -188,21 +188,26 @@ flowchart LR
 **表名转换逻辑**:
 
 ```typescript
-// MySQL: dbo_MaterialsToBeDeleted
+// 输入格式: dbo.MaterialsToBeDeleted
 // SQL Server: [dbo].[MaterialsToBeDeleted]
-function getTableName(mysqlTableName: string): string {
-  const dbType = process.env.DB_TYPE?.toLowerCase()
-  if (dbType === 'sqlserver' || dbType === 'mssql') {
-    // 找到第一个下划线分割schema和表名
-    const firstUnderscoreIndex = mysqlTableName.indexOf('_')
-    if (firstUnderscoreIndex > 0) {
-      const schema = mysqlTableName.substring(0, firstUnderscoreIndex)
-      const tableName = mysqlTableName.substring(firstUnderscoreIndex + 1)
+// PostgreSQL: "dbo"."MaterialsToBeDeleted"
+function getValidationTableName(dottedTableName: string): string {
+  const configManager = ConfigManager.getInstance()
+  const dbType = configManager.getDatabaseType()
+
+  const dotIndex = dottedTableName.indexOf('.')
+  if (dotIndex > 0) {
+    const schema = dottedTableName.substring(0, dotIndex)
+    const tableName = dottedTableName.substring(dotIndex + 1)
+    if (dbType === 'sqlserver') {
       return `[${schema}].[${tableName}]`
     }
-    return `[dbo].[${mysqlTableName}]`
+    return `"${schema}"."${tableName}"`
   }
-  return mysqlTableName
+  if (dbType === 'sqlserver') {
+    return `[dbo].[${dottedTableName}]`
+  }
+  return `"public"."${dottedTableName}"`
 }
 ```
 

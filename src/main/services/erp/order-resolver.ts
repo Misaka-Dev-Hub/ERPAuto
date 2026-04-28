@@ -40,7 +40,7 @@ export function getDbConfig() {
   const configManager = ConfigManager.getInstance()
   const config = configManager.getConfig()
   return {
-    TABLE_NAME: config.orderResolution.tableName || 'productionContractData_26 年压力表合同数据',
+    TABLE_NAME: config.orderResolution.tableName || 'ERPAuto.vw_productionContractData',
     FIELD_PRODUCTION_ID: config.orderResolution.productionIdField || '总排号',
     FIELD_ORDER_NUMBER: config.orderResolution.orderNumberField || '生产订单号'
   }
@@ -58,35 +58,28 @@ export class OrderNumberResolver {
 
   /**
    * Get table name based on database type
-   * Converts schema_tablename format to database-specific quoting:
+   * Converts schema.tablename format to database-specific quoting:
    * - SQL Server: [schema].[tablename]
    * - PostgreSQL: "schema"."tablename"
-   * - MySQL: schema_tablename (as-is)
-   * e.g., productionContractData_26年压力表合同数据 ->
-   *   SQL Server: [productionContractData].[26年压力表合同数据]
-   *   PostgreSQL: "productionContractData"."26年压力表合同数据"
-   *   MySQL: productionContractData_26年压力表合同数据
+   * e.g., ERPAuto.vw_productionContractData ->
+   *   SQL Server: [ERPAuto].[vw_productionContractData]
+   *   PostgreSQL: "ERPAuto"."vw_productionContractData"
    */
   private getTableName(tableName: string): string {
-    if (this.dbService.type === 'sqlserver' || this.dbService.type === 'postgresql') {
-      // Find the FIRST underscore to split schema and table name
-      // This handles patterns like: schema_tablename
-      const firstUnderscoreIndex = tableName.indexOf('_')
-      if (firstUnderscoreIndex > 0) {
-        const schema = tableName.substring(0, firstUnderscoreIndex)
-        const actualTableName = tableName.substring(firstUnderscoreIndex + 1)
-        if (this.dbService.type === 'sqlserver') {
-          return `[${schema}].[${actualTableName}]`
-        }
-        return `"${schema}"."${actualTableName}"`
-      }
-      // If no underscore found, default schema
+    const dotIndex = tableName.indexOf('.')
+    if (dotIndex > 0) {
+      const schema = tableName.substring(0, dotIndex)
+      const actualTableName = tableName.substring(dotIndex + 1)
       if (this.dbService.type === 'sqlserver') {
-        return `[dbo].[${tableName}]`
+        return `[${schema}].[${actualTableName}]`
       }
-      return `"public"."${tableName}"`
+      return `"${schema}"."${actualTableName}"`
     }
-    return tableName
+    // No dot found — use default schema
+    if (this.dbService.type === 'sqlserver') {
+      return `[dbo].[${tableName}]`
+    }
+    return `"public"."${tableName}"`
   }
 
   /**

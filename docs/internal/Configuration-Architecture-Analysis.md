@@ -541,7 +541,7 @@ graph LR
 ### 10.2 默认配置示例
 
 ```env
-DB_TABLE_NAME=productionContractData_26 年压力表合同数据
+DB_TABLE_NAME=ERPAuto.vw_productionContractData
 DB_FIELD_PRODUCTION_ID=总排号
 DB_FIELD_ORDER_NUMBER=生产订单号
 ```
