@@ -26,7 +26,7 @@ export class PostgreSqlDialect implements SqlDialect {
   }
 
   currentTimestamp(): string {
-    return 'CURRENT_TIMESTAMP'
+    return "(NOW() AT TIME ZONE 'UTC')"
   }
 
   upsert(params: {
