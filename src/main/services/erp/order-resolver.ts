@@ -32,6 +32,8 @@ const PRODUCTION_ID_PATTERN = /^\d{2}[A-Z]\d{1,6}$/i
  */
 const ORDER_NUMBER_PATTERN = /^SC\d{14}$/i
 
+const RESOLUTION_QUERY_BATCH_SIZE = 1000
+
 /**
  * Database table and field names
  * Loaded from config.yaml via ConfigManager
@@ -54,6 +56,14 @@ export class OrderNumberResolver {
 
   constructor(dbService: IDatabaseService) {
     this.dbService = dbService
+  }
+
+  private chunk<T>(items: T[], size: number): T[][] {
+    const chunks: T[][] = []
+    for (let index = 0; index < items.length; index += size) {
+      chunks.push(items.slice(index, index + size))
+    }
+    return chunks
   }
 
   /**
@@ -156,36 +166,36 @@ export class OrderNumberResolver {
       // P1: Deduplicate input productionIds to avoid redundant queries
       const uniqueProductionIds = [...new Set(productionIds)]
 
-      // Use parameterized query to prevent SQL injection
-      const placeholders = uniqueProductionIds.map((_, i) => `@p${i}`).join(', ')
-      const params = uniqueProductionIds
-
-      let sql: string
-      if (this.dbService.type === 'sqlserver') {
-        // P0: Use DISTINCT to prevent duplicates from one-to-many relationships
-        // 使用 COLLATE 指定不区分大小写的排序规则
-        sql = `SELECT DISTINCT [${dbConfig.FIELD_PRODUCTION_ID}], [${dbConfig.FIELD_ORDER_NUMBER}] FROM ${tableName} WHERE [${dbConfig.FIELD_PRODUCTION_ID}] COLLATE SQL_Latin1_General_CP1_CI_AS IN (${placeholders})`
-      } else if (this.dbService.type === 'postgresql') {
-        // PostgreSQL: 使用双引号保护中文标识符，UPPER 实现不区分大小写
-        // 注意：getTableName() 已返回带双引号的表名，不应再加引号
-        const pgPlaceholders = uniqueProductionIds.map((_, i) => `UPPER($${i + 1})`).join(', ')
-        sql = `SELECT DISTINCT "${dbConfig.FIELD_PRODUCTION_ID}", "${dbConfig.FIELD_ORDER_NUMBER}" FROM ${tableName} WHERE UPPER("${dbConfig.FIELD_PRODUCTION_ID}") IN (${pgPlaceholders})`
-      } else {
-        const idPlaceholders = uniqueProductionIds.map(() => 'UPPER(?)').join(', ')
-        // P0: Use DISTINCT to prevent duplicates from one-to-many relationships
-        // MySQL: 使用 UPPER 确保不区分大小写
-        sql = `SELECT DISTINCT \`${dbConfig.FIELD_PRODUCTION_ID}\`, \`${dbConfig.FIELD_ORDER_NUMBER}\` FROM \`${tableName}\` WHERE UPPER(\`${dbConfig.FIELD_PRODUCTION_ID}\`) IN (${idPlaceholders})`
-      }
-
-      const result = await this.dbService.query(sql, params)
-
       const mappings = new Map<string, string>()
-      for (const row of result.rows) {
-        const keys = Object.keys(row)
-        const prodId = row[keys[0]] as string
-        const orderNum = row[keys[1]] as string
-        if (prodId && orderNum) {
-          mappings.set(prodId, orderNum)
+      const batches = this.chunk(uniqueProductionIds, RESOLUTION_QUERY_BATCH_SIZE)
+
+      for (const batch of batches) {
+        let sql: string
+        const params = batch
+
+        if (this.dbService.type === 'sqlserver') {
+          const placeholders = batch.map((_, i) => `@p${i}`).join(', ')
+          // P0: Use DISTINCT to prevent duplicates from one-to-many relationships.
+          sql = `SELECT DISTINCT [${dbConfig.FIELD_PRODUCTION_ID}], [${dbConfig.FIELD_ORDER_NUMBER}] FROM ${tableName} WHERE [${dbConfig.FIELD_PRODUCTION_ID}] COLLATE SQL_Latin1_General_CP1_CI_AS IN (${placeholders})`
+        } else if (this.dbService.type === 'postgresql') {
+          // PostgreSQL: 使用双引号保护中文标识符，UPPER 实现不区分大小写。
+          const pgPlaceholders = batch.map((_, i) => `UPPER($${i + 1})`).join(', ')
+          sql = `SELECT DISTINCT "${dbConfig.FIELD_PRODUCTION_ID}", "${dbConfig.FIELD_ORDER_NUMBER}" FROM ${tableName} WHERE UPPER("${dbConfig.FIELD_PRODUCTION_ID}") IN (${pgPlaceholders})`
+        } else {
+          const idPlaceholders = batch.map(() => 'UPPER(?)').join(', ')
+          // MySQL: 使用 UPPER 确保不区分大小写。
+          sql = `SELECT DISTINCT \`${dbConfig.FIELD_PRODUCTION_ID}\`, \`${dbConfig.FIELD_ORDER_NUMBER}\` FROM \`${tableName}\` WHERE UPPER(\`${dbConfig.FIELD_PRODUCTION_ID}\`) IN (${idPlaceholders})`
+        }
+
+        const result = await this.dbService.query(sql, params)
+
+        for (const row of result.rows) {
+          const keys = Object.keys(row)
+          const prodId = row[keys[0]] as string
+          const orderNum = row[keys[1]] as string
+          if (prodId && orderNum) {
+            mappings.set(prodId, orderNum)
+          }
         }
       }
 
@@ -235,13 +245,14 @@ export class OrderNumberResolver {
     // Build results while preserving original input order
     // Note: Multiple productionIDs mapping to the same order number is VALID (not an error)
     const results: OrderMapping[] = []
+    const processedInputs = new Set<string>()
 
     for (const input of inputs) {
       // Skip if this exact input was already processed
-      const alreadyProcessed = results.some((r) => r.input === input)
-      if (alreadyProcessed) {
+      if (processedInputs.has(input)) {
         continue
       }
+      processedInputs.add(input)
 
       const mapping: OrderMapping = { input, resolved: false }
 

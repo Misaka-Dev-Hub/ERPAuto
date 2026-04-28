@@ -173,6 +173,25 @@ describe('OrderNumberResolver', () => {
       // Should be optimized to query unique values only
       expect(mockDbService.query).toHaveBeenCalledTimes(1)
     })
+
+    it('splits large mapping queries into bounded batches', async () => {
+      const largeInput = Array.from({ length: 1001 }, (_, i) => `22A${i}`)
+
+      vi.mocked(mockDbService.query).mockImplementation(async (_sql, params = []) => ({
+        rows: params.map((prodId, i) => ({
+          总排号: prodId,
+          生产订单号: `SC7020260212${String(i).padStart(5, '0')}`
+        })),
+        columns: ['总排号', '生产订单号'],
+        rowCount: params.length
+      }))
+
+      await resolver.mapProductionIdsToOrderNumbers(largeInput)
+
+      expect(mockDbService.query).toHaveBeenCalledTimes(2)
+      expect(vi.mocked(mockDbService.query).mock.calls[0][1]).toHaveLength(1000)
+      expect(vi.mocked(mockDbService.query).mock.calls[1][1]).toHaveLength(1)
+    })
   })
 
   describe('error handling', () => {

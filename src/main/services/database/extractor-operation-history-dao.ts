@@ -126,35 +126,47 @@ export class ExtractorOperationHistoryDAO {
         recordCount: records.length
       })
 
-      for (const record of records) {
+      const columnsPerRecord = 5
+      const batchSize = Math.max(1, dialect.maxBatchRows(columnsPerRecord))
+
+      for (let offset = 0; offset < records.length; offset += batchSize) {
+        const batch = records.slice(offset, offset + batchSize)
         try {
+          const valuesSql: string[] = []
+          const params: (string | number | null)[] = []
+
+          batch.forEach((record, index) => {
+            const paramOffset = index * columnsPerRecord
+            valuesSql.push(
+              `(${dialect.param(paramOffset)}, ${dialect.param(paramOffset + 1)}, ${dialect.param(paramOffset + 2)}, ${dialect.param(paramOffset + 3)}, ${dialect.param(paramOffset + 4)}, ${dialect.currentTimestamp()}, 'pending')`
+            )
+            params.push(batchId, userId, username, record.productionId || null, record.orderNumber)
+          })
+
           const sqlString = `
             INSERT INTO ${tableName}
               (BatchId, UserId, Username, ProductionId, OrderNumber, OperationTime, Status)
             VALUES
-              (${dialect.param(0)}, ${dialect.param(1)}, ${dialect.param(2)}, ${dialect.param(3)}, ${dialect.param(4)}, ${dialect.currentTimestamp()}, 'pending')
+              ${valuesSql.join(',\n              ')}
           `
-          await trackDuration(
-            async () =>
-              await dbService.query(sqlString, [
-                batchId,
-                userId,
-                username,
-                record.productionId || null,
-                record.orderNumber
-              ]),
-            {
-              operationName: 'ExtractorOperationHistoryDAO.insertBatchRecords',
-              context: { tableName, operationType: 'INSERT', batchId }
+          await trackDuration(async () => await dbService.query(sqlString, params), {
+            operationName: 'ExtractorOperationHistoryDAO.insertBatchRecords',
+            context: {
+              tableName,
+              operationType: 'INSERT',
+              batchId,
+              batchOffset: offset,
+              batchCount: batch.length
             }
-          )
+          })
         } catch (error) {
-          log.error('Error inserting individual record', {
+          log.error('Error inserting record batch', {
             tableName,
             operationType: 'INSERT',
             requestId,
             batchId,
-            orderNumber: record.orderNumber,
+            batchOffset: offset,
+            batchCount: batch.length,
             error: error instanceof Error ? error.message : String(error)
           })
         }

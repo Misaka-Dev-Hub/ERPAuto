@@ -126,7 +126,9 @@ export function registerExtractorHandlers(): void {
           sendLog(sender, 'info', '正在解析订单号...')
 
           const resolver = new OrderNumberResolver(dbService)
+          const resolutionStart = Date.now()
           const mappings = await resolver.resolve(input.orderNumbers)
+          const resolutionDurationMs = Date.now() - resolutionStart
 
           // Get valid order numbers and warnings
           const validOrderNumbers = resolver.getValidOrderNumbers(mappings)
@@ -146,7 +148,16 @@ export function registerExtractorHandlers(): void {
             )
           }
 
-          log.info('Resolved order numbers', { count: validOrderNumbers.length })
+          log.info('Resolved order numbers', {
+            inputCount: input.orderNumbers.length,
+            count: validOrderNumbers.length,
+            durationMs: resolutionDurationMs
+          })
+          sendLog(
+            sender,
+            'info',
+            `订单号解析完成：${validOrderNumbers.length}/${input.orderNumbers.length} 个有效，耗时 ${(resolutionDurationMs / 1000).toFixed(2)} 秒`
+          )
 
           // Initialize operation history recording
           const currentUser = SessionManager.getInstance().getUserInfo()
@@ -155,6 +166,7 @@ export function registerExtractorHandlers(): void {
 
           // Save order records to history (preserve productionId -> orderNumber mapping)
           if (currentUser) {
+            const historyInsertStart = Date.now()
             const orderRecords = mappings.map((m) => ({
               productionId: m.productionId || null,
               orderNumber: m.orderNumber || m.input
@@ -165,9 +177,11 @@ export function registerExtractorHandlers(): void {
               currentUser.username,
               orderRecords
             )
+            const historyInsertDurationMs = Date.now() - historyInsertStart
             log.info('Operation history batch created', {
               batchId,
-              recordCount: orderRecords.length
+              recordCount: orderRecords.length,
+              durationMs: historyInsertDurationMs
             })
           }
 
