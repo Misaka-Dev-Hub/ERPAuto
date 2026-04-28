@@ -46,8 +46,8 @@ describe('PostgreSqlDialect', () => {
   })
 
   describe('currentTimestamp', () => {
-    it('should return CURRENT_TIMESTAMP', () => {
-      expect(dialect.currentTimestamp()).toBe('CURRENT_TIMESTAMP')
+    it('should return explicit UTC timestamp expression', () => {
+      expect(dialect.currentTimestamp()).toBe("(NOW() AT TIME ZONE 'UTC')")
     })
   })
 

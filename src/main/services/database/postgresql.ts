@@ -339,7 +339,11 @@ const SQL_KEYWORDS = new Set([
   'IF',
   'CURRENT_TIMESTAMP',
   'NOW',
-  'GETDATE'
+  'GETDATE',
+
+  // ==================== Timezone Expression ====================
+  'AT',
+  'ZONE'
 ])
 
 /**
