@@ -10,6 +10,7 @@ import { AsyncMutex, ConcurrencyTracker } from './cleaner/concurrency'
 import { evaluateDeletionSignals as evaluateDeletionSignalsHelper } from './cleaner/deletion-signals'
 import { MaterialDeletionVerifier } from './cleaner/material-deletion-verifier'
 import { CleanerNavigation } from './cleaner/navigation'
+import { CleanerRetryHandler } from './cleaner/retry-handler'
 import { getSkipReason, shouldDeleteMaterial } from './cleaner/rules'
 import {
   clampNumber,
@@ -46,6 +47,7 @@ export class CleanerService {
   private dryRun: boolean
   private deletionVerifier: MaterialDeletionVerifier
   private navigation: CleanerNavigation
+  private retryHandler: CleanerRetryHandler
 
   constructor(authService: ErpAuthService, options: CleanerOptions = {}) {
     this.authService = authService
@@ -54,6 +56,14 @@ export class CleanerService {
     this.navigation = new CleanerNavigation(log, (page, step, snapshotOptions) =>
       this.logPageStateSnapshot(page, step, snapshotOptions)
     )
+    this.retryHandler = new CleanerRetryHandler(log, {
+      queryOrders: (workFrame, popupPage, orderNumbers) =>
+        this.queryOrders(workFrame, popupPage, orderNumbers),
+      waitForLoading: (workFrame) => this.waitForLoading(workFrame),
+      openDetailPageFromCurrentQuery: (workFrame, popupPage, orderNumber) =>
+        this.openDetailPageFromCurrentQuery(workFrame, popupPage, orderNumber),
+      processDetailPage: (params) => this.processDetailPage(params)
+    })
   }
 
   /**
@@ -1290,221 +1300,6 @@ export class CleanerService {
       extra?: Partial<import('../../types/cleaner.types').CleanerProgress>
     ) => void
   }): Promise<RetryResult> {
-    const { workFrame, popupPage, failedDetails, deleteSet, dryRun, onProgress } = params
-
-    const result: RetryResult = {
-      retriedOrders: 0,
-      successfulRetries: 0,
-      updatedDetails: []
-    }
-
-    if (failedDetails.length === 0) {
-      log.info('[重试机制] 没有需要重试的订单', { checkedCount: failedDetails.length })
-      return result
-    }
-
-    const retryStartTime = Date.now()
-    log.info('[重试机制开始] 准备重试失败的订单', {
-      totalFailures: failedDetails.length,
-      failedOrders: failedDetails
-        .map((d) => d.orderNumber)
-        .slice(0, 5)
-        .concat(failedDetails.length > 5 ? [`... (${failedDetails.length - 5} more)`] : [])
-    })
-
-    const MAX_RETRIES = 2
-
-    // Track overall retry process duration
-    const trackedResult = await trackDuration(
-      async () => {
-        const retryResult: RetryResult = {
-          retriedOrders: 0,
-          successfulRetries: 0,
-          updatedDetails: []
-        }
-
-        for (let detailIndex = 0; detailIndex < failedDetails.length; detailIndex++) {
-          const failedDetail = failedDetails[detailIndex]
-          const orderNumber = failedDetail.orderNumber
-          const retryAttempts: import('../../types/cleaner.types').RetryAttempt[] = []
-          const retryLoopStartTime = Date.now()
-
-          log.info('[重试订单] 开始处理失败订单的重试', {
-            orderNumber,
-            failureReason: failedDetail.errors.join('; '),
-            index: detailIndex + 1,
-            total: failedDetails.length
-          })
-
-          for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-            const attemptStartTime = Date.now()
-            log.info('[重试尝试] 开始第 {attempt} 次重试', {
-              orderNumber,
-              attempt,
-              maxRetries: MAX_RETRIES,
-              elapsedMs: attemptStartTime - retryLoopStartTime,
-              interpolatedAttempt: attempt
-            })
-
-            try {
-              // Step 1: Re-query order
-              log.debug('[重试查询] 重新查询订单', { orderNumber, attempt })
-              await this.queryOrders(workFrame, popupPage, [orderNumber])
-              await this.waitForLoading(workFrame)
-              log.debug('[重试查询完成] 查询加载完成', {
-                orderNumber,
-                attempt,
-                elapsedMs: Date.now() - attemptStartTime
-              })
-
-              // Step 2: Check query results
-              const rows = workFrame.locator('tbody tr')
-              const rowCount = await rows.count()
-              if (rowCount === 0) {
-                const errorMsg = '订单重试查询无结果'
-                log.error('[重试失败] 重试查询返回空结果', {
-                  orderNumber,
-                  attempt,
-                  rowCount,
-                  elapsedMs: Date.now() - attemptStartTime
-                })
-                throw new Error(errorMsg)
-              }
-              log.debug('[重试查询] 查询到 {rowCount} 行结果', { orderNumber, attempt, rowCount })
-
-              // Step 3: Open detail page
-              log.debug('[重试详情] 打开订单详情页', { orderNumber, attempt })
-              const detailPage = await this.openDetailPageFromCurrentQuery(
-                workFrame,
-                popupPage,
-                orderNumber
-              )
-              log.debug('[重试详情] 详情页已打开', {
-                orderNumber,
-                attempt,
-                elapsedMs: Date.now() - attemptStartTime
-              })
-
-              // Step 4: Process detail page
-              log.debug('[重试处理] 开始处理详情页', { orderNumber, attempt })
-              const retryDetail = await this.processDetailPage({
-                detailPage,
-                deleteSet,
-                dryRun,
-                expectedOrderNumber: orderNumber,
-                progressState: {
-                  ordersStarted: detailIndex,
-                  ordersCompleted: 0,
-                  totalOrders: failedDetails.length
-                },
-                onProgress: (message, progress, extra) => {
-                  onProgress?.(
-                    `[重试 ${attempt}/${MAX_RETRIES}] ${message}`,
-                    progress,
-                    extra ? { ...extra, phase: 'processing' as const } : undefined
-                  )
-                }
-              })
-              log.info('[重试处理完成] 详情页处理完毕', {
-                orderNumber,
-                attempt,
-                deleted: retryDetail.materialsDeleted,
-                skipped: retryDetail.materialsSkipped,
-                elapsedMs: Date.now() - attemptStartTime
-              })
-
-              // Success - update counters
-              retryResult.successfulRetries += 1
-              retryResult.updatedDetails.push({
-                ...retryDetail,
-                retryCount: attempt,
-                retriedAt: Date.now(),
-                retrySuccess: true,
-                retryAttempts
-              })
-              retryResult.retriedOrders += 1
-
-              log.info('[重试成功] 订单重试成功', {
-                orderNumber,
-                attempt,
-                cumulativeSuccesses: retryResult.successfulRetries,
-                cumulativeRetried: retryResult.retriedOrders,
-                deletedMaterials: retryDetail.materialsDeleted,
-                elapsedMs: Date.now() - retryLoopStartTime
-              })
-              break
-            } catch (error) {
-              const message = error instanceof Error ? error.message : 'Unknown error'
-              const attemptElapsed = Date.now() - attemptStartTime
-
-              log.warn('[重试失败] 当前重试尝试失败', {
-                orderNumber,
-                attempt,
-                maxRetries: MAX_RETRIES,
-                error: message,
-                elapsedMs: attemptElapsed,
-                remainingAttempts: MAX_RETRIES - attempt
-              })
-
-              retryAttempts.push({
-                attempt,
-                error: message,
-                timestamp: Date.now()
-              })
-
-              if (attempt === MAX_RETRIES) {
-                log.error('[重试彻底失败] 所有重试均已失败', {
-                  orderNumber,
-                  totalAttempts: MAX_RETRIES,
-                  errors: retryAttempts.map((a) => a.error),
-                  elapsedMs: Date.now() - retryLoopStartTime,
-                  finalOutcome: 'exhausted_all_retries',
-                  successRate: `${((retryResult.successfulRetries / (detailIndex + 1)) * 100).toFixed(1)}%`
-                })
-
-                retryResult.updatedDetails.push({
-                  ...failedDetail,
-                  retryCount: MAX_RETRIES,
-                  retryAttempts,
-                  retriedAt: Date.now(),
-                  retrySuccess: false
-                })
-                retryResult.retriedOrders += 1
-              }
-            }
-          }
-        }
-
-        const totalRetryTime = Date.now() - retryStartTime
-        const finalSuccessRate =
-          failedDetails.length > 0
-            ? ((retryResult.successfulRetries / failedDetails.length) * 100).toFixed(1) + '%'
-            : 'N/A'
-        const avgTimePerRetry = totalRetryTime / (failedDetails.length || 1)
-
-        log.info('[重试机制完成] 所有重试订单处理完毕', {
-          totalRetryOrders: failedDetails.length,
-          successfulRetries: retryResult.successfulRetries,
-          failedRetries: failedDetails.length - retryResult.successfulRetries,
-          successRate: finalSuccessRate,
-          totalElapsedTimeMs: totalRetryTime,
-          avgTimePerRetry,
-          isSlow: totalRetryTime > 30000
-        })
-
-        return retryResult
-      },
-      {
-        operationName: 'retry-failed-orders',
-        message: 'Retry failed orders',
-        slowThresholdMs: 5000,
-        context: {
-          totalRetryOrders: failedDetails.length,
-          dryRun
-        }
-      }
-    )
-
-    return trackedResult.result
+    return this.retryHandler.retryFailedOrders(params)
   }
 }
