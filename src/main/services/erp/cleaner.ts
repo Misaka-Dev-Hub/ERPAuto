@@ -1,17 +1,30 @@
 import { ERP_LOCATORS } from './locators'
 import { ErpAuthService } from './erp-auth'
 import { DeletionErrorCategory, DeletionOutcome } from '../../types/cleaner.types'
-import type {
-  CleanerInput,
-  CleanerResult,
-  MaterialDeletionAttempt,
-  OrderCleanDetail
-} from '../../types/cleaner.types'
+import type { CleanerInput, CleanerResult, OrderCleanDetail } from '../../types/cleaner.types'
 import type { ErpSession } from '../../types/erp.types'
 import type { BrowserContext, FrameLocator, Locator, Page } from 'playwright'
 import { createLogger, run, trackDuration } from '../logger'
 import { capturePageContext } from './erp-error-context'
 import { capturePageState } from './page-state'
+import { AsyncMutex, ConcurrencyTracker } from './cleaner/concurrency'
+import { evaluateDeletionSignals as evaluateDeletionSignalsHelper } from './cleaner/deletion-signals'
+import { MaterialDeletionVerifier } from './cleaner/material-deletion-verifier'
+import { getSkipReason, shouldDeleteMaterial } from './cleaner/rules'
+import {
+  clampNumber,
+  createBatches,
+  delay,
+  getMissingOrders,
+  runWithConcurrency
+} from './cleaner/utils'
+import type {
+  CleanerOptions,
+  ProgressState,
+  QueryResultRow,
+  RetryResult,
+  ShouldDeleteParams
+} from './cleaner/types'
 
 const log = createLogger('CleanerService')
 
@@ -21,204 +34,8 @@ const DEFAULT_PROCESS_CONCURRENCY = 1
 const MAX_PROCESS_CONCURRENCY = 20
 const DEFAULT_SESSION_REFRESH_ORDER_THRESHOLD = 160
 
-interface RetryResult {
-  retriedOrders: number
-  successfulRetries: number
-  updatedDetails: OrderCleanDetail[]
-}
-
-interface ProgressState {
-  ordersStarted: number // 开始处理的订单数
-  ordersCompleted: number // 已完成订单数
-  totalOrders: number
-  progressText?: string // "ordersCompleted/totalOrders (xx%)"
-  lastCompletedOrder?: string // 最后完成的订单号
-  lastActivityTime?: number // 最后活动时间戳（健康检查用）
-}
-
-interface QueryResultRow {
-  rowIndex: number
-  orderNumber: string
-}
-
-class AsyncMutex {
-  private queue: Promise<void> = Promise.resolve()
-
-  async runExclusive<T>(task: () => Promise<T>): Promise<T> {
-    let release!: () => void
-    const next = new Promise<void>((resolve) => {
-      release = resolve
-    })
-
-    const previous = this.queue
-    this.queue = this.queue.then(() => next)
-
-    await previous
-    try {
-      return await task()
-    } finally {
-      release()
-    }
-  }
-}
-
-/**
- * 并发追踪器 - 监控 worker 状态和 mutex 等待情况
- */
-class ConcurrencyTracker {
-  private activeWorkers = 0
-  private waitQueue = 0
-  private mutexWaitCount = 0
-  private currentOwnerWorkerId: number | null = null
-  private currentOwnerOrderNumber: string | null = null
-  private waitStartedAt = new Map<number, number>()
-
-  workerStarted(workerId: number, orderNumber: string) {
-    this.activeWorkers++
-    log.verbose('[CONCURRENCY] Worker started', {
-      workerId,
-      orderNumber,
-      activeWorkers: this.activeWorkers,
-      waitQueue: this.waitQueue,
-      waitingForPopupMutex: this.mutexWaitCount > 0
-    })
-  }
-
-  workerCompleted(workerId: number, orderNumber: string) {
-    this.activeWorkers--
-    log.verbose('[CONCURRENCY] Worker completed', {
-      workerId,
-      orderNumber,
-      activeWorkers: this.activeWorkers,
-      queueRemaining: this.waitQueue
-    })
-  }
-
-  waitingForMutex(workerId: number, orderNumber: string) {
-    this.mutexWaitCount++
-    this.waitQueue++
-    this.waitStartedAt.set(workerId, Date.now())
-    log.warn('[CONCURRENCY] Worker waiting for popup mutex', {
-      workerId,
-      orderNumber,
-      mutexWaitCount: this.mutexWaitCount,
-      activeWorkers: this.activeWorkers,
-      queueDepth: this.waitQueue,
-      currentOwnerWorkerId: this.currentOwnerWorkerId,
-      currentOwnerOrderNumber: this.currentOwnerOrderNumber
-    })
-  }
-
-  acquiredMutex(workerId: number, orderNumber: string) {
-    const waitStartedAt = this.waitStartedAt.get(workerId)
-    const waitDurationMs = waitStartedAt ? Date.now() - waitStartedAt : 0
-    this.waitStartedAt.delete(workerId)
-    this.mutexWaitCount--
-    this.waitQueue = Math.max(0, this.waitQueue - 1)
-    this.currentOwnerWorkerId = workerId
-    this.currentOwnerOrderNumber = orderNumber
-    log.verbose('[CONCURRENCY] Worker acquired popup mutex', {
-      workerId,
-      orderNumber,
-      mutexWaitCount: this.mutexWaitCount,
-      activeWorkers: this.activeWorkers,
-      waitDurationMs,
-      queueDepth: this.waitQueue
-    })
-
-    if (waitDurationMs > 5000) {
-      log.warn('[CONCURRENCY] Popup mutex slow wait', {
-        workerId,
-        orderNumber,
-        waitDurationMs,
-        activeWorkers: this.activeWorkers,
-        queueDepth: this.waitQueue,
-        currentOwnerWorkerId: this.currentOwnerWorkerId,
-        currentOwnerOrderNumber: this.currentOwnerOrderNumber
-      })
-    }
-  }
-
-  releasedMutex(workerId: number, orderNumber: string) {
-    if (this.currentOwnerWorkerId === workerId) {
-      this.currentOwnerWorkerId = null
-      this.currentOwnerOrderNumber = null
-    }
-    log.verbose('[CONCURRENCY] Worker released popup mutex', {
-      workerId,
-      orderNumber,
-      activeWorkers: this.activeWorkers,
-      queueDepth: this.waitQueue
-    })
-  }
-}
-
-/**
- * Cleaner Service Options
- */
-export interface CleanerOptions {
-  dryRun?: boolean
-  verbose?: boolean
-}
-
-/**
- * Material deletion check parameters
- */
-export interface ShouldDeleteParams {
-  rowNumber: number
-  pendingQty: string
-  materialCode: string
-  deleteSet: Set<string>
-}
-
-function clampNumber(
-  value: number | undefined,
-  fallback: number,
-  min: number,
-  max: number
-): number {
-  if (!Number.isFinite(value)) {
-    return fallback
-  }
-  return Math.min(max, Math.max(min, Math.trunc(value ?? fallback)))
-}
-
-export function createBatches<T>(items: T[], batchSize: number): T[][] {
-  const batches: T[][] = []
-  for (let i = 0; i < items.length; i += batchSize) {
-    batches.push(items.slice(i, i + batchSize))
-  }
-  return batches
-}
-
-export function getMissingOrders(inputOrders: string[], processedOrders: Set<string>): string[] {
-  const uniqueInputOrders = Array.from(new Set(inputOrders))
-  return uniqueInputOrders.filter((order) => !processedOrders.has(order))
-}
-
-export async function runWithConcurrency<T, R>(
-  items: T[],
-  concurrency: number,
-  worker: (item: T, index: number, workerId: number) => Promise<R>
-): Promise<R[]> {
-  const results = new Array<R>(items.length)
-  const limit = Math.max(1, Math.trunc(concurrency))
-  let cursor = 0
-
-  const runners = Array.from({ length: Math.min(limit, items.length) }, async (_, workerId) => {
-    while (true) {
-      const current = cursor
-      cursor += 1
-      if (current >= items.length) {
-        return
-      }
-      results[current] = await worker(items[current], current, workerId)
-    }
-  })
-
-  await Promise.all(runners)
-  return results
-}
+export type { CleanerOptions, ShouldDeleteParams } from './cleaner/types'
+export { createBatches, getMissingOrders, runWithConcurrency } from './cleaner/utils'
 
 /**
  * ERP Cleaner Service
@@ -227,10 +44,12 @@ export async function runWithConcurrency<T, R>(
 export class CleanerService {
   private authService: ErpAuthService
   private dryRun: boolean
+  private deletionVerifier: MaterialDeletionVerifier
 
   constructor(authService: ErpAuthService, options: CleanerOptions = {}) {
     this.authService = authService
     this.dryRun = options.dryRun ?? false
+    this.deletionVerifier = new MaterialDeletionVerifier(log)
   }
 
   /**
@@ -244,36 +63,11 @@ export class CleanerService {
    * Determine if a material should be deleted
    */
   shouldDeleteMaterial(params: ShouldDeleteParams): boolean {
-    const { rowNumber, pendingQty, materialCode, deleteSet } = params
-
-    if (!deleteSet.has(materialCode)) {
-      return false
-    }
-
-    if (rowNumber >= 2000 && rowNumber < 8000) {
-      return false
-    }
-
-    if (pendingQty && pendingQty.trim() !== '') {
-      return false
-    }
-
-    return true
+    return shouldDeleteMaterial(params)
   }
 
   getSkipReason(params: ShouldDeleteParams): string {
-    const { rowNumber, pendingQty, materialCode, deleteSet } = params
-
-    if (!deleteSet.has(materialCode)) {
-      return '物料不在删除清单中'
-    }
-    if (rowNumber >= 2000 && rowNumber < 8000) {
-      return '行号在 2000-7999 范围内（受保护）'
-    }
-    if (pendingQty && pendingQty.trim() !== '') {
-      return '累计待发数量不为空'
-    }
-    return '未知原因'
+    return getSkipReason(params)
   }
 
   async clean(input: CleanerInput): Promise<CleanerResult> {
@@ -380,138 +174,153 @@ export class CleanerService {
         }, 30000) // 每 30 秒检查一次
 
         // [新增] 为每个 batch 创建并发追踪器
-        const tracker = new ConcurrencyTracker()
+        const tracker = new ConcurrencyTracker(log)
 
-        // Track batch processing duration with 5s slow threshold
-        await trackDuration(
-          async () => {
-            // Phase 1: Query orders
-            await trackDuration(async () => await this.queryOrders(workFrame, popupPage!, batchOrders), {
-              operationName: 'query',
-              message: '执行订单查询',
-              slowThresholdMs: 3000,
-              context: { orderCount: batchOrders.length }
-            })
-
-            // Phase 2: Wait for loading complete
-            await trackDuration(async () => await this.waitForLoading(workFrame), {
-              operationName: 'wait_loading',
-              message: '等待加载完成',
-              slowThresholdMs: 5000
-            })
-
-            // Phase 3: Collect query results
-            const collectResult = await trackDuration(
-              async () => await this.collectQueryResultRows(workFrame, popupPage!),
-              {
-                operationName: 'collect_results',
-                message: '收集查询结果',
-                slowThresholdMs: 2000
-              }
-            )
-            const queriedRows = collectResult.result
-            const queriedOrderNumbersInBatch = new Set(queriedRows.map((row) => row.orderNumber))
-
-            // Phase 4: Process all orders in batch
-            await trackDuration(
-              async () => {
-                await runWithConcurrency(queriedRows, processConcurrency, async (row, _index, workerId) => {
-                  const { rowIndex, orderNumber } = row
-
-                  // [新增] Worker 开始追踪
-                  tracker.workerStarted(workerId, orderNumber)
-
-                  try {
-                    const openedDetailPage = await popupMutex.runExclusive(async () => {
-                      // [新增] Mutex 等待追踪
-                      tracker.waitingForMutex(workerId, orderNumber)
-                      try {
-                        const page = await this.openDetailPageFromRow(workFrame, popupPage!, rowIndex, {
-                          orderNumber,
-                          orderIndex: progressState.ordersStarted,
-                          orderPosition: `${progressState.ordersStarted + 1}/${progressState.totalOrders}`,
-                          workerId
-                        })
-                        // [新增] Mutex 获取追踪
-                        tracker.acquiredMutex(workerId, orderNumber)
-                        return page
-                      } finally {
-                        tracker.releasedMutex(workerId, orderNumber)
-                      }
-                    })
-
-                    let detail: OrderCleanDetail
-                    try {
-                      detail = await this.processDetailPage({
-                        detailPage: openedDetailPage,
-                        deleteSet,
-                        dryRun,
-                        expectedOrderNumber: orderNumber,
-                        progressState,
-                        onProgress: input.onProgress
-                      })
-                    } catch (error) {
-                      const message = error instanceof Error ? error.message : 'Unknown error'
-                      detail = this.createErrorDetail(orderNumber, message)
-                    } finally {
-                      progressState.ordersStarted += 1
-                      progressState.ordersCompleted += 1
-                      progressState.lastCompletedOrder = orderNumber
-                      lastActivityTime = Date.now() // [新增] 健康检查：更新活动时间
-                    }
-
-                    result.details.push(detail)
-
-                    if (detail.errors.length > 0) {
-                      result.errors.push(`Order ${detail.orderNumber}: ${detail.errors.join('; ')}`)
-                      return
-                    }
-
-                    result.ordersProcessed += 1
-                    result.materialsDeleted += detail.materialsDeleted
-                    result.materialsSkipped += detail.materialsSkipped
-                    result.materialsFailed += detail.materialsFailed
-                    result.uncertainDeletions += detail.uncertainDeletions
-                  } finally {
-                    // [新增] Worker 完成追踪
-                    tracker.workerCompleted(workerId, orderNumber)
-                  }
-                })
-
-                // Handle missing orders
-                const missingOrders = getMissingOrders(batchOrders, queriedOrderNumbersInBatch)
-                for (const missingOrder of missingOrders) {
-                  const missingMessage = '订单未出现在查询结果中'
-                  result.errors.push(`Order ${missingOrder}: ${missingMessage}`)
-                  result.details.push(this.createErrorDetail(missingOrder, missingMessage, true))
+        try {
+          // Track batch processing duration with 5s slow threshold
+          await trackDuration(
+            async () => {
+              // Phase 1: Query orders
+              await trackDuration(
+                async () => await this.queryOrders(workFrame, popupPage!, batchOrders),
+                {
+                  operationName: 'query',
+                  message: '执行订单查询',
+                  slowThresholdMs: 3000,
+                  context: { orderCount: batchOrders.length }
                 }
-              },
-              {
-                operationName: 'process_all_orders_in_batch',
-                message: `处理批次中所有${queriedRows.length}个订单`,
-                slowThresholdMs: 10000
+              )
+
+              // Phase 2: Wait for loading complete
+              await trackDuration(async () => await this.waitForLoading(workFrame), {
+                operationName: 'wait_loading',
+                message: '等待加载完成',
+                slowThresholdMs: 5000
+              })
+
+              // Phase 3: Collect query results
+              const collectResult = await trackDuration(
+                async () => await this.collectQueryResultRows(workFrame, popupPage!),
+                {
+                  operationName: 'collect_results',
+                  message: '收集查询结果',
+                  slowThresholdMs: 2000
+                }
+              )
+              const queriedRows = collectResult.result
+              const queriedOrderNumbersInBatch = new Set(queriedRows.map((row) => row.orderNumber))
+
+              // Phase 4: Process all orders in batch
+              await trackDuration(
+                async () => {
+                  await runWithConcurrency(
+                    queriedRows,
+                    processConcurrency,
+                    async (row, _index, workerId) => {
+                      const { rowIndex, orderNumber } = row
+
+                      // [新增] Worker 开始追踪
+                      tracker.workerStarted(workerId, orderNumber)
+
+                      try {
+                        // [新增] Mutex 等待追踪
+                        tracker.waitingForMutex(workerId, orderNumber)
+                        const openedDetailPage = await popupMutex.runExclusive(async () => {
+                          // [新增] Mutex 获取追踪
+                          tracker.acquiredMutex(workerId, orderNumber)
+                          try {
+                            return await this.openDetailPageFromRow(
+                              workFrame,
+                              popupPage!,
+                              rowIndex,
+                              {
+                                orderNumber,
+                                orderIndex: progressState.ordersStarted,
+                                orderPosition: `${progressState.ordersStarted + 1}/${progressState.totalOrders}`,
+                                workerId
+                              }
+                            )
+                          } finally {
+                            tracker.releasedMutex(workerId, orderNumber)
+                          }
+                        })
+
+                        let detail: OrderCleanDetail
+                        try {
+                          detail = await this.processDetailPage({
+                            detailPage: openedDetailPage,
+                            deleteSet,
+                            dryRun,
+                            expectedOrderNumber: orderNumber,
+                            progressState,
+                            onProgress: input.onProgress
+                          })
+                        } catch (error) {
+                          const message = error instanceof Error ? error.message : 'Unknown error'
+                          detail = this.createErrorDetail(orderNumber, message)
+                        } finally {
+                          progressState.ordersStarted += 1
+                          progressState.ordersCompleted += 1
+                          progressState.lastCompletedOrder = orderNumber
+                          lastActivityTime = Date.now() // [新增] 健康检查：更新活动时间
+                        }
+
+                        result.details.push(detail)
+
+                        if (detail.errors.length > 0) {
+                          result.errors.push(
+                            `Order ${detail.orderNumber}: ${detail.errors.join('; ')}`
+                          )
+                          return
+                        }
+
+                        result.ordersProcessed += 1
+                        result.materialsDeleted += detail.materialsDeleted
+                        result.materialsSkipped += detail.materialsSkipped
+                        result.materialsFailed += detail.materialsFailed
+                        result.uncertainDeletions += detail.uncertainDeletions
+                      } finally {
+                        // [新增] Worker 完成追踪
+                        tracker.workerCompleted(workerId, orderNumber)
+                      }
+                    }
+                  )
+
+                  // Handle missing orders
+                  const missingOrders = getMissingOrders(batchOrders, queriedOrderNumbersInBatch)
+                  for (const missingOrder of missingOrders) {
+                    const missingMessage = '订单未出现在查询结果中'
+                    result.errors.push(`Order ${missingOrder}: ${missingMessage}`)
+                    result.details.push(this.createErrorDetail(missingOrder, missingMessage, true))
+                  }
+                },
+                {
+                  operationName: 'process_all_orders_in_batch',
+                  message: `处理批次中所有${queriedRows.length}个订单`,
+                  slowThresholdMs: 10000
+                }
+              )
+
+              // Phase 5: Save batch results (already included in process_all_orders_in_batch)
+              // No separate save step needed as results are accumulated in result object
+            },
+            {
+              operationName: `batch-${batchIndex + 1}-${orderBatches[batchIndex].length}-orders`,
+              message: `Batch ${batchIndex + 1}/${orderBatches.length}`,
+              slowThresholdMs: 5000,
+              context: {
+                batchIndex: batchIndex + 1,
+                totalBatches: orderBatches.length,
+                batchSize: batchOrders.length,
+                totalOrders,
+                totalMaterials
               }
-            )
-
-            // Phase 5: Save batch results (already included in process_all_orders_in_batch)
-            // No separate save step needed as results are accumulated in result object
-          },
-          {
-            operationName: `batch-${batchIndex + 1}-${orderBatches[batchIndex].length}-orders`,
-            message: `Batch ${batchIndex + 1}/${orderBatches.length}`,
-            slowThresholdMs: 5000,
-            context: {
-              batchIndex: batchIndex + 1,
-              totalBatches: orderBatches.length,
-              batchSize: batchOrders.length,
-              totalOrders,
-              totalMaterials
             }
-          }
-        )
-
-        // [新增] 清理健康检查定时器
-        clearInterval(healthCheckInterval)
+          )
+        } finally {
+          // [新增] 清理健康检查定时器
+          clearInterval(healthCheckInterval)
+        }
 
         ordersProcessedSinceLogin += batchOrders.length
         const remainingBatches = orderBatches.length - (batchIndex + 1)
@@ -547,7 +356,10 @@ export class CleanerService {
           popupPage = refreshedNavigation.popupPage
           workFrame = refreshedNavigation.workFrame
           ordersProcessedSinceLogin = 0
-        } else if (remainingBatches === 0 && ordersProcessedSinceLogin >= sessionRefreshOrderThreshold) {
+        } else if (
+          remainingBatches === 0 &&
+          ordersProcessedSinceLogin >= sessionRefreshOrderThreshold
+        ) {
           log.info('[SESSION_REFRESH_SKIPPED] 已达到阈值但无剩余批次，跳过重建', {
             batchIndex: batchIndex + 1,
             totalBatches: orderBatches.length,
@@ -1276,15 +1088,19 @@ export class CleanerService {
       const detailInnerFrame = await detailInnerLocator.contentFrame()
 
       if (!detailInnerFrame) {
-        const pageState = await this.logPageStateSnapshot(detailPage, 'detail.step2.detailInnerFrame', {
-          level: 'error',
-          orderNumber: expectedOrderNumber,
-          orderIndex: progressState.ordersStarted,
-          orderPosition: `${progressState.ordersStarted + 1}/${progressState.totalOrders}`,
-          elapsedMs: Date.now() - processStartTime,
-          includeFrameHierarchy: true,
-          includeBodyTextPreview: true
-        })
+        const pageState = await this.logPageStateSnapshot(
+          detailPage,
+          'detail.step2.detailInnerFrame',
+          {
+            level: 'error',
+            orderNumber: expectedOrderNumber,
+            orderIndex: progressState.ordersStarted,
+            orderPosition: `${progressState.ordersStarted + 1}/${progressState.totalOrders}`,
+            elapsedMs: Date.now() - processStartTime,
+            includeFrameHierarchy: true,
+            includeBodyTextPreview: true
+          }
+        )
         const errorMsg = '无法访问详情页面的内部框架'
         log.error('[DETAIL_PAGE_INVALID] 详情页未建立', {
           failureKind: 'mainiframe_missing',
@@ -1485,7 +1301,25 @@ export class CleanerService {
               deleteSet
             })
 
-            if (shouldDelete && !dryRun) {
+            if (shouldDelete) {
+              if (dryRun) {
+                detail.materialsDeleted += 1
+                detail.deletedMaterials.push({
+                  materialCode,
+                  materialName,
+                  rowNumber: rowNumInt,
+                  outcome: 'dry_run'
+                })
+                log.info('[物料操作预演] 符合删除条件，dry-run 模式不执行删除', {
+                  orderNumber,
+                  materialIdx,
+                  materialCode,
+                  materialName,
+                  rowNumber: currentRow
+                })
+                continue
+              }
+
               log.info('[物料操作] 执行删除操作（多信号验证）', {
                 orderNumber,
                 materialIdx,
@@ -1496,8 +1330,9 @@ export class CleanerService {
                 dryRun: false
               })
 
-              const currentMaterialCount = await this.readMaterialCount(detailInnerFrame)
-              const deleteResult = await this.deleteWithVerification({
+              const currentMaterialCount =
+                await this.deletionVerifier.readMaterialCount(detailInnerFrame)
+              const deleteResult = await this.deletionVerifier.deleteWithVerification({
                 childForm,
                 detailInnerFrame,
                 deleteRowBtn,
@@ -1785,66 +1620,6 @@ export class CleanerService {
     }
   }
 
-  // --- Deletion verification constants ---
-  private static readonly MATERIAL_RETRY_MAX_ATTEMPTS = 3
-  private static readonly MATERIAL_RETRY_DELAY_MS = 1000
-  private static readonly VERIFICATION_TIMEOUT_MS = 8000
-  private static readonly ERROR_CHECK_WINDOW_MS = 2000
-
-  /**
-   * Read current material count from the "详细信息 (N)" text.
-   */
-  private async readMaterialCount(
-    detailInnerFrame: FrameLocator | Locator
-  ): Promise<number | null> {
-    try {
-      const text = await detailInnerFrame.getByText(/^详细信息 \(\d+\)$/).innerText()
-      const match = text.match(/\((\d+)\)/)
-      return match ? parseInt(match[1], 10) : null
-    } catch {
-      return null
-    }
-  }
-
-  /**
-   * Check for ERP error messages or confirm dialogs.
-   */
-  private async checkErpMessages(
-    container: FrameLocator | Locator | Page
-  ): Promise<{ hasError: boolean; errorText?: string; hasConfirmDialog: boolean }> {
-    try {
-      const errorLocator = container.locator(ERP_LOCATORS.common.errorMessage)
-      const hasError = await errorLocator.isVisible().catch(() => false)
-      let errorText: string | undefined
-      if (hasError) {
-        errorText = (await errorLocator.textContent().catch(() => undefined)) ?? undefined
-      }
-
-      const confirmLocator = container.locator(ERP_LOCATORS.common.confirmDialog)
-      const hasConfirmDialog = await confirmLocator.isVisible().catch(() => false)
-
-      return { hasError, errorText, hasConfirmDialog }
-    } catch {
-      return { hasError: false, hasConfirmDialog: false }
-    }
-  }
-
-  /**
-   * Auto-handle a confirm dialog by clicking the confirm button.
-   */
-  private async handleConfirmDialog(container: FrameLocator | Locator | Page): Promise<void> {
-    try {
-      const confirmBtn = container.locator(ERP_LOCATORS.common.confirmButton).first()
-      if (await confirmBtn.isVisible().catch(() => false)) {
-        await confirmBtn.click()
-        log.debug('[确认对话框] 已自动点击确定')
-        await this.delay(500)
-      }
-    } catch {
-      log.warn('[确认对话框] 处理确认对话框失败')
-    }
-  }
-
   /**
    * Pure logic: evaluate deletion signals and determine outcome.
    * No Playwright dependencies — easy to unit test.
@@ -1859,236 +1634,11 @@ export class CleanerService {
     errorCategory?: DeletionErrorCategory
     errorMessage?: string
   } {
-    const { rowChanged, countDecreased, hasError, errorText } = params
-
-    if (hasError) {
-      return {
-        outcome: DeletionOutcome.FailedErpError,
-        errorCategory: DeletionErrorCategory.ErpRejection,
-        errorMessage: errorText || 'ERP returned an error'
-      }
-    }
-
-    if (rowChanged && countDecreased !== false) {
-      // countDecreased === true or null (unreadable) — both acceptable
-      return { outcome: DeletionOutcome.Success }
-    }
-
-    if (rowChanged && countDecreased === false) {
-      return { outcome: DeletionOutcome.Uncertain }
-    }
-
-    if (!rowChanged && countDecreased === true) {
-      return { outcome: DeletionOutcome.Success }
-    }
-
-    // Neither row changed nor count decreased
-    return {
-      outcome: DeletionOutcome.FailedNoChange,
-      errorCategory: DeletionErrorCategory.Unknown
-    }
-  }
-
-  /**
-   * Core method: delete a single material with multi-signal verification and retry.
-   */
-  private async deleteWithVerification(params: {
-    childForm: FrameLocator | Locator
-    detailInnerFrame: FrameLocator | Locator
-    deleteRowBtn: Locator
-    materialCode: string
-    materialName: string
-    currentRowNumber: string
-    materialCountBefore: number
-    maxAttempts?: number
-    attemptDelayMs?: number
-  }): Promise<{
-    outcome: DeletionOutcome
-    errorCategory?: DeletionErrorCategory
-    errorMessage?: string
-    attempts: MaterialDeletionAttempt[]
-  }> {
-    const {
-      childForm,
-      detailInnerFrame,
-      deleteRowBtn,
-      materialCode,
-      materialName,
-      currentRowNumber,
-      materialCountBefore,
-      maxAttempts = CleanerService.MATERIAL_RETRY_MAX_ATTEMPTS,
-      attemptDelayMs = CleanerService.MATERIAL_RETRY_DELAY_MS
-    } = params
-
-    const attempts: MaterialDeletionAttempt[] = []
-
-    for (let attemptNum = 1; attemptNum <= maxAttempts; attemptNum++) {
-      const attemptStart = Date.now()
-
-      // Check button state before clicking
-      const btnEnabled = await this.isButtonEnabled(deleteRowBtn)
-      if (!btnEnabled) {
-        attempts.push({
-          attempt: attemptNum,
-          outcome: DeletionOutcome.FailedButtonDisabled,
-          errorCategory: DeletionErrorCategory.UiUnexpected,
-          errorMessage: '删行按钮不可用',
-          rowNumberBefore: currentRowNumber,
-          rowNumberAfter: currentRowNumber,
-          materialCountBefore,
-          materialCountAfter: materialCountBefore,
-          timestamp: attemptStart,
-          durationMs: Date.now() - attemptStart
-        })
-        return {
-          outcome: DeletionOutcome.FailedButtonDisabled,
-          errorCategory: DeletionErrorCategory.UiUnexpected,
-          errorMessage: '删行按钮不可用',
-          attempts
-        }
-      }
-
-      // Click delete button
-      await deleteRowBtn.click()
-
-      // Check for ERP messages (error / confirm dialog)
-      const msgCheck = await this.checkErpMessages(detailInnerFrame)
-      if (msgCheck.hasConfirmDialog) {
-        await this.handleConfirmDialog(detailInnerFrame)
-      }
-
-      if (msgCheck.hasError) {
-        const attempt: MaterialDeletionAttempt = {
-          attempt: attemptNum,
-          outcome: DeletionOutcome.FailedErpError,
-          errorCategory: DeletionErrorCategory.ErpRejection,
-          errorMessage: msgCheck.errorText,
-          rowNumberBefore: currentRowNumber,
-          rowNumberAfter: currentRowNumber,
-          materialCountBefore,
-          materialCountAfter: materialCountBefore,
-          timestamp: attemptStart,
-          durationMs: Date.now() - attemptStart
-        }
-        attempts.push(attempt)
-        // No retry for erp_rejection
-        return {
-          outcome: DeletionOutcome.FailedErpError,
-          errorCategory: DeletionErrorCategory.ErpRejection,
-          errorMessage: msgCheck.errorText,
-          attempts
-        }
-      }
-
-      // Wait and poll for verification signals
-      const verificationStart = Date.now()
-      const timeout = CleanerService.VERIFICATION_TIMEOUT_MS
-      let rowNumberAfter = currentRowNumber
-      let materialCountAfter: number | null = materialCountBefore
-
-      while (Date.now() - verificationStart < timeout) {
-        rowNumberAfter = await this.getInputValue(childForm, /^行号$/)
-        materialCountAfter = await this.readMaterialCount(detailInnerFrame)
-
-        const rowChanged = rowNumberAfter !== currentRowNumber
-        const countDecreased =
-          materialCountAfter !== null ? materialCountAfter < materialCountBefore : null
-
-        if (rowChanged || countDecreased === true) {
-          break
-        }
-
-        await this.delay(300)
-      }
-
-      // Final read if we didn't update in the loop
-      if (rowNumberAfter === currentRowNumber && materialCountAfter === materialCountBefore) {
-        rowNumberAfter = await this.getInputValue(childForm, /^行号$/)
-        materialCountAfter = await this.readMaterialCount(detailInnerFrame)
-      }
-
-      const rowChanged = rowNumberAfter !== currentRowNumber
-      const countDecreased =
-        materialCountAfter !== null ? materialCountAfter < materialCountBefore : null
-
-      const evaluation = this.evaluateDeletionSignals({
-        rowChanged,
-        countDecreased,
-        hasError: false
-      })
-
-      const attempt: MaterialDeletionAttempt = {
-        attempt: attemptNum,
-        outcome: evaluation.outcome,
-        errorCategory: evaluation.errorCategory,
-        errorMessage: evaluation.errorMessage,
-        rowNumberBefore: currentRowNumber,
-        rowNumberAfter,
-        materialCountBefore,
-        materialCountAfter: materialCountAfter ?? materialCountBefore,
-        timestamp: attemptStart,
-        durationMs: Date.now() - attemptStart
-      }
-      attempts.push(attempt)
-
-      if (
-        evaluation.outcome === DeletionOutcome.Success ||
-        evaluation.outcome === DeletionOutcome.Uncertain
-      ) {
-        return {
-          outcome: evaluation.outcome,
-          errorCategory: evaluation.errorCategory,
-          errorMessage: evaluation.errorMessage,
-          attempts
-        }
-      }
-
-      // Retryable failure — wait before next attempt
-      if (attemptNum < maxAttempts) {
-        log.info('[物料删除重试] 等待后重试', {
-          materialCode,
-          materialName,
-          attempt: attemptNum,
-          nextAttempt: attemptNum + 1,
-          delayMs: attemptDelayMs
-        })
-        await this.delay(attemptDelayMs)
-      }
-    }
-
-    // All attempts exhausted
-    return {
-      outcome: DeletionOutcome.FailedNoChange,
-      errorCategory: DeletionErrorCategory.VerificationTimeout,
-      errorMessage: `${maxAttempts} 次尝试后仍无法确认删除`,
-      attempts
-    }
-  }
-
-  private async waitForRowChange(
-    childForm: FrameLocator | Locator,
-    oldRowNumber: string,
-    maxWaitMs: number
-  ): Promise<boolean> {
-    const startTime = Date.now()
-
-    while (Date.now() - startTime < maxWaitMs) {
-      try {
-        const newRowNumber = await this.getInputValue(childForm, /^行号$/)
-        if (newRowNumber !== oldRowNumber) {
-          return true
-        }
-        await this.delay(200)
-      } catch {
-        await this.delay(200)
-      }
-    }
-
-    return false
+    return evaluateDeletionSignalsHelper(params)
   }
 
   private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
+    return delay(ms)
   }
 
   private async retryFailedOrders(params: {

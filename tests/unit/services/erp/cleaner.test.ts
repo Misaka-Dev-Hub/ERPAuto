@@ -62,6 +62,17 @@ describe('CleanerService - Helper Methods', () => {
       expect(result).toBe(false)
     })
 
+    it('should return false when row number is invalid', () => {
+      const result = cleaner.shouldDeleteMaterial({
+        rowNumber: Number.NaN,
+        pendingQty: '',
+        materialCode: 'MAT001',
+        deleteSet
+      })
+
+      expect(result).toBe(false)
+    })
+
     it('should return false when pendingQty has only whitespace', () => {
       const result = cleaner.shouldDeleteMaterial({
         rowNumber: 100,
@@ -169,6 +180,17 @@ describe('CleanerService - Helper Methods', () => {
       })
 
       expect(reason).toBe('累计待发数量不为空')
+    })
+
+    it('should return safe skip reason for invalid row number', () => {
+      const reason = cleaner.getSkipReason({
+        rowNumber: Number.NaN,
+        pendingQty: '',
+        materialCode: 'MAT001',
+        deleteSet
+      })
+
+      expect(reason).toBe('行号无效，无法安全判断是否受保护')
     })
   })
 
